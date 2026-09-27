@@ -9,7 +9,7 @@
     "build": "tsup src/index.ts --format esm --dts"
   },
   "dependencies": {
-    "@pluto-engine/core": "0.1.0"
+    "@pluto-engine/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

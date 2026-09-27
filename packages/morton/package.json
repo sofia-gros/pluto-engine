@@ -21,6 +21,6 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
-    "@pluto-engine/core": "0.1.0"
+    "@pluto-engine/core": "workspace:*"
   }
 }

@@ -9,10 +9,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@pluto-engine/core": "0.1.0"
+    "@pluto-engine/core": "workspace:*"
   },
   "devDependencies": {
-    "@pluto-engine/vite-plugin-wgsl": "0.1.0",
+    "@pluto-engine/vite-plugin-wgsl": "workspace:*",
     "@vitest/browser": "^1.6.1",
     "@webgpu/types": "^0.1.74",
     "copyfiles": "^2.4.1",
