@@ -115,3 +115,4 @@ export class MortonSpatialHash {
     return outCount;
   }
 }
+export * from './MortonPlugin';
