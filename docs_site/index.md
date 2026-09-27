@@ -3,21 +3,21 @@ layout: home
 
 hero:
   name: PlutoEngine
-  text: The Next-Gen 2D Web Engine
-  tagline: Zero Allocation. Structure of Arrays. Pure Performance.
+  text: 次世代2D Webエンジン
+  tagline: ゼロアロケーション。SoA（Structure of Arrays）。純粋なパフォーマンス。
   actions:
     - theme: brand
-      text: Get Started
+      text: はじめる
       link: /guide/getting-started
     - theme: alt
-      text: View on GitHub
+      text: GitHubで見る
       link: https://github.com/yourusername/pluto-engine
 
 features:
-  - title: Ultra Fast Instancing
-    details: Render tens of thousands of sprites in a single draw call with zero GC overhead.
-  - title: Data-Oriented Design
-    details: Built from the ground up on flat TypedArrays (SoA) to maximize cache coherency.
-  - title: WGSL First
-    details: Write shaders in WGSL, automatically transpiled to WebGL2 for older devices.
+  - title: 超高速インスタンシング
+    details: GCのオーバーヘッドなしで、数万のスプライトを単一のドローコールでレンダリングします。
+  - title: データ指向設計 (SoA)
+    details: キャッシュの一貫性を最大化するために、フラットなTypedArray (SoA) 上にゼロから構築されています。
+  - title: WGSLファースト
+    details: シェーダーをWGSLで記述し、古いデバイス向けにWebGL2へ自動的にトランスパイルします。
 ---
