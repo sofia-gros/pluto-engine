@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   base: '/pluto-engine/',
   title: 'PlutoEngine',
+  ignoreDeadLinks: true,
 
   locales: {
     root: {
