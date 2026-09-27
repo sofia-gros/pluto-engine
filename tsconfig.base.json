@@ -9,6 +9,10 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pluto-engine/*": ["packages/*/src"]
+    }
   }
 }
