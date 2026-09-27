@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@pluto-engine/core": "workspace:*"
+    "@pluto-engine/core": "0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

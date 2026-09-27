@@ -17,17 +17,17 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@pluto-engine/ai": "workspace:*",
-    "@pluto-engine/core": "workspace:*",
-    "@pluto-engine/morton": "workspace:*",
-    "@pluto-engine/poisson": "workspace:*",
-    "@pluto-engine/renderer": "workspace:*",
-    "@pluto-engine/sdf-collider": "workspace:*",
-    "@pluto-engine/verlet-ik": "workspace:*",
-    "@pluto-engine/xpbd": "workspace:*"
+    "@pluto-engine/ai": "0.1.0",
+    "@pluto-engine/core": "0.1.0",
+    "@pluto-engine/morton": "0.1.0",
+    "@pluto-engine/poisson": "0.1.0",
+    "@pluto-engine/renderer": "0.1.0",
+    "@pluto-engine/sdf-collider": "0.1.0",
+    "@pluto-engine/verlet-ik": "0.1.0",
+    "@pluto-engine/xpbd": "0.1.0"
   },
   "devDependencies": {
-    "@pluto-engine/vite-plugin-wgsl": "workspace:*",
+    "@pluto-engine/vite-plugin-wgsl": "0.1.0",
     "tsup": "^8.2.0",
     "typescript": "^5.6.0"
   }

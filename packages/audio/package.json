@@ -19,6 +19,6 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "@pluto-engine/core": "workspace:*"
+    "@pluto-engine/core": "0.1.0"
   }
 }

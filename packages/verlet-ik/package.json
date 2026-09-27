@@ -14,7 +14,7 @@
     "tsup": "^8.2.0"
   },
   "dependencies": {
-    "@pluto-engine/core": "workspace:*"
+    "@pluto-engine/core": "0.1.0"
   },
   "types": "./dist/index.d.ts",
   "exports": {
