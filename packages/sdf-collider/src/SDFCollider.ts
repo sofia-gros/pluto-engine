@@ -6,7 +6,6 @@
 export class SDFCollider {
   private width: number;
   private height: number;
-  private resolution: number;
   private invResolution: number;
   private data: Float32Array;
 
@@ -19,7 +18,6 @@ export class SDFCollider {
   constructor(width: number, height: number, resolution: number, initialData?: Float32Array) {
     this.width = width;
     this.height = height;
-    this.resolution = resolution;
     this.invResolution = 1.0 / resolution;
 
     if (initialData) {
