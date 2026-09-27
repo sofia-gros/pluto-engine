@@ -55,7 +55,7 @@ jobs:
           for dir in packages/*; do
             if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
               echo "Publishing $dir..."
-              (cd "$dir" && npm publish --access public) || echo "Failed to publish $dir (might already exist)"
+              (cd "$dir" && npm publish --access public)
             fi
           done
         env:
