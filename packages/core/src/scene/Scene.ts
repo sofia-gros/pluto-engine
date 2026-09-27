@@ -14,6 +14,7 @@ import { mathHelpers } from '../math/Math';
 import { TweenManager } from '../tween/TweenManager';
 import type { Plugin } from './Plugin';
 import type { SceneManager } from './SceneManager';
+import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
 
 export class Scene {
@@ -54,6 +55,9 @@ export class Scene {
     text: (x = 0, y = 0, text = '', style: TextStyle = {}): Text => {
       return new Text(x, y, text, style, this.arena);
     },
+    tilemap: (mapData: number[][], tileSize = 32): Tilemap => {
+      return new Tilemap(this.arena, mapData, tileSize);
+    }
   };
 
   constructor(maxInstances = 100000) {

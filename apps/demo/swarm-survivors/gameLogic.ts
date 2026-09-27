@@ -499,6 +499,8 @@ export class SwarmSystem {
 
       if (pDist < reach) {
         player.takeDamage(this.atkPower[i] * dt, stats);
+        // ダメージを受けた時に画面を少し揺らす
+        this.scene.camera.shake(3, 0.1);
         const pen = reach - pDist;
         const nx = pdx / (pDist || 1);
         const ny = pdy / (pDist || 1);
