@@ -79,6 +79,7 @@ export default defineConfig({
               { text: 'モートン順序空間分割', link: '/plugins/morton' },
               { text: 'AI & ビヘイビア', link: '/plugins/ai' },
               { text: 'SDF テキスト & ポアソンサンプリング', link: '/plugins/sdf' },
+              { text: 'オーディオ', link: '/plugins/sound' },
             ],
           },
           {
@@ -88,6 +89,7 @@ export default defineConfig({
               { text: 'PlutoEngine', link: '/api/pluto-engine' },
               { text: 'Scene', link: '/api/scene' },
               { text: 'TweenManager', link: '/api/tween-manager' },
+              { text: 'Camera', link: '/api/camera' },
             ],
           },
         ],
