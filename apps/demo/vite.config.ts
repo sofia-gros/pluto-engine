@@ -5,6 +5,7 @@ import { resolve } from 'path';
 const wgslPlugin = (wgsl as any).default || wgsl;
 
 export default defineConfig({
+  base: process.env.VITE_BASE || '/',
   plugins: [wgslPlugin()],
   build: {
     rollupOptions: {

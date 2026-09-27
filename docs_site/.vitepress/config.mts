@@ -12,6 +12,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'ホーム', link: '/' },
+          { text: 'デモを遊ぶ', link: '/demos' },
           { text: 'ガイド', link: '/guide/intro' },
           { text: 'チュートリアル', link: '/tutorial/01-setup' },
           { text: 'コア概念', link: '/concepts/engine-config' },
@@ -19,6 +20,13 @@ export default defineConfig({
           { text: 'API', link: '/api/pluto-engine' },
         ],
         sidebar: [
+          {
+            text: 'デモゲーム',
+            collapsed: false,
+            items: [
+              { text: '🎮 プレイアブルデモ一覧', link: '/demos' }
+            ]
+          },
           {
             text: 'ガイド (Guide)',
             collapsed: false,
@@ -78,8 +86,9 @@ export default defineConfig({
               { text: 'XPBD 物理エンジン', link: '/plugins/xpbd' },
               { text: 'モートン順序空間分割', link: '/plugins/morton' },
               { text: 'AI & ビヘイビア', link: '/plugins/ai' },
-              { text: 'SDF テキスト & ポアソンサンプリング', link: '/plugins/sdf' },
+              { text: 'SDF テキスト & 距離場', link: '/plugins/sdf' },
               { text: 'オーディオ', link: '/plugins/sound' },
+              { text: 'ポアソン群集流体 (Continuum Crowds)', link: '/plugins/poisson' },
             ],
           },
           {
@@ -103,6 +112,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/en/' },
+          { text: 'Play Demos', link: '/en/demos' },
           { text: 'Guide', link: '/en/guide/intro' },
           { text: 'Tutorial', link: '/en/tutorial/01-setup' },
           { text: 'Concepts', link: '/en/concepts/engine-config' },
@@ -110,6 +120,13 @@ export default defineConfig({
           { text: 'API', link: '/en/api/pluto-engine' },
         ],
         sidebar: [
+          {
+            text: 'Demos',
+            collapsed: false,
+            items: [
+              { text: '🎮 Playable Demos', link: '/en/demos' }
+            ]
+          },
           {
             text: 'Guide',
             collapsed: false,
@@ -178,7 +195,8 @@ export default defineConfig({
               { text: 'XPBD Physics Engine', link: '/en/plugins/xpbd' },
               { text: 'Morton Spatial Partitioning', link: '/en/plugins/morton' },
               { text: 'AI & Behavior Systems', link: '/en/plugins/ai' },
-              { text: 'SDF Text & Poisson Sampling', link: '/en/plugins/sdf' },
+              { text: 'SDF Text & Signed Distance Fields', link: '/en/plugins/sdf' },
+              { text: 'Poisson Continuum Crowds', link: '/en/plugins/poisson' },
             ],
           },
           {
