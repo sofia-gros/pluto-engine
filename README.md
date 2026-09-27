@@ -42,13 +42,40 @@ Rendering is done via **Hardware Instancing** in WebGL2 (and WebGPU ready), mean
 
 ## 📦 Installation & Usage
 
-You can use PlutoEngine via ES modules, or directly drop it in a script tag.
+PlutoEngine provides multiple distribution methods to suit your project.
 
+### 1. Via Package Manager (TypeScript / Bundlers)
 ```bash
 bun add @pluto-engine/core @pluto-engine/renderer
 ```
 
-### Quick Start Example
+### 2. Via CDN (Standalone Script)
+You can directly use the standalone bundles from GitHub Releases in a vanilla HTML file without any build tools.
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PlutoEngine Demo</title>
+</head>
+<body>
+    <script type="module">
+        // Import directly from a CDN (or locally downloaded file)
+        import { PlutoEngine, Scene } from 'https://cdn.jsdelivr.net/gh/sofia-gros/pluto-engine@v1.0.0/release_assets/pluto.esm.min.js';
+
+        class MainScene extends Scene {
+            create() {
+                this.add.sprite(400, 300, 16);
+            }
+        }
+        
+        new PlutoEngine({ width: 800, height: 600, scene: MainScene });
+    </script>
+</body>
+</html>
+```
+
+### Quick Start Example (TypeScript)
 
 ```typescript
 import { PlutoEngine, Scene } from '@pluto-engine/core';
