@@ -3,15 +3,25 @@
   "version": "1.0.0",
   "description": "Zero-allocation Verlet integration and IK for rope and cloth physics",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "./dist/index.js",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsup src/index.ts --format esm --dts"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "vitest": "^1.0.0",
+    "tsup": "^8.2.0"
   },
   "dependencies": {
     "@pluto-engine/core": "workspace:*"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   }
 }

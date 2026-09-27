@@ -44,6 +44,7 @@
         "@pluto-engine/core": "workspace:*",
       },
       "devDependencies": {
+        "tsup": "^8.2.0",
         "typescript": "^5.6.0",
         "vitest": "^2.0.0",
       },
@@ -125,6 +126,7 @@
         "@webgpu/types": "^0.1.74",
         "copyfiles": "^2.4.1",
         "playwright": "^1.40.0",
+        "tsup": "^8.2.0",
         "typescript": "^5.0.0",
         "vitest": "^1.0.0",
       },
@@ -136,6 +138,7 @@
         "@pluto-engine/core": "workspace:*",
       },
       "devDependencies": {
+        "tsup": "^8.2.0",
         "typescript": "^5.0.0",
         "vitest": "^2.0.0",
       },
@@ -147,6 +150,7 @@
         "@pluto-engine/core": "workspace:*",
       },
       "devDependencies": {
+        "tsup": "^8.2.0",
         "typescript": "^5.0.0",
         "vitest": "^1.0.0",
       },
@@ -170,6 +174,7 @@
         "@pluto-engine/core": "workspace:*",
       },
       "devDependencies": {
+        "tsup": "^8.2.0",
         "typescript": "^5.0.0",
         "vitest": "^1.0.0",
       },

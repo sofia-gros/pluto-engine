@@ -3,11 +3,22 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "composite": true,
     "moduleResolution": "bundler",
-    "lib": ["DOM", "ESNext"],
-    "types": ["@webgpu/types"]
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "types": [
+      "@webgpu/types"
+    ],
+    "declaration": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests"
+  ]
 }
