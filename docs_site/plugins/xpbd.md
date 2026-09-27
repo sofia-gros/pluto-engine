@@ -18,3 +18,28 @@ PlutoEngineのXPBDソルバは完全にデータ指向（DOD）で設計され�
 - `positions`, `prev_positions`, `inverse_mass`, `velocities` などの配列をSoA形式で保持します。
 - 衝突解決やジョイント制約の計算は、フラットな `Float32Array` に対する単純な数学演算として連続的に実行されます。
 - クラスインスタンスの生成（`new Vector2()` や `new ContactPoint()`）はループ内で一切発生しません。
+
+## Standalone Usage
+
+```typescript
+import { XPBDSolver } from '@pluto-engine/xpbd';
+const solver = new XPBDSolver();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { XpbdPlugin } from '@pluto-engine/xpbd';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new XpbdPlugin());
+  }
+
+  update() {
+    // Use it via this.xpbd
+    // this.xpbd...
+  }
+}
+```

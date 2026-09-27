@@ -14,3 +14,28 @@ PlutoEngine's AI plugin flattens logic trees into a sequence of "instruction arr
    The CPU continuously iterates over arrays of entities sharing the same AI patterns. Instructions are processed sequentially via tightly packed switch statements or lookup tables.
 
 This minimizes CPU cache misses, allowing 10,000 enemy entities to simultaneously execute complex searching, pathfinding, and attacking logic without dropping frames.
+
+## Standalone Usage
+
+```typescript
+import { UtilityAISystem } from '@pluto-engine/ai';
+const solver = new UtilityAISystem();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { AiPlugin } from '@pluto-engine/ai';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new AiPlugin());
+  }
+
+  update() {
+    // Use it via this.ai
+    // this.ai...
+  }
+}
+```

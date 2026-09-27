@@ -21,3 +21,28 @@ Instead, PlutoEngine calculates Morton Codes from X and Y coordinates directly o
 Then, a parallel Radix Sort is executed on the GPU, reordering buffers so that spatially close entities are strictly adjacent in memory.
 
 As a result, broad-phase collision detection and frustum culling become incredibly fast operations. They simply require binary searches or linear scans over a flat 1D array, without a single pointer dereference.
+
+## Standalone Usage
+
+```typescript
+import { MortonSpatialHash } from '@pluto-engine/morton';
+const solver = new MortonSpatialHash();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { MortonPlugin } from '@pluto-engine/morton';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new MortonPlugin());
+  }
+
+  update() {
+    // Use it via this.spatialHash
+    // this.spatialHash...
+  }
+}
+```

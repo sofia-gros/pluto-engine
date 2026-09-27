@@ -8,7 +8,9 @@
     "build": "tsc",
     "test": "vitest run"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@pluto-engine/core": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"

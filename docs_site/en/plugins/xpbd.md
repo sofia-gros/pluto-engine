@@ -18,3 +18,28 @@ PlutoEngine's XPBD solver is designed entirely using Data-Oriented Design.
 - Physical properties like `positions`, `prev_positions`, `inverse_mass`, and `velocities` are strictly maintained in SoA format.
 - Constraint solving (collision resolution, joints) is executed as contiguous, flat mathematical operations over `Float32Array` blocks.
 - Class instantiations (e.g., `new Vector2()` or `new ContactPoint()`) are completely banned inside the physics loop to ensure zero-allocation.
+
+## Standalone Usage
+
+```typescript
+import { XPBDSolver } from '@pluto-engine/xpbd';
+const solver = new XPBDSolver();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { XpbdPlugin } from '@pluto-engine/xpbd';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new XpbdPlugin());
+  }
+
+  update() {
+    // Use it via this.xpbd
+    // this.xpbd...
+  }
+}
+```

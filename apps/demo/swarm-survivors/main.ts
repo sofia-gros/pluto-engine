@@ -1,12 +1,10 @@
 import { PlutoEngine, Scene } from '@pluto-engine/core';
-import { MortonSpatialHash } from '@pluto-engine/morton';
+import { MortonPlugin } from '@pluto-engine/morton';
 
 import { ContinuumFlowGrid, Player, SwarmSystem } from './gameLogic.js';
 import { InteractiveSkillTreeUI, SaveManager, SkillTreeGraph } from './tree.js';
 
 class GameScene extends Scene {
-  private hash = new MortonSpatialHash(50000, 64);
-
   private player!: Player;
   private swarm!: SwarmSystem;
   private flow!: ContinuumFlowGrid;
@@ -24,6 +22,7 @@ class GameScene extends Scene {
 
   constructor() {
     super(50000);
+    this.registerPlugin(new MortonPlugin(64));
   }
 
   create() {
@@ -34,7 +33,7 @@ class GameScene extends Scene {
     });
 
     this.flow = new ContinuumFlowGrid(96, 96, 24);
-    this.swarm = new SwarmSystem(this, this.hash, 40000);
+    this.swarm = new SwarmSystem(this, 40000);
     this.player = new Player(this, 0, 0);
 
     this.initControls();

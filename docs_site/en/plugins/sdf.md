@@ -15,3 +15,28 @@ This is an algorithm used to place objects (like grass, trees, or crowds) random
 Within PlutoEngine's DOD architecture, this algorithm is run during initialization. The resulting massive coordinate data array is bulk-loaded directly into the `Float32Array` arena.
 
 At runtime, tens of thousands of vegetation entities are drawn via WGSL instancing with strict zero-allocation.
+
+## Standalone Usage
+
+```typescript
+import { SDFCollider } from '@pluto-engine/sdf-collider';
+const solver = new SDFCollider();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { SdfPlugin } from '@pluto-engine/sdf-collider';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new SdfPlugin());
+  }
+
+  update() {
+    // Use it via this.sdf
+    // this.sdf...
+  }
+}
+```

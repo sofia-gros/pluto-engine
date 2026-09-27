@@ -4,6 +4,11 @@
     "outDir": "./dist",
     "declaration": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["tests/**/*", "**/*.test.ts"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "tests/**/*",
+    "**/*.test.ts"
+  ]
 }

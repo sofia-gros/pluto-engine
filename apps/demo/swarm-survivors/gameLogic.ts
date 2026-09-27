@@ -1,5 +1,5 @@
 import type { Scene, Sprite } from '@pluto-engine/core';
-import type { MortonSpatialHash } from '@pluto-engine/morton';
+
 
 export class Player {
   sprite: Sprite;
@@ -250,7 +250,6 @@ export class ContinuumFlowGrid {
 
 export class SwarmSystem {
   scene: Scene;
-  hash: MortonSpatialHash;
   maxEnemies: number;
 
   vx: Float32Array;
@@ -281,9 +280,8 @@ export class SwarmSystem {
   ppierce: Int8Array;
   psprite: Sprite[];
 
-  constructor(scene: Scene, hash: MortonSpatialHash, maxEnemies = 40000) {
+  constructor(scene: Scene, maxEnemies = 40000) {
     this.scene = scene;
-    this.hash = hash;
     this.maxEnemies = maxEnemies;
 
     this.vx = new Float32Array(maxEnemies);
@@ -453,7 +451,7 @@ export class SwarmSystem {
 
     const pRadius = 12;
 
-    this.hash.clear();
+    this.scene.spatialHash.clear();
 
     for (let i = 0; i < this.scene.arena.capacity; i++) {
       if (this.scene.arena.active[i] === 0) continue;
@@ -489,7 +487,7 @@ export class SwarmSystem {
       this.vy[i] += (steerY * targetSpd - this.vy[i]) * 8.0 * dt;
       this.scene.arena.posX[i] += this.vx[i] * dt;
       this.scene.arena.posY[i] += this.vy[i] * dt;
-      this.hash.addEntity(i, this.scene.arena.posX[i], this.scene.arena.posY[i]);
+      this.scene.spatialHash.addEntity(i, this.scene.arena.posX[i], this.scene.arena.posY[i]);
 
       if (this.vx[i] > 2) this.scene.arena.facing[i] = 1.0;
       else if (this.vx[i] < -2) this.scene.arena.facing[i] = -1.0;
@@ -509,13 +507,13 @@ export class SwarmSystem {
       }
     }
 
-    this.hash.build();
+    this.scene.spatialHash.build();
 
     const outArray = new Uint32Array(32);
     for (let i = 0; i < this.scene.arena.capacity; i++) {
       if (this.scene.arena.active[i] === 0) continue;
       const eRadius = this.scene.arena.scale[i] * 0.42;
-      const count = this.hash.query(
+      const count = this.scene.spatialHash.query(
         this.scene.arena.posX[i],
         this.scene.arena.posY[i],
         eRadius * 2,

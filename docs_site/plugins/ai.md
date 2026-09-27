@@ -14,3 +14,28 @@ PlutoEngineのAIプラグインは、ロジックツリーをメモリ上の「�
    CPUは同一のAIパターンを持つエンティティの配列を連続して走査し、Switch文やルックアップテーブルを用いて命令をシーケンシャルに処理します。
 
 これにより、キャッシュミスを最小限に抑え、1万体の敵キャラが同時に複雑な索敵・追従・攻撃ロジックを実行してもフレームレートを落としません。
+
+## Standalone Usage
+
+```typescript
+import { UtilityAISystem } from '@pluto-engine/ai';
+const solver = new UtilityAISystem();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { AiPlugin } from '@pluto-engine/ai';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new AiPlugin());
+  }
+
+  update() {
+    // Use it via this.ai
+    // this.ai...
+  }
+}
+```

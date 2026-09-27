@@ -9,8 +9,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'swarm-survivors/index.html')
-      }
-    }
-  }
+        main: resolve(__dirname, 'swarm-survivors/index.html'),
+      },
+    },
+  },
 });

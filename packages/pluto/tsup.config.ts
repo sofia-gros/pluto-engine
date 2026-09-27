@@ -62,5 +62,5 @@ export default defineConfig([
     noExternal: [/(.*)/],
     clean: false,
     esbuildPlugins: [wgslPlugin],
-  }
+  },
 ]);

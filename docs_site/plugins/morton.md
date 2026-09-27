@@ -21,3 +21,28 @@ PlutoEngineでは、エンティティのX, Y座標からモートンコード�
 その後、GPU上で並列基数ソート（Radix Sort）を行い、空間的に近いエンティティ同士がメモリ上でも隣接するようにバッファを並び替えます。
 
 これにより、広域衝突判定（Broad-phase Collision Detection）やカリングが、ポインタを一切使わない1次元配列のバイナリサーチや線形走査だけで爆速に完了します。
+
+## Standalone Usage
+
+```typescript
+import { MortonSpatialHash } from '@pluto-engine/morton';
+const solver = new MortonSpatialHash();
+```
+
+## Plugin Usage (this.registerPlugin)
+
+```typescript
+import { MortonPlugin } from '@pluto-engine/morton';
+
+class MyScene extends Scene {
+  constructor() {
+    super();
+    this.registerPlugin(new MortonPlugin());
+  }
+
+  update() {
+    // Use it via this.spatialHash
+    // this.spatialHash...
+  }
+}
+```

@@ -2,11 +2,15 @@ import type { Plugin } from 'vite';
 
 export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string } {
   // Extract Vertex & Fragment blocks
-  const vertexMatch = wgsl.match(/@vertex\s*fn\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*(?:->\s*([a-zA-Z0-9_]+))?\s*\{([\s\S]*?)\n\}/);
-  const fragMatch = wgsl.match(/@fragment\s*fn\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*->\s*(.*?)\s*\{([\s\S]*?)\n\}/);
+  const vertexMatch = wgsl.match(
+    /@vertex\s*fn\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*(?:->\s*([a-zA-Z0-9_]+))?\s*\{([\s\S]*?)\n\}/,
+  );
+  const fragMatch = wgsl.match(
+    /@fragment\s*fn\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)\s*->\s*(.*?)\s*\{([\s\S]*?)\n\}/,
+  );
 
   if (!vertexMatch || !fragMatch) {
-    console.log("Vertex:", !!vertexMatch, "Frag:", !!fragMatch);
+    console.log('Vertex:', !!vertexMatch, 'Frag:', !!fragMatch);
     throw new Error('Failed to parse WGSL vertex or fragment block');
   }
 
@@ -37,7 +41,8 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
 
   // Parse globals (uniforms, textures)
   const globals: string[] = [];
-  const globalRegex = /@group\(\d+\)\s*@binding\(\d+\)\s*var(?:<uniform>)?\s+([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_<>]+);/g;
+  const globalRegex =
+    /@group\(\d+\)\s*@binding\(\d+\)\s*var(?:<uniform>)?\s+([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_<>]+);/g;
   let gm;
   while ((gm = globalRegex.exec(wgsl)) !== null) {
     const name = gm[1];
@@ -52,7 +57,10 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
   }
 
   // Build Vertex Shader
-  const vertInputArgs = vertexMatch[2].split(',').map(s => s.trim()).filter(Boolean);
+  const vertInputArgs = vertexMatch[2]
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const vertAttrs: string[] = [];
   for (const arg of vertInputArgs) {
     const m = arg.match(/@location\((\d+)\)\s*([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_<>]+)/);
@@ -66,18 +74,18 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
   vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec2<f32>/g, 'vec2 $1 = vec2');
   vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec3<f32>/g, 'vec3 $1 = vec3');
   vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec4<f32>/g, 'vec4 $1 = vec4');
-  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*/g, (_, name) => `${name} = `); // Need types for lets in GLSL... 
+  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*/g, (_, name) => `${name} = `); // Need types for lets in GLSL...
   vertBody = vertBody.replace(/vec2<f32>/g, 'vec2');
   vertBody = vertBody.replace(/vec3<f32>/g, 'vec3');
   vertBody = vertBody.replace(/vec4<f32>/g, 'vec4');
-  
+
   // Handle `out.xxx = ...`
   vertBody = vertBody.replace(/var\s+out\s*:\s*VertexOutput;/g, '');
   vertBody = vertBody.replace(/out\.position/g, 'gl_Position');
   vertBody = vertBody.replace(/out\.([a-zA-Z0-9_]+)/g, 'v_$1');
   vertBody = vertBody.replace(/return\s+out;/g, '');
-  
-  const vertVaryings = varyings.map(v => `out ${v.type} v_${v.name};`).join('\n');
+
+  const vertVaryings = varyings.map((v) => `out ${v.type} v_${v.name};`).join('\n');
 
   const glslVert = `#version 300 es
 precision highp float;
@@ -95,12 +103,15 @@ ${vertBody}
   // Build Fragment Shader
   let fragBody = fragMatch[4];
   fragBody = fragBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*/g, 'vec4 $1 = '); // assuming color
-  fragBody = fragBody.replace(/textureSample\(([^,]+),\s*[^,]+,\s*([^,]+),\s*([^)]+)\)/g, 'texture($1, vec3($2, float($3)))'); // 2D array texture
+  fragBody = fragBody.replace(
+    /textureSample\(([^,]+),\s*[^,]+,\s*([^,]+),\s*([^)]+)\)/g,
+    'texture($1, vec3($2, float($3)))',
+  ); // 2D array texture
   fragBody = fragBody.replace(/in\.([a-zA-Z0-9_]+)/g, 'v_$1');
   fragBody = fragBody.replace(/return\s+(.*?);/g, 'fragColor = $1;');
   fragBody = fragBody.replace(/i32\((.*?)\)/g, 'int($1)');
 
-  const fragVaryings = varyings.map(v => `in ${v.type} v_${v.name};`).join('\n');
+  const fragVaryings = varyings.map((v) => `in ${v.type} v_${v.name};`).join('\n');
 
   const glslFrag = `#version 300 es
 precision highp float;
@@ -131,9 +142,9 @@ export const wgsl = ${JSON.stringify(code)};
 export const glsl = ${JSON.stringify(glsl)};
 export default wgsl;
           `,
-          map: null
+          map: null,
         };
       }
-    }
+    },
   };
 }
