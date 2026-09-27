@@ -215,7 +215,7 @@ export default defineConfig({
   },
 
   themeConfig: {
-    socialLinks: [{ icon: 'github', link: 'https://github.com/yourusername/pluto-engine' }],
+    socialLinks: [{ icon: 'github', link: 'https://github.com/sofia-gros/pluto-engine' }],
     search: {
       provider: 'local',
     },

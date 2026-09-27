@@ -14,7 +14,7 @@ hero:
       link: /en/tutorial/01-setup
     - theme: alt
       text: View on GitHub
-      link: https://github.com/yourusername/pluto-engine
+      link: https://github.com/sofia-gros/pluto-engine
 
 features:
   - title: Ultra Fast Instancing (100,000+ Sprites)

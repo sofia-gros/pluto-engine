@@ -14,7 +14,7 @@ hero:
       link: /tutorial/01-setup
     - theme: alt
       text: GitHubで見る
-      link: https://github.com/yourusername/pluto-engine
+      link: https://github.com/sofia-gros/pluto-engine
 
 features:
   - title: 超高速インスタンシング (100,000+ スプライト)
