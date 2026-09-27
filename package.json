@@ -1,7 +1,11 @@
 {
   "name": "pluto-engine-monorepo",
   "private": true,
-  "workspaces": ["packages/*", "apps/*", "docs_site"],
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "docs_site"
+  ],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
     "build:all": "bun run --if-present --filter \"@pluto-engine/vite-plugin-wgsl\" build && bun run --if-present --filter \"@pluto-engine/*\" build && bun run --if-present --filter \"pluto-engine\" build",
@@ -18,5 +22,6 @@
     "playwright": "^1.40.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
-  }
+  },
+  "version": "1.0.0"
 }
