@@ -1,5 +1,5 @@
 {
-  "name": "@pluto-engine/vite-plugin-wgsl",
+  "name": "@plutoengine/vite-plugin-wgsl",
   "version": "1.0.0",
   "description": "Vite plugin to load WGSL files and optionally transpile to GLSL",
   "main": "dist/index.js",

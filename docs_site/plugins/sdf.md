@@ -19,14 +19,14 @@ PlutoEngineのDODアーキテクチャでは、初期化時にこのアルゴリ
 ## Standalone Usage
 
 ```typescript
-import { SDFCollider } from '@pluto-engine/sdf-collider';
+import { SDFCollider } from '@plutoengine/sdf-collider';
 const solver = new SDFCollider();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { SdfPlugin } from '@pluto-engine/sdf-collider';
+import { SdfPlugin } from '@plutoengine/sdf-collider';
 
 class MyScene extends Scene {
   constructor() {

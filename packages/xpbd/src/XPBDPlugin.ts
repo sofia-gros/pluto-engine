@@ -1,7 +1,7 @@
-import type { Scene, Plugin } from '@pluto-engine/core';
+import type { Scene, Plugin } from '@plutoengine/core';
 import { XPBDSolver } from './XPBDSolver';
 
-declare module '@pluto-engine/core' {
+declare module '@plutoengine/core' {
   interface Scene {
     xpbd?: XPBDSolver;
   }

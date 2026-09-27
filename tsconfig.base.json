@@ -12,7 +12,7 @@
     "noUnusedParameters": true,
     "baseUrl": ".",
     "paths": {
-      "@pluto-engine/*": ["packages/*/src"]
+      "@plutoengine/*": ["packages/*/src"]
     },
     "types": ["@webgpu/types"]
   }

@@ -30,12 +30,12 @@ $$\text{判定回数} = 5,000 \times 5,000 = 25,000,000 \text{ 回 / フレー�
 
 ## 2. MortonPlugin の登録
 
-PlutoEngine には、モートンコード（Z-order Curve）を用いた超高速な空間ハッシュパッケージ `@pluto-engine/morton` が用意されています。
+PlutoEngine には、モートンコード（Z-order Curve）を用いた超高速な空間ハッシュパッケージ `@plutoengine/morton` が用意されています。
 プラグインとして登録するだけで、シーン内にゼロアロケーションの空間ハッシュが注入されます。
 
 ```typescript
-import { Scene } from '@pluto-engine/core';
-import { MortonPlugin } from '@pluto-engine/morton';
+import { Scene } from '@plutoengine/core';
+import { MortonPlugin } from '@plutoengine/morton';
 
 export class SwarmSurvivorScene extends Scene {
   constructor() {

@@ -1,7 +1,7 @@
-import type { Scene, Plugin } from '@pluto-engine/core';
+import type { Scene, Plugin } from '@plutoengine/core';
 import { VerletSolver } from './VerletSolver';
 
-declare module '@pluto-engine/core' {
+declare module '@plutoengine/core' {
   interface Scene {
     verlet?: VerletSolver;
   }

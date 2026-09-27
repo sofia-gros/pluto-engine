@@ -4,7 +4,7 @@
   "workspaces": ["packages/*", "apps/*", "docs_site"],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
-    "build:all": "bun run --if-present --filter \"@pluto-engine/vite-plugin-wgsl\" build && bun run --if-present --filter \"@pluto-engine/*\" build && bun run --if-present --filter \"pluto-engine\" build",
+    "build:all": "bun run --if-present --filter \"@plutoengine/vite-plugin-wgsl\" build && bun run --if-present --filter \"@plutoengine/*\" build && bun run --if-present --filter \"pluto-engine\" build",
     "build": "bun run build:all",
     "test": "vitest run --browser.enabled=true --browser.name=chromium --browser.provider=playwright",
     "test:watch": "vitest --browser.enabled=true --browser.name=chromium --browser.provider=playwright",

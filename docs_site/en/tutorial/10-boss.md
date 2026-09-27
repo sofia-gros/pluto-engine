@@ -209,8 +209,8 @@ PlutoEngine provides an expansive canvas for your creativity. Consider these nex
 
 - 🎨 **Custom Spritesheets**: Load custom pixel art using `this.load.image`.
 - ⚔️ **New Weapon Arsenals**: Add chain lightning, orbiting shields, and flame trails.
-- 🧪 **Poisson Disk Sampling**: Use `@pluto-engine/poisson` to scatter natural obstacles and trees.
-- 🦾 **Verlet Inverse Kinematics**: Use `@pluto-engine/verlet-ik` to attach writhing multi-jointed tentacles to boss monsters.
+- 🧪 **Poisson Disk Sampling**: Use `@plutoengine/poisson` to scatter natural obstacles and trees.
+- 🦾 **Verlet Inverse Kinematics**: Use `@plutoengine/verlet-ik` to attach writhing multi-jointed tentacles to boss monsters.
 
 Explore the sidebar to delve into **[Concepts](/en/concepts/engine-config)**, **[Plugins](/en/plugins/xpbd)**, and the complete **[API Reference](/en/api/pluto-engine)**.
 

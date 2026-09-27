@@ -1,5 +1,5 @@
 {
-  "name": "@pluto-engine/core",
+  "name": "@plutoengine/core",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,6 @@
     "typescript": "^5.6.0"
   },
   "dependencies": {
-    "@pluto-engine/renderer": "workspace:*"
+    "@plutoengine/renderer": "workspace:*"
   }
 }

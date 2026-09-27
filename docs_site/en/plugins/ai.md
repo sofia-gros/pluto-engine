@@ -18,14 +18,14 @@ This minimizes CPU cache misses, allowing 10,000 enemy entities to simultaneousl
 ## Standalone Usage
 
 ```typescript
-import { UtilityAISystem } from '@pluto-engine/ai';
+import { UtilityAISystem } from '@plutoengine/ai';
 const solver = new UtilityAISystem();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { AiPlugin } from '@pluto-engine/ai';
+import { AiPlugin } from '@plutoengine/ai';
 
 class MyScene extends Scene {
   constructor() {

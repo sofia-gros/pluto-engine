@@ -46,7 +46,7 @@ PlutoEngine provides multiple distribution methods to suit your project.
 
 ### 1. Via Package Manager (TypeScript / Bundlers)
 ```bash
-bun add @pluto-engine/core @pluto-engine/renderer
+bun add @plutoengine/core @plutoengine/renderer
 ```
 
 ### 2. Via CDN (No Build Tools Required)
@@ -67,7 +67,7 @@ PlutoEngine provides two types of standalone files:
 <body>
     <script type="module">
         // Import directly from npm via unpkg CDN
-        import { PlutoEngine, Scene } from 'https://unpkg.com/pluto-engine@latest/dist/pluto.esm.min.js';
+        import { PlutoEngine, Scene } from 'https://unpkg.com/plutoengine@latest/dist/pluto.esm.min.js';
 
         class MainScene extends Scene {
             create() {
@@ -87,8 +87,8 @@ PlutoEngine provides two types of standalone files:
 ### Quick Start Example (TypeScript)
 
 ```typescript
-import { PlutoEngine, Scene } from '@pluto-engine/core';
-import { MortonPlugin } from '@pluto-engine/morton';
+import { PlutoEngine, Scene } from '@plutoengine/core';
+import { MortonPlugin } from '@plutoengine/morton';
 
 class MainScene extends Scene {
   init() {
@@ -122,3 +122,4 @@ Read the full documentation, architecture deep-dives, and our **10-Part Swarm Su
 
 ## 📄 License
 MIT License
+

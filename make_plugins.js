@@ -11,10 +11,10 @@ const packages = [
 
 for (const pkg of packages) {
   const pluginFile = path.join('packages', pkg.name, 'src', `${pkg.className}.ts`);
-  const content = `import type { Scene, Plugin } from '@pluto-engine/core';
+  const content = `import type { Scene, Plugin } from '@plutoengine/core';
 import { ${pkg.implClass} } from '${pkg.importFrom}';
 
-declare module '@pluto-engine/core' {
+declare module '@plutoengine/core' {
   interface Scene {
     ${pkg.prop}?: ${pkg.implClass};
   }
@@ -43,6 +43,6 @@ export class ${pkg.className} implements Plugin {
   const packageJsonPath = path.join('packages', pkg.name, 'package.json');
   const pkgJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   pkgJson.dependencies = pkgJson.dependencies || {};
-  pkgJson.dependencies['@pluto-engine/core'] = 'workspace:*';
+  pkgJson.dependencies['@plutoengine/core'] = 'workspace:*';
   fs.writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
 }

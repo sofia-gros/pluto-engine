@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @pluto-engine/ai
+bun add @plutoengine/ai
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @pluto-engine/ai
 ### Import
 
 ```typescript
-import { UtilityAISystem } from '@pluto-engine/ai';
+import { UtilityAISystem } from '@plutoengine/ai';
 ```
 
 ### Create instance

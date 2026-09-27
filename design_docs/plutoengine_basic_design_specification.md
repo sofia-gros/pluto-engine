@@ -100,13 +100,13 @@ PlutoEngine は Bun ワークスペースを活用したモノレポ構造で構
                +-------------------------+-------------------------+
                |                                                   |
                v                                                   v
-       @pluto-engine/core                                 @pluto-engine/swarm
+       @plutoengine/core                                 @plutoengine/swarm
 (Scene, GameLoop, Input, Managers, Audio)               (All-in-One Swarm Facade)
                |                                                   |
        +-------+---------------+                                   |
        |       |               |                                   |
        v       v               v                                   |
-@pluto-engine/renderer   @pluto-engine/tilemap                     |
+@plutoengine/renderer   @plutoengine/tilemap                     |
 (Unified GPU Pipeline)   (TMX / LDtk Parser)                       |
        ^                                                           |
        |===========================================================+
@@ -115,21 +115,21 @@ PlutoEngine は Bun ワークスペースを活用したモノレポ構造で構
        +---------------+---------------+-------------------+
        |               |               |                   |
        v               v               v                   v
-@pluto-engine/morton  @pluto-engine/xpbd  @pluto-engine/poisson  @pluto-engine/continuum
+@plutoengine/morton  @plutoengine/xpbd  @plutoengine/poisson  @plutoengine/continuum
 ```
 
 ### 3.2 パッケージ責務定義
 
 | パッケージ名 | 責務・提供機能 | 依存関係 |
 | ----- | ----- | ----- |
-| `@pluto-engine/core` | エンジン初期化、Scene基底、マネージャー群（Time, Tweens, Anims, Scale, Sound, Registry）、Input、Flyweight Sprite | なし（基底） |
-| `@pluto-engine/renderer` | WebGL2/WebGPU 統一シングルパス描画、シェーダー管理、テクスチャアトラス、法線ライティング | `@pluto-engine/core` |
-| `@pluto-engine/tilemap` | TMX (Tiled) / LDtk 等のタイルデータ解析、静的インスタンスデータ変換 | `@pluto-engine/core` |
-| `@pluto-engine/morton` | **【完全独立】** 2D Morton符号化（Z-Order）、近傍空間ハッシュ探索 | なし（Pure Math） |
-| `@pluto-engine/xpbd` | **【完全独立】** 拡張位置ベース動力学（XPBD）接触拘束・剛体緩和ソルバー | なし（Pure Math） |
-| `@pluto-engine/poisson` | **【完全独立】** 均一非圧縮性制約（UIC）圧力緩和ソルバー | なし（Pure Math） |
-| `@pluto-engine/continuum` | **【完全独立】** アイコナール方程式に基づく大群ナビゲーションベクトル場 | なし（Pure Math） |
-| `@pluto-engine/swarm` | 上記4数学モジュールを配線し、1行で統合群集を制御する高レベルファサード | 上記4数学モジュール |
+| `@plutoengine/core` | エンジン初期化、Scene基底、マネージャー群（Time, Tweens, Anims, Scale, Sound, Registry）、Input、Flyweight Sprite | なし（基底） |
+| `@plutoengine/renderer` | WebGL2/WebGPU 統一シングルパス描画、シェーダー管理、テクスチャアトラス、法線ライティング | `@plutoengine/core` |
+| `@plutoengine/tilemap` | TMX (Tiled) / LDtk 等のタイルデータ解析、静的インスタンスデータ変換 | `@plutoengine/core` |
+| `@plutoengine/morton` | **【完全独立】** 2D Morton符号化（Z-Order）、近傍空間ハッシュ探索 | なし（Pure Math） |
+| `@plutoengine/xpbd` | **【完全独立】** 拡張位置ベース動力学（XPBD）接触拘束・剛体緩和ソルバー | なし（Pure Math） |
+| `@plutoengine/poisson` | **【完全独立】** 均一非圧縮性制約（UIC）圧力緩和ソルバー | なし（Pure Math） |
+| `@plutoengine/continuum` | **【完全独立】** アイコナール方程式に基づく大群ナビゲーションベクトル場 | なし（Pure Math） |
+| `@plutoengine/swarm` | 上記4数学モジュールを配線し、1行で統合群集を制御する高レベルファサード | 上記4数学モジュール |
 
 ---
 
@@ -406,7 +406,7 @@ GPUキャッシュライン（64バイト）に2インスタンスが整列し�
 重厚なシーングラフを持たないため、見た目はPhaserそのものでありながら、内部では圧倒的な軽快さで動作する。
 
 ```typescript
-import { Pluto, Scene, Sprite } from "@pluto-engine/core";
+import { Pluto, Scene, Sprite } from "@plutoengine/core";
 
 export class ActionRpgScene extends Scene {
   private player!: Sprite;

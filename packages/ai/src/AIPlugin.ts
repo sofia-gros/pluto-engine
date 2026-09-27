@@ -1,7 +1,7 @@
-import type { Scene, Plugin } from '@pluto-engine/core';
+import type { Scene, Plugin } from '@plutoengine/core';
 import { UtilityAISystem } from './UtilityAISystem';
 
-declare module '@pluto-engine/core' {
+declare module '@plutoengine/core' {
   interface Scene {
     ai?: UtilityAISystem;
   }

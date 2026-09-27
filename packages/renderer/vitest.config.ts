@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import wgsl from '@pluto-engine/vite-plugin-wgsl';
+import wgsl from '@plutoengine/vite-plugin-wgsl';
 
 const wgslPlugin = (wgsl as any).default || wgsl;
 

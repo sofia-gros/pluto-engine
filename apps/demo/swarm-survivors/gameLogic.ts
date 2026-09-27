@@ -1,4 +1,4 @@
-import type { Scene, Sprite } from '@pluto-engine/core';
+import type { Scene, Sprite } from '@plutoengine/core';
 
 
 export class Player {

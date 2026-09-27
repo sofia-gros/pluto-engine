@@ -1,5 +1,5 @@
 {
-  "name": "@pluto-engine/xpbd",
+  "name": "@plutoengine/xpbd",
   "version": "1.0.0",
   "description": "XPBD (Extended Position-Based Dynamics) solver for PlutoEngine",
   "main": "./dist/index.js",
@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@pluto-engine/core": "workspace:*"
+    "@plutoengine/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

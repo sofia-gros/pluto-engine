@@ -12,12 +12,12 @@ PlutoEngine では、`new Sprite()` などのオブジェクト生成は**初期
 
 ## 2. API リファレンス
 
-### 2.1 PlutoEngine と Scene クラス (`@pluto-engine/core`)
+### 2.1 PlutoEngine と Scene クラス (`@plutoengine/core`)
 `PlutoEngine` がエントリポイントとなり、`Scene` がゲームのロジックを担当します。Phaser と完全に同じDXで構築できます。
 
 ```typescript
-import { PlutoEngine, Scene } from '@pluto-engine/core';
-import { XPBDSolver } from '@pluto-engine/xpbd'; // プラグイン例
+import { PlutoEngine, Scene } from '@plutoengine/core';
+import { XPBDSolver } from '@plutoengine/xpbd'; // プラグイン例
 
 class MyGame extends Scene {
   create() {
@@ -46,21 +46,21 @@ interface Plugin {
 }
 ```
 
-### 2.3 空間ハッシュ (`@pluto-engine/morton`)
+### 2.3 空間ハッシュ (`@plutoengine/morton`)
 Morton空間ハッシュを用いて、数万体の近傍探索を $O(1)$ で行います。
 ```typescript
-import { MortonSpatialHash } from '@pluto-engine/morton';
+import { MortonSpatialHash } from '@plutoengine/morton';
 // 内部でUint32Arrayなどを使い、ゼロアロケで実装されています。
 ```
 
-### 2.4 物理ソルバ (`@pluto-engine/xpbd`, `@pluto-engine/verlet-ik`)
+### 2.4 物理ソルバ (`@plutoengine/xpbd`, `@plutoengine/verlet-ik`)
 - `XPBDSolver`: 位置ベース動力学。敵同士の「めり込み反発」を一括計算します。
 - `VerletSolver`: マントや触手など、点の距離制約を用いた軽量なIK。
 
-### 2.5 レンダラ (`@pluto-engine/renderer`)
+### 2.5 レンダラ (`@plutoengine/renderer`)
 WebGL2 と WebGPU を抽象化した統合レンダラです。
 ```typescript
-import { createGraphicsDevice } from '@pluto-engine/renderer';
+import { createGraphicsDevice } from '@plutoengine/renderer';
 
 const canvas = document.getElementById('game-canvas');
 const device = await createGraphicsDevice(canvas);

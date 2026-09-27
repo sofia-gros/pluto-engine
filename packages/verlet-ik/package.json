@@ -1,5 +1,5 @@
 {
-  "name": "@pluto-engine/verlet-ik",
+  "name": "@plutoengine/verlet-ik",
   "version": "1.0.0",
   "description": "Zero-allocation Verlet integration and IK for rope and cloth physics",
   "type": "module",
@@ -14,7 +14,7 @@
     "tsup": "^8.2.0"
   },
   "dependencies": {
-    "@pluto-engine/core": "workspace:*"
+    "@plutoengine/core": "workspace:*"
   },
   "types": "./dist/index.d.ts",
   "exports": {

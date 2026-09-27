@@ -25,14 +25,14 @@ PlutoEngineでは、エンティティのX, Y座標からモートンコード�
 ## Standalone Usage
 
 ```typescript
-import { MortonSpatialHash } from '@pluto-engine/morton';
+import { MortonSpatialHash } from '@plutoengine/morton';
 const solver = new MortonSpatialHash();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { MortonPlugin } from '@pluto-engine/morton';
+import { MortonPlugin } from '@plutoengine/morton';
 
 class MyScene extends Scene {
   constructor() {

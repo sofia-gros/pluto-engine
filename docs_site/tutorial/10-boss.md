@@ -212,8 +212,8 @@ PlutoEngine の可能性は無限大です。ここからさらに発展させ�
 
 - 🎨 **カスタムスプライトシートのロード**: `this.load.image` で美しいドット絵キャラクターを適用。
 - ⚔️ **新しい武器の追加**: 稲妻チェーンライトニング、炎の結界、巨大鎌など。
-- 🧪 **ポアソンディスクサンプリング**: `@pluto-engine/poisson` で障害物（木や岩）を自然に配置。
-- 🦾 **Verlet IK 触手**: `@pluto-engine/verlet-ik` でボスにうねる多関節の触手を実装。
+- 🧪 **ポアソンディスクサンプリング**: `@plutoengine/poisson` で障害物（木や岩）を自然に配置。
+- 🦾 **Verlet IK 触手**: `@plutoengine/verlet-ik` でボスにうねる多関節の触手を実装。
 
 さらに詳しい技術仕様については、左サイドバーの **[コア概念](/concepts/engine-config)** や **[プラグイン](/plugins/xpbd)**、**[APIリファレンス](/api/pluto-engine)** をご覧ください。
 

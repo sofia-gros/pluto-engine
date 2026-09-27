@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @pluto-engine/morton
+bun add @plutoengine/morton
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @pluto-engine/morton
 ### Import
 
 ```typescript
-import { MortonSpatialHash, encodeMorton2D } from '@pluto-engine/morton';
+import { MortonSpatialHash, encodeMorton2D } from '@plutoengine/morton';
 ```
 
 ### Create instance

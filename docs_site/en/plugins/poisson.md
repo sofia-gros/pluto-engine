@@ -4,14 +4,14 @@
 ## Standalone Usage
 
 ```typescript
-import { PoissonSolver } from '@pluto-engine/poisson';
+import { PoissonSolver } from '@plutoengine/poisson';
 const solver = new PoissonSolver();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { PoissonPlugin } from '@pluto-engine/poisson';
+import { PoissonPlugin } from '@plutoengine/poisson';
 
 class MyScene extends Scene {
   constructor() {
