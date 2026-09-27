@@ -14,6 +14,7 @@ import { mathHelpers } from '../math/Math';
 import { TweenManager } from '../tween/TweenManager';
 import type { Plugin } from './Plugin';
 import type { SceneManager } from './SceneManager';
+import { Camera } from './Camera';
 
 export class Scene {
   public key = '';
@@ -24,6 +25,8 @@ export class Scene {
   public input!: InputManager;
   public load!: LoaderManager;
   public tweens!: TweenManager;
+  
+  public camera: Camera;
 
   private _plugins: Plugin[] = [];
 
@@ -36,12 +39,6 @@ export class Scene {
   public get time() {
     return this.engine.time;
   }
-
-  public camera = {
-    x: 0,
-    y: 0,
-    zoom: 1.0,
-  };
 
   public readonly add = {
     sprite: (x = 0, y = 0, scale = 20): Sprite => {
@@ -64,6 +61,7 @@ export class Scene {
     this.input = new InputManager();
     this.load = new LoaderManager();
     this.tweens = new TweenManager(this.arena);
+    this.camera = new Camera();
   }
 
   public init(): void {}
@@ -86,11 +84,38 @@ export class Scene {
   }
 
   public sysUpdate(dt: number): void {
+    this.camera.update(dt);
     this.input.update();
     this.tweens.update(dt);
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {
       this._plugins[i].update?.(dt);
+    }
+    
+    // シーングラフ（親子階層）の更新
+    // キャッシュ効率のため、ループを分けるかまとめますが、ここでは単純に回します。
+    const arena = this.arena;
+    const count = arena.capacity; // IDはcapacityまで使われる可能性がある（再利用など考慮して全配列スキャン）
+    for (let i = 0; i < count; i++) {
+      if (arena.active[i] === 0) continue;
+      const pid = arena.parentId[i];
+      if (pid !== -1 && arena.active[pid] !== 0) {
+        // Simple position inheritance (no rotation inheritance in this basic version, or with rotation)
+        const pr = arena.rotation[pid];
+        const lx = arena.localX[i];
+        const ly = arena.localY[i];
+        
+        if (pr !== 0.0) {
+          const cosR = Math.cos(pr);
+          const sinR = Math.sin(pr);
+          arena.posX[i] = arena.posX[pid] + (lx * cosR - ly * sinR);
+          arena.posY[i] = arena.posY[pid] + (lx * sinR + ly * cosR);
+        } else {
+          arena.posX[i] = arena.posX[pid] + lx;
+          arena.posY[i] = arena.posY[pid] + ly;
+        }
+        arena.rotation[i] = arena.rotation[pid] + arena.localRotation[i];
+      }
     }
   }
 

@@ -13,9 +13,16 @@ export class InstanceBufferArena {
   // --- SoA Arrays ---
   public readonly posX: Float32Array;
   public readonly posY: Float32Array;
+  public readonly rotation: Float32Array;
   public readonly scale: Float32Array;
   public readonly facing: Float32Array;
   public readonly tint: Uint32Array; // 0xAABBGGRR 形式などを想定
+
+  // --- Hierarchy ---
+  public readonly parentId: Int32Array;
+  public readonly localX: Float32Array;
+  public readonly localY: Float32Array;
+  public readonly localRotation: Float32Array;
 
   // 生存フラグ
   public readonly active: Uint8Array;
@@ -34,9 +41,16 @@ export class InstanceBufferArena {
     // メモリの一括確保
     this.posX = new Float32Array(maxInstances);
     this.posY = new Float32Array(maxInstances);
+    this.rotation = new Float32Array(maxInstances);
     this.scale = new Float32Array(maxInstances);
     this.facing = new Float32Array(maxInstances);
     this.tint = new Uint32Array(maxInstances);
+    
+    this.parentId = new Int32Array(maxInstances).fill(-1);
+    this.localX = new Float32Array(maxInstances);
+    this.localY = new Float32Array(maxInstances);
+    this.localRotation = new Float32Array(maxInstances);
+
     this.active = new Uint8Array(maxInstances);
 
     this.freeList = new Int32Array(maxInstances);
@@ -66,9 +80,14 @@ export class InstanceBufferArena {
     // デフォルト値の初期化
     this.posX[id] = 0.0;
     this.posY[id] = 0.0;
+    this.rotation[id] = 0.0;
     this.scale[id] = 1.0;
     this.facing[id] = 1.0;
     this.tint[id] = 0xffffffff; // 白 (RGBA)
+    this.parentId[id] = -1;
+    this.localX[id] = 0.0;
+    this.localY[id] = 0.0;
+    this.localRotation[id] = 0.0;
 
     return id;
   }
@@ -84,6 +103,7 @@ export class InstanceBufferArena {
 
     this.active[id] = 0;
     this._activeCount--;
+    this.parentId[id] = -1;
 
     // 空きリストに戻す
     this.freeList[--this.freeListHead] = id;
@@ -103,6 +123,7 @@ export class InstanceBufferArena {
     this._activeCount = 0;
     this.freeListHead = 0;
     this.active.fill(0);
+    this.parentId.fill(-1);
 
     for (let i = 0; i < this.capacity; i++) {
       this.freeList[i] = i;

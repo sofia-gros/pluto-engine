@@ -47,6 +47,17 @@
         "vitest": "^2.0.0",
       },
     },
+    "packages/audio": {
+      "name": "@pluto-engine/audio",
+      "version": "0.1.0",
+      "dependencies": {
+        "@pluto-engine/core": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "^8.2.0",
+        "typescript": "^5.6.0",
+      },
+    },
     "packages/core": {
       "name": "@pluto-engine/core",
       "version": "0.1.0",
@@ -323,6 +334,8 @@
     "@open-draft/until": ["@open-draft/until@2.1.0", "", {}, "sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg=="],
 
     "@pluto-engine/ai": ["@pluto-engine/ai@workspace:packages/ai"],
+
+    "@pluto-engine/audio": ["@pluto-engine/audio@workspace:packages/audio"],
 
     "@pluto-engine/core": ["@pluto-engine/core@workspace:packages/core"],
 

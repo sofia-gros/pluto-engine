@@ -161,26 +161,20 @@ export class PlutoEngine {
     const w = this.canvasElement!.width;
     const h = this.canvasElement!.height;
     const zoom = activeScene.camera?.zoom || 1.4;
-    const cx = activeScene.camera?.x || 0;
-    const cy = activeScene.camera?.y || 0;
+    const rot = activeScene.camera?.rotation || 0.0;
+    const cx = activeScene.camera?.actualX || 0;
+    const cy = activeScene.camera?.actualY || 0;
+
+    const cosR = Math.cos(-rot);
+    const sinR = Math.sin(-rot);
+    const sx = (2 / w) * zoom;
+    const sy = -(2 / h) * zoom;
 
     const proj = new Float32Array([
-      (2 / w) * zoom,
-      0,
-      0,
-      0,
-      0,
-      -(2 / h) * zoom,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      -(cx * (2 / w) * zoom),
-      cy * (2 / h) * zoom,
-      0,
-      1,
+      sx * cosR,           sy * sinR,          0, 0,
+      sx * -sinR,          sy * cosR,          0, 0,
+      0,                   0,                  1, 0,
+      sx * (-cx * cosR + cy * sinR), sy * (-cx * sinR - cy * cosR), 0, 1
     ]);
 
     this.device.setUniformMatrix4fv('projectionMatrix', proj);
