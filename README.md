@@ -49,15 +49,14 @@ PlutoEngine provides multiple distribution methods to suit your project.
 bun add @pluto-engine/core @pluto-engine/renderer
 ```
 
-### 2. Standalone Scripts (No Build Tools Required)
-You can download the pre-built bundles from the [GitHub Releases](https://github.com/sofia-gros/pluto-engine/releases) page and use them directly in a vanilla HTML file.
+### 2. Via CDN (No Build Tools Required)
+Since `v1.0.0`, PlutoEngine is published to npm, which means you can directly load it from CDNs like **unpkg** or **jsDelivr** in a vanilla HTML file.
 
-We provide two types of standalone files:
+PlutoEngine provides two types of standalone files:
 - **`pluto.esm.min.js`**: Use this if you want to use modern ES modules (`<script type="module">`). It allows you to `import` exactly what you need.
 - **`pluto.global.min.js`**: Use this for traditional setups (`<script src="...">`). It exposes all engine features under a single global variable named `Pluto`.
 
-#### Example using ES Modules (`pluto.esm.min.js`)
-Download `pluto.esm.min.js` and place it in your project folder:
+#### Example using ES Modules via unpkg
 
 ```html
 <!DOCTYPE html>
@@ -67,8 +66,8 @@ Download `pluto.esm.min.js` and place it in your project folder:
 </head>
 <body>
     <script type="module">
-        // Import directly from the downloaded file
-        import { PlutoEngine, Scene } from './pluto.esm.min.js';
+        // Import directly from npm via unpkg CDN
+        import { PlutoEngine, Scene } from 'https://unpkg.com/pluto-engine@latest/dist/pluto.esm.min.js';
 
         class MainScene extends Scene {
             create() {
@@ -79,6 +78,9 @@ Download `pluto.esm.min.js` and place it in your project folder:
         new PlutoEngine({ width: 800, height: 600, scene: MainScene });
     </script>
 </body>
+</html>
+```
+
 </html>
 ```
 
