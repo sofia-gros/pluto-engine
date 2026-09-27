@@ -1,7 +1,7 @@
 {
   "name": "pluto-engine-monorepo",
   "private": true,
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": ["packages/*", "apps/*", "docs_site"],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
     "build": "bun --filter \"packages/*\" run build",
