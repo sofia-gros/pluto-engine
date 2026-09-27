@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: "PlutoEngine",
+  base: "/pluto-engine/",
   description: "Next-generation Zero-Allocation 2D WebGL/WebGPU Game Engine",
   themeConfig: {
     nav: [
