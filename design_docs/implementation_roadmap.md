@@ -24,15 +24,15 @@
 ## フェーズ 2: 数学・物理・インテリジェンス (Math, Physics & AI Solvers)
 ブラウザAPI（WebGLやDOM）に依存しない純粋な TypeScript アルゴリズム群を実装します。将来的にWasm化可能なように設計しますが、基本は Pure TS で構築しエコシステムの利便性を保ちます。
 
-- [ ] **Step 2.1: 2D Morton 空間ハッシュ (`@plutoengine/morton`)**
+- [ ] **Step 2.1: 2D Morton 空間ハッシュ (`@pluto-engine/morton`)**
   - アクション、STG、RPGのすべての近傍探索を加速するビット演算空間ハッシュ。
-- [ ] **Step 2.2: 2D-SDF コライダー (`@plutoengine/sdf-collider`)**
+- [ ] **Step 2.2: 2D-SDF コライダー (`@pluto-engine/sdf-collider`)**
   - タイルマップ等の地形を符号付き距離場 (SDF) として保持し、どんな数万の群集やプレイヤーも「角に引っかからず滑らかに滑る」 $O(1)$ の衝突判定を実装。
-- [ ] **Step 2.3: XPBD 剛体緩和ソルバ (`@plutoengine/xpbd`)**
+- [ ] **Step 2.3: XPBD 剛体緩和ソルバ (`@pluto-engine/xpbd`)**
   - 位置ベース動力学によるめり込み反発アルゴリズム。
-- [ ] **Step 2.4: Continuum Crowds & Poisson UIC (`@plutoengine/poisson`, `continuum`)**
+- [ ] **Step 2.4: Continuum Crowds & Poisson UIC (`@pluto-engine/poisson`, `continuum`)**
   - 流体力学的な群集シミュレーション。グリッドベースの密度スプラッティングと、ヤコビ反復法を用いた圧力ポアソン方程式ソルバの実装。
-- [ ] **Step 2.5: SoA ユーティリティ AI (`@plutoengine/ai`)**
+- [ ] **Step 2.5: SoA ユーティリティ AI (`@pluto-engine/ai`)**
   - FSM（状態遷移）の複雑さを排除し、SoAアーキテクチャ上で数万体のNPCの行動（接近、逃走、補給など）を軽量に意思決定するシステム。
 
 ---
@@ -54,7 +54,7 @@
 
 - [ ] **Step 4.1: Scene クラスとプラグインシステムの統合**
   - `this.add.sprite()` などの基本APIと、ユーザーが物理エンジン（XPBD、Verlet、またはMatter.js等）を自由に抜き差しできるプラグインアーキテクチャの構築。
-- [ ] **Step 4.2: 軽量物理モジュール `@plutoengine/verlet-ik` の構築**
+- [ ] **Step 4.2: 軽量物理モジュール `@pluto-engine/verlet-ik` の構築**
   - マントや触手の演出に特化した軽量な Verlet積分モジュールをパッケージとして分離・実装し、プラガブルな設計を検証。
 - [ ] **Step 4.3: デモアプリ (`apps/demo`) の実装**
   - 構築した全機能を用いたゲームロジックを実装し、実ブラウザ上でのプロファイリング（GCゼロ、目標FPSの維持）を検証。

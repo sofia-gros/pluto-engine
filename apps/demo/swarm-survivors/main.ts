@@ -1,5 +1,5 @@
-import { PlutoEngine, Scene } from '@plutoengine/core';
-import { MortonPlugin } from '@plutoengine/morton';
+import { PlutoEngine, Scene } from '@pluto-engine/core';
+import { MortonPlugin } from '@pluto-engine/morton';
 
 import { ContinuumFlowGrid, Player, SwarmSystem } from './gameLogic.js';
 import { InteractiveSkillTreeUI, SaveManager, SkillTreeGraph } from './tree.js';

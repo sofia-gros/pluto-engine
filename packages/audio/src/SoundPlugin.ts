@@ -5,7 +5,7 @@
  * ユーザーは this.registerPlugin(new SoundPlugin()) として登録可能。
  */
 
-import type { Plugin, Scene } from '@plutoengine/core';
+import type { Plugin, Scene } from '@pluto-engine/core';
 import { SoundManager } from './SoundManager';
 
 export class SoundPlugin implements Plugin {

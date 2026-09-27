@@ -30,12 +30,12 @@ When a bullet or weapon searches for an enemy, it only needs to scan **the few c
 
 ## 2. Registering MortonPlugin
 
-PlutoEngine provides an ultra-fast spatial hashing package `@plutoengine/morton` using Morton codes (Z-order Curve).
+PlutoEngine provides an ultra-fast spatial hashing package `@pluto-engine/morton` using Morton codes (Z-order Curve).
 By simply registering it as a plugin, a zero-allocation spatial hash is injected into your scene.
 
 ```typescript
-import { Scene } from '@plutoengine/core';
-import { MortonPlugin } from '@plutoengine/morton';
+import { Scene } from '@pluto-engine/core';
+import { MortonPlugin } from '@pluto-engine/morton';
 
 export class SwarmSurvivorScene extends Scene {
   constructor() {

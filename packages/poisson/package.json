@@ -1,5 +1,5 @@
 {
-  "name": "@plutoengine/poisson",
+  "name": "@pluto-engine/poisson",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,6 +21,6 @@
     "vitest": "^2.1.1"
   },
   "dependencies": {
-    "@plutoengine/core": "workspace:*"
+    "@pluto-engine/core": "workspace:*"
   }
 }

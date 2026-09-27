@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @plutoengine/renderer
+bun add @pluto-engine/renderer
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @plutoengine/renderer
 ### Import
 
 ```typescript
-import { createGraphicsDevice, GraphicsDevice } from '@plutoengine/renderer';
+import { createGraphicsDevice, GraphicsDevice } from '@pluto-engine/renderer';
 ```
 
 ### Initialization

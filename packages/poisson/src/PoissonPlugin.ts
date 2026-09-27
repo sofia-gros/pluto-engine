@@ -1,7 +1,7 @@
-import type { Scene, Plugin } from '@plutoengine/core';
+import type { Scene, Plugin } from '@pluto-engine/core';
 import { PoissonSolver } from './PoissonSolver';
 
-declare module '@plutoengine/core' {
+declare module '@pluto-engine/core' {
   interface Scene {
     poisson?: PoissonSolver;
   }

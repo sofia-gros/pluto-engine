@@ -22,14 +22,14 @@ PlutoEngine's XPBD solver is designed entirely using Data-Oriented Design.
 ## Standalone Usage
 
 ```typescript
-import { XPBDSolver } from '@plutoengine/xpbd';
+import { XPBDSolver } from '@pluto-engine/xpbd';
 const solver = new XPBDSolver();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { XpbdPlugin } from '@plutoengine/xpbd';
+import { XpbdPlugin } from '@pluto-engine/xpbd';
 
 class MyScene extends Scene {
   constructor() {

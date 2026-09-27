@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import wgsl from '@plutoengine/vite-plugin-wgsl';
+import wgsl from '@pluto-engine/vite-plugin-wgsl';
 import { resolve } from 'path';
 
 const wgslPlugin = (wgsl as any).default || wgsl;

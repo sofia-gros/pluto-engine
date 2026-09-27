@@ -1,5 +1,5 @@
 {
-  "name": "plutoengine",
+  "name": "pluto-engine",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/pluto.global.js",
@@ -17,17 +17,17 @@
     "dev": "tsup --watch"
   },
   "dependencies": {
-    "@plutoengine/ai": "workspace:*",
-    "@plutoengine/core": "workspace:*",
-    "@plutoengine/morton": "workspace:*",
-    "@plutoengine/poisson": "workspace:*",
-    "@plutoengine/renderer": "workspace:*",
-    "@plutoengine/sdf-collider": "workspace:*",
-    "@plutoengine/verlet-ik": "workspace:*",
-    "@plutoengine/xpbd": "workspace:*"
+    "@pluto-engine/ai": "workspace:*",
+    "@pluto-engine/core": "workspace:*",
+    "@pluto-engine/morton": "workspace:*",
+    "@pluto-engine/poisson": "workspace:*",
+    "@pluto-engine/renderer": "workspace:*",
+    "@pluto-engine/sdf-collider": "workspace:*",
+    "@pluto-engine/verlet-ik": "workspace:*",
+    "@pluto-engine/xpbd": "workspace:*"
   },
   "devDependencies": {
-    "@plutoengine/vite-plugin-wgsl": "workspace:*",
+    "@pluto-engine/vite-plugin-wgsl": "workspace:*",
     "tsup": "^8.2.0",
     "typescript": "^5.6.0"
   }

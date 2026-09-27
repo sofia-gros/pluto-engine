@@ -22,14 +22,14 @@ PlutoEngineのXPBDソルバは完全にデータ指向（DOD）で設計され�
 ## Standalone Usage
 
 ```typescript
-import { XPBDSolver } from '@plutoengine/xpbd';
+import { XPBDSolver } from '@pluto-engine/xpbd';
 const solver = new XPBDSolver();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { XpbdPlugin } from '@plutoengine/xpbd';
+import { XpbdPlugin } from '@pluto-engine/xpbd';
 
 class MyScene extends Scene {
   constructor() {

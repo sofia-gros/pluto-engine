@@ -35,12 +35,12 @@ $$\\text{判定回数} = 5,000 \\times 5,000 = 25,000,000 \\text{ 回 / フレ�
 
 ## 2. MortonPlugin の登録
 
-PlutoEngine には、モートンコード（Z-order Curve）を用いた超高速な空間ハッシュパッケージ \`@plutoengine/morton\` が用意されています。
+PlutoEngine には、モートンコード（Z-order Curve）を用いた超高速な空間ハッシュパッケージ \`@pluto-engine/morton\` が用意されています。
 プラグインとして登録するだけで、シーン内にゼロアロケーションの空間ハッシュが注入されます。
 
 \`\`\`typescript
-import { Scene } from '@plutoengine/core';
-import { MortonPlugin } from '@plutoengine/morton';
+import { Scene } from '@pluto-engine/core';
+import { MortonPlugin } from '@pluto-engine/morton';
 
 export class SwarmSurvivorScene extends Scene {
   constructor() {
@@ -146,12 +146,12 @@ When a bullet or weapon searches for an enemy, it only needs to scan **the few c
 
 ## 2. Registering MortonPlugin
 
-PlutoEngine provides an ultra-fast spatial hashing package \`@plutoengine/morton\` using Morton codes (Z-order Curve).
+PlutoEngine provides an ultra-fast spatial hashing package \`@pluto-engine/morton\` using Morton codes (Z-order Curve).
 By simply registering it as a plugin, a zero-allocation spatial hash is injected into your scene.
 
 \`\`\`typescript
-import { Scene } from '@plutoengine/core';
-import { MortonPlugin } from '@plutoengine/morton';
+import { Scene } from '@pluto-engine/core';
+import { MortonPlugin } from '@pluto-engine/morton';
 
 export class SwarmSurvivorScene extends Scene {
   constructor() {
@@ -237,12 +237,12 @@ for (const p of pkgs) {
     if (!content.includes('Standalone Usage')) {
       content += `\n## Standalone Usage\n\n` +
                  `\`\`\`typescript\n` +
-                 `import { ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'} } from '@plutoengine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n` +
+                 `import { ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n` +
                  `const solver = new ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'}();\n` +
                  `\`\`\`\n\n` +
                  `## Plugin Usage (this.registerPlugin)\n\n` +
                  `\`\`\`typescript\n` +
-                 `import { ${cap} } from '@plutoengine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n\n` +
+                 `import { ${cap} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n\n` +
                  `class MyScene extends Scene {\n` +
                  `  constructor() {\n` +
                  `    super();\n` +

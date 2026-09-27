@@ -8,14 +8,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@plutoengine/core": "workspace:*",
-    "@plutoengine/poisson": "workspace:*",
-    "@plutoengine/morton": "workspace:*",
-    "@plutoengine/renderer": "workspace:*",
-    "@plutoengine/xpbd": "workspace:*"
+    "@pluto-engine/core": "workspace:*",
+    "@pluto-engine/poisson": "workspace:*",
+    "@pluto-engine/morton": "workspace:*",
+    "@pluto-engine/renderer": "workspace:*",
+    "@pluto-engine/xpbd": "workspace:*"
   },
   "devDependencies": {
-    "@plutoengine/vite-plugin-wgsl": "workspace:*",
+    "@pluto-engine/vite-plugin-wgsl": "workspace:*",
     "typescript": "^5.6.0",
     "vite": "^5.4.0"
   }

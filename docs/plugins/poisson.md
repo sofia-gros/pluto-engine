@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @plutoengine/poisson
+bun add @pluto-engine/poisson
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @plutoengine/poisson
 ### Import
 
 ```typescript
-import { PoissonSolver } from '@plutoengine/poisson';
+import { PoissonSolver } from '@pluto-engine/poisson';
 ```
 
 ### Create instance

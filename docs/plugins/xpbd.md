@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @plutoengine/xpbd
+bun add @pluto-engine/xpbd
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @plutoengine/xpbd
 ### Import
 
 ```typescript
-import { XPBDSolver } from '@plutoengine/xpbd';
+import { XPBDSolver } from '@pluto-engine/xpbd';
 ```
 
 ### Register to Scene
@@ -54,8 +54,8 @@ XPBDSolver.solve(
 ### Example
 
 ```typescript
-import { Scene } from '@plutoengine/core';
-import { XPBDSolver } from '@plutoengine/xpbd';
+import { Scene } from '@pluto-engine/core';
+import { XPBDSolver } from '@pluto-engine/xpbd';
 
 const scene = new Scene(50000);
 

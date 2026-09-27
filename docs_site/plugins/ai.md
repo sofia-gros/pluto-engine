@@ -18,14 +18,14 @@ PlutoEngineのAIプラグインは、ロジックツリーをメモリ上の「�
 ## Standalone Usage
 
 ```typescript
-import { UtilityAISystem } from '@plutoengine/ai';
+import { UtilityAISystem } from '@pluto-engine/ai';
 const solver = new UtilityAISystem();
 ```
 
 ## Plugin Usage (this.registerPlugin)
 
 ```typescript
-import { AiPlugin } from '@plutoengine/ai';
+import { AiPlugin } from '@pluto-engine/ai';
 
 class MyScene extends Scene {
   constructor() {

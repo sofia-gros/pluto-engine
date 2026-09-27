@@ -1,6 +1,6 @@
 # ポアソン群集流体 (Continuum Crowds)
 
-`@plutoengine/poisson` パッケージは、**流体力学ベースの群集シミュレーション (Continuum Crowds)** を実現する高度な物理プラグインです。
+`@pluto-engine/poisson` パッケージは、**流体力学ベースの群集シミュレーション (Continuum Crowds)** を実現する高度な物理プラグインです。
 数万体の敵（群集）が、まるで水やスライムのように互いを避け合いながらプレイヤーに向かって流れるような滑らかな動きを、**ゼロアロケーション (GCフリー)** で計算します。
 
 「囲碁盤のように画面をマス目に分割し、そのマスの人口密度（容量）に応じて敵の流れを変える」というアルゴリズムを、ヤコビ反復法を用いたポアソン方程式ソルバ（Poisson UIC）で解決しています。
@@ -8,7 +8,7 @@
 ## インストールと登録
 
 ```typescript
-import { PoissonPlugin } from '@plutoengine/poisson';
+import { PoissonPlugin } from '@pluto-engine/poisson';
 
 export class MyScene extends Scene {
   public init() {

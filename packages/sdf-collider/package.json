@@ -1,5 +1,5 @@
 {
-  "name": "@plutoengine/sdf-collider",
+  "name": "@pluto-engine/sdf-collider",
   "version": "1.0.0",
   "description": "SDF collider for Pluto Engine",
   "main": "./dist/index.js",
@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@plutoengine/core": "workspace:*"
+    "@pluto-engine/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

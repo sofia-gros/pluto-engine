@@ -9,10 +9,10 @@ Scene is the main facade and lifecycle manager in PlutoEngine. It orchestrates t
 
 ## Install plugin
 
-The `Scene` is part of the `@plutoengine/core` package.
+The `Scene` is part of the `@pluto-engine/core` package.
 
 ```bash
-bun add @plutoengine/core
+bun add @pluto-engine/core
 ```
 
 ## Usage
@@ -20,7 +20,7 @@ bun add @plutoengine/core
 ### Import
 
 ```typescript
-import { PlutoEngine, Scene } from '@plutoengine/core';
+import { PlutoEngine, Scene } from '@pluto-engine/core';
 ```
 
 ### Create instance (Engine Entry Point)
@@ -49,7 +49,7 @@ scene.registerPlugin(pluginInstance);
 
 Example:
 ```typescript
-import { XPBDSolver } from '@plutoengine/xpbd';
+import { XPBDSolver } from '@pluto-engine/xpbd';
 scene.registerPlugin(new XPBDSolver());
 ```
 

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { transpileWGSLtoGLSL } from '@plutoengine/vite-plugin-wgsl';
+import { transpileWGSLtoGLSL } from '@pluto-engine/vite-plugin-wgsl';
 
 const wgslPlugin = {
   name: 'wgsl-plugin',

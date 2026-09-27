@@ -1,5 +1,5 @@
 {
-  "name": "@plutoengine/morton",
+  "name": "@pluto-engine/morton",
   "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
@@ -21,6 +21,6 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
-    "@plutoengine/core": "workspace:*"
+    "@pluto-engine/core": "workspace:*"
   }
 }

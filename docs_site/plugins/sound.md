@@ -1,12 +1,12 @@
 # オーディオプラグイン (SoundManager)
 
-`@plutoengine/audio` は、Web Audio API をフル活用した強力なサウンドシステムです。
+`@pluto-engine/audio` は、Web Audio API をフル活用した強力なサウンドシステムです。
 大量の敵が同時に爆発した際などに音が割れる（クリッピングする）のを防ぐマスターリミッターや、GC（ガベージコレクション）スパイクを防ぐオーディオノードのプーリング機構を内蔵しています。
 
 ## インストールと登録
 
 ```typescript
-import { SoundPlugin } from '@plutoengine/audio';
+import { SoundPlugin } from '@pluto-engine/audio';
 
 export class MyScene extends Scene {
   public init() {

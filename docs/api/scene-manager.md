@@ -11,7 +11,7 @@
 
 Included in the core package.
 ```bash
-bun add @plutoengine/core
+bun add @pluto-engine/core
 ```
 
 ## Usage
@@ -19,7 +19,7 @@ bun add @plutoengine/core
 ### Import
 
 ```typescript
-import { SceneManager, Scene } from '@plutoengine/core';
+import { SceneManager, Scene } from '@pluto-engine/core';
 ```
 
 ### Create and Register Scenes (via PlutoEngine)
@@ -27,7 +27,7 @@ import { SceneManager, Scene } from '@plutoengine/core';
 The `SceneManager` is automatically created and injected into your scenes as `this.scene` when you initialize the engine.
 
 ```typescript
-import { PlutoEngine, Scene } from '@plutoengine/core';
+import { PlutoEngine, Scene } from '@pluto-engine/core';
 
 class TitleScene extends Scene {}
 class GameScene extends Scene {}
@@ -51,7 +51,7 @@ Calls `shutdown()` on the currently active scene, and seamlessly transitions to 
 ### Example
 
 ```typescript
-import { SceneManager, Scene } from '@plutoengine/core';
+import { SceneManager, Scene } from '@pluto-engine/core';
 
 class TitleScene extends Scene {
     create() {

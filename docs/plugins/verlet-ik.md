@@ -10,7 +10,7 @@
 ## Install plugin
 
 ```bash
-bun add @plutoengine/verlet-ik
+bun add @pluto-engine/verlet-ik
 ```
 
 ## Usage
@@ -18,7 +18,7 @@ bun add @plutoengine/verlet-ik
 ### Import
 
 ```typescript
-import { VerletSolver } from '@plutoengine/verlet-ik';
+import { VerletSolver } from '@pluto-engine/verlet-ik';
 ```
 
 ### Create instance

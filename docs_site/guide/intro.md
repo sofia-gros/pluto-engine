@@ -94,7 +94,7 @@ PlutoEngine はあらゆるプロジェクト規模・環境に対応できる�
 | 形態 | 説明 | 用途 |
 | :--- | :--- | :--- |
 | **1. GitHub ソースコード** | モノレポ（Bun workspaces）をクローンして独自にエンジンを拡張 | エンジン自体のカスタマイズ、コア開発 |
-| **2. TypeScript インポート** | `@plutoengine/core` を npm / bun 経由で導入し、完全な型推論を享受 | Vite、Next.js、Nuxt などのモダンWeb制作 |
+| **2. TypeScript インポート** | `@pluto-engine/core` を npm / bun 経由で導入し、完全な型推論を享受 | Vite、Next.js、Nuxt などのモダンWeb制作 |
 | **3. トランスパイル済み ESM** | ビルド済み `pluto.esm.js` をインポート | バンドラーなしのモダンブラウザ環境 |
 | **4. `<script>` タグ (CDN)** | 単一の `pluto.global.js` をHTMLに埋め込むだけ | プロトタイピング、CodePen、ブログ埋め込み |
 

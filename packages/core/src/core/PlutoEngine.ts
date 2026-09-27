@@ -4,8 +4,8 @@
  * Phaser の `new Phaser.Game(config)` に相当するエンジンのエントリーポイント。
  */
 
-import { createGraphicsDevice } from '@plutoengine/renderer';
-import type { BufferInfo, GraphicsDevice } from '@plutoengine/renderer';
+import { createGraphicsDevice } from '@pluto-engine/renderer';
+import type { BufferInfo, GraphicsDevice } from '@pluto-engine/renderer';
 import { ScaleManager, ScaleMode } from '../scale/ScaleManager';
 import type { Scene } from '../scene/Scene';
 import { SceneManager } from '../scene/SceneManager';

@@ -29,7 +29,7 @@ cd my-pluto-game
 
 ### 2. PlutoEngine のインストール
 
-統合パッケージ `pluto-engine`、またはコアパッケージ `@plutoengine/core` をインストールします：
+統合パッケージ `pluto-engine`、またはコアパッケージ `@pluto-engine/core` をインストールします：
 
 ::: code-group
 ```bash [bun]
@@ -49,7 +49,7 @@ yarn add pluto-engine
 モジュール個別で導入したい場合（物理やAIなど）：
 
 ```bash
-bun add @plutoengine/core @plutoengine/renderer @plutoengine/xpbd @plutoengine/morton
+bun add @pluto-engine/core @pluto-engine/renderer @pluto-engine/xpbd @pluto-engine/morton
 ```
 
 ---
@@ -78,7 +78,7 @@ TypeScript プロジェクトでは、`tsconfig.json` を以下のように設�
 ```typescript
 import { PlutoEngine, Scene } from 'pluto-engine';
 // または
-import { PlutoEngine, Scene } from '@plutoengine/core';
+import { PlutoEngine, Scene } from '@pluto-engine/core';
 ```
 
 ---

@@ -94,7 +94,7 @@ PlutoEngine supports any project workflow:
 | Format | Description | Target Use Case |
 | :--- | :--- | :--- |
 | **1. GitHub Source** | Clone the Bun monorepo and extend the core engine | Engine developers and contributors |
-| **2. TypeScript Imports** | Import `@plutoengine/core` via npm or bun | Production apps in Vite, Next.js, Nuxt |
+| **2. TypeScript Imports** | Import `@pluto-engine/core` via npm or bun | Production apps in Vite, Next.js, Nuxt |
 | **3. Transpiled ESM** | Import bundled `pluto.esm.js` directly | Modern browsers without bundlers |
 | **4. `<script>` Tag (CDN)** | Drop standalone `pluto.global.js` into HTML | Rapid prototyping, CodePen, interactive demos |
 

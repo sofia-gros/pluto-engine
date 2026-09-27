@@ -1,9 +1,9 @@
-import type { Plugin, Scene } from '@plutoengine/core';
+import type { Plugin, Scene } from '@pluto-engine/core';
 import { MortonSpatialHash } from './index';
 
 // TypeScriptのモジュール拡張 (Declaration Merging) を利用して、
 // プラグインをインポートするだけで Scene クラスに spatialHash プロパティが生えるようにします。
-declare module '@plutoengine/core' {
+declare module '@pluto-engine/core' {
   interface Scene {
     spatialHash: MortonSpatialHash;
   }

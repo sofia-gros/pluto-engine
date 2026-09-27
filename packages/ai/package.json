@@ -1,5 +1,5 @@
 {
-  "name": "@plutoengine/ai",
+  "name": "@pluto-engine/ai",
   "version": "0.1.0",
   "description": "Utility AI module for Pluto Engine",
   "main": "./dist/index.js",
@@ -9,7 +9,7 @@
     "build": "tsup src/index.ts --format esm --dts"
   },
   "dependencies": {
-    "@plutoengine/core": "workspace:*"
+    "@pluto-engine/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
