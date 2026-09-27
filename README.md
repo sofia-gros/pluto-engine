@@ -49,8 +49,15 @@ PlutoEngine provides multiple distribution methods to suit your project.
 bun add @pluto-engine/core @pluto-engine/renderer
 ```
 
-### 2. Via CDN (Standalone Script)
-You can directly use the standalone bundles from GitHub Releases in a vanilla HTML file without any build tools.
+### 2. Standalone Scripts (No Build Tools Required)
+You can download the pre-built bundles from the [GitHub Releases](https://github.com/sofia-gros/pluto-engine/releases) page and use them directly in a vanilla HTML file.
+
+We provide two types of standalone files:
+- **`pluto.esm.min.js`**: Use this if you want to use modern ES modules (`<script type="module">`). It allows you to `import` exactly what you need.
+- **`pluto.global.min.js`**: Use this for traditional setups (`<script src="...">`). It exposes all engine features under a single global variable named `Pluto`.
+
+#### Example using ES Modules (`pluto.esm.min.js`)
+Download `pluto.esm.min.js` and place it in your project folder:
 
 ```html
 <!DOCTYPE html>
@@ -60,8 +67,8 @@ You can directly use the standalone bundles from GitHub Releases in a vanilla HT
 </head>
 <body>
     <script type="module">
-        // Import directly from a CDN (or locally downloaded file)
-        import { PlutoEngine, Scene } from 'https://cdn.jsdelivr.net/gh/sofia-gros/pluto-engine@v1.0.0/release_assets/pluto.esm.min.js';
+        // Import directly from the downloaded file
+        import { PlutoEngine, Scene } from './pluto.esm.min.js';
 
         class MainScene extends Scene {
             create() {
