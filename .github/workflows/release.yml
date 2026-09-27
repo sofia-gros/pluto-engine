@@ -1,0 +1,38 @@
+name: Release PlutoEngine
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Engine (All packages)
+        run: bun run build
+
+      - name: Package Standalone Bundles
+        run: |
+          mkdir -p release_assets
+          cp packages/pluto/dist/pluto.global.min.js release_assets/
+          cp packages/pluto/dist/pluto.esm.min.js release_assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

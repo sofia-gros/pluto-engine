@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlutoEngine Standalone Demo</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #111; color: #fff; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #info { position: absolute; top: 10px; left: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div id="info">PlutoEngine Standalone Demo</div>
+    <canvas id="game-canvas"></canvas>
+
+    <script type="module">
+        import * as Pluto from '../../packages/pluto/dist/pluto.esm.min.js';
+
+        async function init() {
+            const canvas = document.getElementById('game-canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const info = document.getElementById('info');
+            info.textContent = 'Initializing PlutoEngine...';
+
+            try {
+                // Initialize rendering device
+                const device = await Pluto.createGraphicsDevice(canvas);
+                info.textContent = 'PlutoEngine Initialized successfully!';
+                
+                // Set clear color and clear screen to prove it works
+                device.setClearColor(0.2, 0.3, 0.4, 1.0);
+                device.clear();
+            } catch (err) {
+                console.error(err);
+                info.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

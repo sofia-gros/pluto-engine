@@ -1,0 +1,75 @@
+/**
+ * @file Sprite.ts
+ * @description
+ * InstanceBufferArena の単一インスタンスを指し示す軽量なハンドル（Flyweight）。
+ * プロパティへのアクセスはすべて Arena の Float32Array への直接読み書きに変換されます。
+ */
+
+import type { InstanceBufferArena } from './InstanceBufferArena';
+
+export class Sprite {
+  /**
+   * アリーナ内のデータスロットを指すインデックス
+   */
+  public readonly id: number;
+
+  /**
+   * 参照するメモリアリーナ
+   */
+  private readonly _arena: InstanceBufferArena;
+
+  /**
+   * @param id アリーナで割り当てられたID
+   * @param arena 所属するメモリアリーナ
+   */
+  constructor(id: number, arena: InstanceBufferArena) {
+    this.id = id;
+    this._arena = arena;
+  }
+
+  public get x(): number {
+    return this._arena.posX[this.id];
+  }
+  public set x(val: number) {
+    this._arena.posX[this.id] = val;
+  }
+
+  public get y(): number {
+    return this._arena.posY[this.id];
+  }
+  public set y(val: number) {
+    this._arena.posY[this.id] = val;
+  }
+
+  public get scale(): number {
+    return this._arena.scale[this.id];
+  }
+  public set scale(val: number) {
+    this._arena.scale[this.id] = val;
+  }
+
+  /**
+   * 向きを設定します。true の場合は左向き (-1.0)、false の場合は右向き (1.0)。
+   */
+  public setFlipX(flip: boolean): this {
+    this._arena.facing[this.id] = flip ? -1.0 : 1.0;
+    return this;
+  }
+
+  /**
+   * 描画色（Tint）を設定します。
+   * @param tintHex 0xAABBGGRR 形式の色データ
+   */
+  public setTint(tintHex: number): this {
+    this._arena.tint[this.id] = tintHex;
+    return this;
+  }
+
+  /**
+   * このスプライトをアリーナから解放（破壊）します。
+   * 以降このハンドルへのアクセスは未定義の動作を引き起こす可能性があります。
+   */
+  public destroy(): void {
+    this._arena.free(this.id);
+  }
+}

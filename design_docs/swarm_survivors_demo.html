@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Swarm Survivors - Hardcore Skill Tree</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030712;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #030712;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+    .boss-warning {
+      animation: pulse-red 0.8s infinite alternate;
+    }
+    @keyframes pulse-red {
+      from { opacity: 0.3; transform: translate(-50%, 0) scale(0.98); }
+      to { opacity: 1.0; transform: translate(-50%, 0) scale(1.02); }
+    }
+  </style>
+</head>
+<body class="text-slate-100">
+
+<div id="game-container">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Boss Warning Banner -->
+  <div id="boss-alert" class="absolute top-14 left-1/2 -translate-x-1/2 bg-rose-950/90 border-2 border-rose-500 px-5 py-1.5 rounded-xl text-rose-200 font-black text-xs sm:text-sm tracking-widest hidden boss-warning z-20 pointer-events-none shadow-2xl">
+    ⚠️ 強大ボス接近！ノックバック無効 ⚠️
+  </div>
+
+  <!-- In-Game HUD -->
+  <div id="hud-top" class="absolute top-2 left-2 right-2 flex flex-col pointer-events-none gap-1.5 max-w-xl mx-auto z-10">
+    <div class="flex items-center justify-between bg-slate-900/90 backdrop-blur border border-slate-700/80 px-3 py-1.5 rounded-xl text-white shadow-xl pointer-events-auto">
+      <div class="flex items-center gap-2">
+        <span id="player-lvl" class="font-black text-amber-400 text-xs sm:text-sm">Lv.1</span>
+        <div class="w-20 sm:w-36 bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-700">
+          <div id="exp-bar" class="bg-gradient-to-r from-sky-400 to-cyan-300 h-full transition-all duration-75" style="width: 0%"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="game-timer" class="text-sm sm:text-base font-black text-amber-300 tracking-wider font-mono">10:00</div>
+        <div class="flex items-center gap-1 text-yellow-400 font-bold text-xs sm:text-sm">
+          <span>🪙</span><span id="run-coins">0</span>
+        </div>
+        <div class="text-[10px] text-slate-400 font-mono">
+          <span id="horde-count">0</span> 体
+        </div>
+      </div>
+    </div>
+    <!-- HP Bar (Fragile: dies in seconds if cornered) -->
+    <div class="w-full bg-slate-900/80 backdrop-blur border border-slate-700/70 p-1 rounded-lg flex items-center gap-2">
+      <span class="text-[10px] font-black text-rose-400 pl-1">HP</span>
+      <div class="flex-1 bg-slate-950 rounded-full h-2 overflow-hidden border border-rose-950">
+        <div id="hp-bar" class="bg-gradient-to-r from-rose-600 to-rose-400 h-full transition-all duration-75" style="width: 100%"></div>
+      </div>
+      <span id="hp-text" class="text-[9px] font-mono text-rose-300 pr-1">40/40</span>
+    </div>
+  </div>
+
+  <!-- Virtual Joystick (Mobile) -->
+  <div id="joystick-base" class="absolute w-28 h-28 rounded-full border-2 border-cyan-400/40 bg-cyan-950/25 backdrop-blur pointer-events-none hidden z-20">
+    <div id="joystick-thumb" class="absolute w-10 h-10 rounded-full bg-cyan-400/80 shadow-lg shadow-cyan-400/50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+  </div>
+
+  <!-- Level Up Modal -->
+  <div id="levelup-modal" class="absolute inset-0 bg-black/80 backdrop-blur-md hidden flex-col items-center justify-center p-4 z-30 pointer-events-auto">
+    <div class="max-w-sm w-full bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-4 shadow-2xl flex flex-col gap-3 text-white">
+      <div class="text-center">
+        <span class="text-[10px] font-bold text-amber-400 tracking-widest uppercase">Level Up!</span>
+        <h2 class="text-lg font-black text-amber-300">スキル強化を選択</h2>
+      </div>
+      <div id="skill-choices" class="flex flex-col gap-2"></div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE NODE SKILL TREE MODAL -->
+  <div id="tree-modal" class="absolute inset-0 bg-slate-950/98 hidden flex-col z-40 text-white pointer-events-auto">
+    <!-- Top Header -->
+    <div class="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-800 z-10">
+      <div>
+        <h1 id="tree-modal-title" class="text-base sm:text-lg font-black text-rose-500">SURVIVAL FAILED</h1>
+        <p id="tree-modal-sub" class="text-[10px] sm:text-xs text-slate-400">生存時間: 00:00 | ドラッグで移動、ピンチ/ホイールでズーム</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5 bg-slate-950 border border-amber-500/60 px-3 py-1 rounded-xl">
+          <span class="text-base">🪙</span>
+          <span id="total-coins" class="text-sm sm:text-base font-black text-amber-400">0</span>
+        </div>
+        <button id="btn-tree-restart" class="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition-all">
+          出撃 ⚔️
+        </button>
+      </div>
+    </div>
+
+    <!-- Tree Interactive Viewport (Canvas) -->
+    <div class="relative flex-1 w-full h-full overflow-hidden bg-[#030712]">
+      <canvas id="tree-canvas" class="w-full h-full"></canvas>
+
+      <!-- Zoom & Center Controls Floating on Tree Canvas -->
+      <div class="absolute bottom-20 right-4 flex flex-col gap-2 z-10">
+        <button id="btn-tree-zoom-in" class="w-9 h-9 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 font-black text-lg flex items-center justify-center active:scale-90 shadow-lg">＋</button>
+        <button id="btn-tree-zoom-out" class="w-9 h-9 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 font-black text-lg flex items-center justify-center active:scale-90 shadow-lg">－</button>
+        <button id="btn-tree-reset" class="w-9 h-9 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center active:scale-90 shadow-lg">原点</button>
+      </div>
+
+      <!-- Selected Node Inspector Floating Card -->
+      <div id="node-inspector" class="absolute bottom-4 left-4 right-4 sm:right-auto sm:w-80 bg-slate-900/95 border border-slate-700 p-3 rounded-2xl shadow-2xl backdrop-blur hidden flex-col gap-2 z-10">
+        <div class="flex items-start justify-between">
+          <div>
+            <div id="inspector-cat" class="text-[9px] font-black uppercase tracking-wider text-amber-400">CATEGORY</div>
+            <h3 id="inspector-title" class="text-sm font-black text-white">ノード名</h3>
+          </div>
+          <span id="inspector-level" class="text-xs font-mono font-bold text-cyan-400">Lv.0/5</span>
+        </div>
+        <p id="inspector-desc" class="text-xs text-slate-300 leading-snug">効果説明文</p>
+        <div class="flex items-center justify-between pt-1 border-t border-slate-800">
+          <span id="inspector-cost" class="text-xs font-mono font-bold text-amber-300">🪙 10</span>
+          <button id="btn-node-upgrade" class="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-lg active:scale-95 transition-all">
+            習得 / 強化
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ==============================================================================
+// 1. HARDCORE SKILL TREE GRAPH (Path of Exile / Node Graph Style, 80+ Nodes)
+// ==============================================================================
+class SkillTreeGraph {
+  constructor() {
+    this.nodes = new Map();
+    this.edges = [];
+    this.buildGraph();
+  }
+
+  addNode(id, x, y, cat, title, desc, statKey, stepVal, maxLvl, baseCost, costScale, isSpecial = false) {
+    this.nodes.set(id, {
+      id, x, y, cat, title, desc, statKey, stepVal, maxLvl, baseCost, costScale, isSpecial,
+      level: 0,
+      unlocked: id === 'core'
+    });
+  }
+
+  addEdge(fromId, toId) {
+    this.edges.push([fromId, toId]);
+  }
+
+  buildGraph() {
+    // Center Core Node (Always Unlocked at Lv.1)
+    this.addNode('core', 0, 0, 'core', '生存の本能', 'すべての力の発脈点。', 'none', 0, 1, 0, 1, true);
+
+    // Helper for procedural node generation in 3 directions:
+    // North (0 to 120 deg): Offense (Red/Amber)
+    // South-West (120 to 240 deg): Defense/Survival (Blue/Cyan)
+    // South-East (240 to 360 deg): Utility/Economy (Green/Emerald)
+    const sectors = [
+      { cat: 'offense', baseAngle: -Math.PI / 2, name: '攻撃' },
+      { cat: 'defense', baseAngle: Math.PI / 6, name: '防御' },
+      { cat: 'utility', baseAngle: (5 * Math.PI) / 6, name: '収益' },
+    ];
+
+    sectors.forEach(sec => {
+      let prevTierNodes = ['core'];
+      for (let ring = 1; ring <= 5; ring++) {
+        const ringDist = ring * 130;
+        const countInRing = ring * 2 + 1;
+        const curTierNodes = [];
+
+        for (let i = 0; i < countInRing; i++) {
+          const spread = (i - (countInRing - 1) / 2) * 0.28;
+          const ang = sec.baseAngle + spread;
+          const nx = Math.round(Math.cos(ang) * ringDist);
+          const ny = Math.round(Math.sin(ang) * ringDist);
+          const nodeId = `${sec.cat}_r${ring}_n${i}`;
+
+          const isKeystone = (ring === 3 && i === 1) || (ring === 5 && (i === 0 || i === countInRing - 1));
+          let title = '', desc = '', statKey = '', stepVal = 0, maxLvl = isKeystone ? 1 : 5;
+          let baseCost = 6 + ring * 8 + (isKeystone ? 40 : 0);
+          let costScale = 1.35 + ring * 0.05;
+
+          if (sec.cat === 'offense') {
+            if (isKeystone) {
+              title = (ring === 3) ? '双弾乱舞' : '破滅の極点';
+              desc = (ring === 3) ? '魔導弾の同時発射数 +1' : '全クリティカル倍率 +50%';
+              statKey = (ring === 3) ? 'bonusProj' : 'critMult';
+              stepVal = (ring === 3) ? 1 : 0.5;
+            } else {
+              const types = [
+                { t: '鋭利刃', s: 'bulletDmg', d: '攻撃力 +2.5%', v: 0.025 },
+                { t: '急速展開', s: 'atkSpeed', d: '攻撃間隔 -2.0%', v: 0.02 },
+                { t: '急所眼', s: 'critChance', d: '会心率 +1.5%', v: 0.015 },
+                { t: '衝撃伝播', s: 'knockback', d: 'ノックバック +6.0%', v: 0.06 },
+                { t: '領域拡張', s: 'areaSize', d: '攻撃範囲 +3.0%', v: 0.03 }
+              ];
+              const tData = types[(ring + i) % types.length];
+              title = `${tData.t} T${ring}.${i+1}`;
+              desc = tData.d;
+              statKey = tData.s;
+              stepVal = tData.v;
+            }
+          } else if (sec.cat === 'defense') {
+            if (isKeystone) {
+              title = (ring === 3) ? '不死鳥の契約' : '金剛の要塞';
+              desc = (ring === 3) ? '1回だけHP50%で復活' : '被ダメージを常に -4 軽減';
+              statKey = (ring === 3) ? 'revive' : 'armor';
+              stepVal = (ring === 3) ? 1 : 4;
+            } else {
+              const types = [
+                { t: '巨人の血肉', s: 'maxHp', d: '最大HP +6', v: 6 },
+                { t: '細胞再生', s: 'hpRegen', d: '毎秒HP再生 +0.08', v: 0.08 },
+                { t: '硬質外骨格', s: 'armor', d: '被ダメ軽減 -0.5', v: 0.5 },
+                { t: '疾風脚', s: 'moveSpeed', d: '移動速度 +1.5%', v: 0.015 },
+                { t: '反発衝角', s: 'bodyPush', d: '接触反発 +8.0%', v: 0.08 }
+              ];
+              const tData = types[(ring + i) % types.length];
+              title = `${tData.t} T${ring}.${i+1}`;
+              desc = tData.d;
+              statKey = tData.s;
+              stepVal = tData.v;
+            }
+          } else {
+            if (isKeystone) {
+              title = (ring === 3) ? '超引力磁場' : '強欲の権化';
+              desc = (ring === 3) ? '回収範囲 +60%' : 'コインドロップ率 +15%';
+              statKey = (ring === 3) ? 'pickupRadius' : 'coinRate';
+              stepVal = (ring === 3) ? 0.6 : 0.15;
+            } else {
+              const types = [
+                { t: '強奪の勘', s: 'coinRate', d: 'コインドロップ率 +1.5%', v: 0.015 },
+                { t: '賢者の眼', s: 'expGain', d: '経験値倍率 +2.5%', v: 0.025 },
+                { t: '微小引力', s: 'pickupRadius', d: '回収範囲 +4.0%', v: 0.04 },
+                { t: '精神集中', s: 'cooldown', d: '全クールダウン -1.5%', v: 0.015 },
+                { t: '持続詠唱', s: 'duration', d: '効果持続時間 +3.0%', v: 0.03 }
+              ];
+              const tData = types[(ring + i) % types.length];
+              title = `${tData.t} T${ring}.${i+1}`;
+              desc = tData.d;
+              statKey = tData.s;
+              stepVal = tData.v;
+            }
+          }
+
+          this.addNode(nodeId, nx, ny, sec.cat, title, desc, statKey, stepVal, maxLvl, baseCost, costScale, isKeystone);
+          curTierNodes.push(nodeId);
+
+          // Connect to previous tier (branching web)
+          if (prevTierNodes.length === 1 && prevTierNodes[0] === 'core') {
+            this.addEdge('core', nodeId);
+          } else {
+            const pIdx = Math.min(prevTierNodes.length - 1, Math.floor((i / countInRing) * prevTierNodes.length));
+            this.addEdge(prevTierNodes[pIdx], nodeId);
+            if (pIdx + 1 < prevTierNodes.length && Math.random() < 0.4) {
+              this.addEdge(prevTierNodes[pIdx + 1], nodeId);
+            }
+          }
+
+          // Cross-connect neighboring nodes in the same ring
+          if (i > 0 && Math.random() < 0.45) {
+            this.addEdge(curTierNodes[i - 1], nodeId);
+          }
+        }
+        prevTierNodes = curTierNodes;
+      }
+    });
+  }
+
+  // Check if a node is purchasable (has an adjacent node with level >= 1)
+  isNodePurchasable(nodeId, savedLevels) {
+    if (nodeId === 'core') return false;
+    for (const [a, b] of this.edges) {
+      if (a === nodeId) {
+        if (b === 'core' || (savedLevels[b] && savedLevels[b] > 0)) return true;
+      } else if (b === nodeId) {
+        if (a === 'core' || (savedLevels[a] && savedLevels[a] > 0)) return true;
+      }
+    }
+    return false;
+  }
+}
+
+// Persistent Save Manager
+class SaveManager {
+  static KEY = 'SWARM_HARDCORE_SAVE_V1';
+  static load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      return {
+        coins: Number(data.coins) || 0,
+        nodeLevels: data.nodeLevels || {}
+      };
+    } catch {
+      return { coins: 0, nodeLevels: {} };
+    }
+  }
+  static save(coins, nodeLevels) {
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify({ coins, nodeLevels }));
+    } catch {}
+  }
+}
+
+// ==============================================================================
+// 2. PROCEDURAL SPRITES & TEXTURE ATLAS
+// ==============================================================================
+function generateProceduralPixelAtlas() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const nCanvas = document.createElement('canvas');
+  nCanvas.width = 256; nCanvas.height = 256;
+  const nctx = nCanvas.getContext('2d');
+  nctx.imageSmoothingEnabled = false;
+
+  ctx.clearRect(0, 0, 256, 256);
+  nctx.fillStyle = 'rgb(128, 128, 255)';
+  nctx.fillRect(0, 0, 256, 256);
+
+  // Player (0, 0, 32, 32)
+  ctx.fillStyle = '#1e1b4b'; ctx.fillRect(8, 12, 16, 14);
+  ctx.fillStyle = '#38bdf8'; ctx.fillRect(10, 10, 12, 12);
+  ctx.fillStyle = '#f8fafc'; ctx.fillRect(11, 4, 10, 8);
+  ctx.fillStyle = '#38bdf8'; ctx.fillRect(13, 6, 6, 3);
+  ctx.fillStyle = '#f59e0b'; ctx.fillRect(22, 5, 4, 18);
+  ctx.fillStyle = '#fef08a'; ctx.fillRect(23, 4, 2, 16);
+
+  // 4 Mobs x 3 Walk Frames: Goblin(0), Red Orc(1), Knight(2), Boss(3)
+  const colors = ['#15803d', '#dc2626', '#4338ca', '#7e22ce'];
+  for (let s = 0; s < 4; s++) {
+    for (let f = 0; f < 3; f++) {
+      const rx = 32 + f * 24;
+      const ry = s * 24;
+      const legOff = (f === 1) ? 2 : (f === 2) ? -2 : 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath(); ctx.ellipse(rx + 10, ry + 18, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = colors[s];
+      ctx.fillRect(rx + 5, ry + 4, 10, 10);
+      ctx.fillRect(rx + 4, ry + 14 + legOff, 4, 6);
+      ctx.fillRect(rx + 12, ry + 14 - legOff, 4, 6);
+      ctx.fillStyle = '#022c22'; ctx.fillRect(rx + 6, ry + 6, 2, 2); ctx.fillRect(rx + 12, ry + 6, 2, 2);
+      ctx.fillStyle = (s === 3) ? '#facc15' : '#ef4444'; ctx.fillRect(rx + 7, ry + 7, 1, 1); ctx.fillRect(rx + 11, ry + 7, 1, 1);
+    }
+  }
+
+  // Drops: Exp (168, 2) & Coin (192, 8)
+  ctx.fillStyle = '#06b6d4';
+  ctx.beginPath(); ctx.moveTo(168, 2); ctx.lineTo(174, 8); ctx.lineTo(168, 14); ctx.lineTo(162, 8); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#cffafe'; ctx.fillRect(166, 6, 4, 4);
+
+  ctx.fillStyle = '#f59e0b';
+  ctx.beginPath(); ctx.arc(192, 8, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath(); ctx.arc(192, 8, 4, 0, Math.PI * 2); ctx.fill();
+
+  // Bullet (216, 8)
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath(); ctx.arc(216, 8, 5, 0, Math.PI * 2); ctx.fill();
+
+  return { atlas: canvas, normalMap: nCanvas };
+}
+
+// ==============================================================================
+// 3. CONTINUUM FLOW GRID
+// ==============================================================================
+class ContinuumFlowGrid {
+  constructor(cols = 96, rows = 96, cellSize = 24) {
+    this.cols = cols;
+    this.rows = rows;
+    this.cellSize = cellSize;
+    this.width = cols * cellSize;
+    this.height = rows * cellSize;
+    this.size = cols * rows;
+    this.dirX = new Float32Array(this.size);
+    this.dirY = new Float32Array(this.size);
+    this.density = new Float32Array(this.size);
+    this.pressure = new Float32Array(this.size);
+    this.originX = 0;
+    this.originY = 0;
+  }
+
+  updatePlayerCenter(px, py) {
+    this.originX = px - this.width * 0.5;
+    this.originY = py - this.height * 0.5;
+    const halfW = this.width * 0.5;
+    const halfH = this.height * 0.5;
+    for (let r = 0; r < this.rows; r++) {
+      const cy = (r + 0.5) * this.cellSize;
+      const dy = cy - halfH;
+      const rowIdx = r * this.cols;
+      for (let c = 0; c < this.cols; c++) {
+        const cx = (c + 0.5) * this.cellSize;
+        const dx = cx - halfW;
+        const dist = Math.hypot(dx, dy) + 0.001;
+        const idx = rowIdx + c;
+        this.dirX[idx] = -dx / dist;
+        this.dirY[idx] = -dy / dist;
+      }
+    }
+  }
+
+  solvePoissonUIC(iterations = 2) {
+    const cols = this.cols;
+    const rows = this.rows;
+    const p = this.pressure;
+    const rho = this.density;
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let r = 1; r < rows - 1; r++) {
+        const row = r * cols;
+        for (let c = 1; c < cols - 1; c++) {
+          const idx = row + c;
+          const excess = Math.max(0, rho[idx] - 3.5);
+          p[idx] = (p[idx - 1] + p[idx + 1] + p[idx - cols] + p[idx + cols] + excess * 1.5) * 0.25;
+        }
+      }
+    }
+  }
+}
+
+// ==============================================================================
+// 4. HARDCORE SWARM CONTAINER
+// ==============================================================================
+class SwarmContainer {
+  constructor(maxEnemies = 40000, maxDrops = 15000) {
+    this.max = maxEnemies;
+    this.count = 0;
+    this.x = new Float32Array(maxEnemies);
+    this.y = new Float32Array(maxEnemies);
+    this.vx = new Float32Array(maxEnemies);
+    this.vy = new Float32Array(maxEnemies);
+    this.hp = new Float32Array(maxEnemies);
+    this.maxHp = new Float32Array(maxEnemies);
+    this.spd = new Float32Array(maxEnemies);
+    this.type = new Uint8Array(maxEnemies);
+    this.facing = new Float32Array(maxEnemies);
+    this.knockResist = new Float32Array(maxEnemies);
+    this.atkPower = new Float32Array(maxEnemies);
+    this.scale = new Float32Array(maxEnemies);
+
+    // Drops
+    this.maxDrops = maxDrops;
+    this.dropCount = 0;
+    this.dx = new Float32Array(maxDrops);
+    this.dy = new Float32Array(maxDrops);
+    this.dtype = new Uint8Array(maxDrops);
+    this.dval = new Float32Array(maxDrops);
+
+    // Projectiles
+    this.maxProjectiles = 600;
+    this.projCount = 0;
+    this.px = new Float32Array(this.maxProjectiles);
+    this.py = new Float32Array(this.maxProjectiles);
+    this.pvx = new Float32Array(this.maxProjectiles);
+    this.pvy = new Float32Array(this.maxProjectiles);
+    this.pdmg = new Float32Array(this.maxProjectiles);
+    this.plife = new Float32Array(this.maxProjectiles);
+    this.ppierce = new Int8Array(this.maxProjectiles);
+
+    // Spatial Hash
+    this.cellSize = 24;
+    this.hashBuckets = 16384;
+    this.head = new Int32Array(this.hashBuckets).fill(-1);
+    this.next = new Int32Array(maxEnemies).fill(-1);
+  }
+
+  spawn(x, y, type = 0, hp = 24, speed = 55, knockResist = 0, atk = 22, scale = 20) {
+    if (this.count >= this.max) return;
+    const i = this.count++;
+    this.x[i] = x;
+    this.y[i] = y;
+    this.vx[i] = 0;
+    this.vy[i] = 0;
+    this.hp[i] = hp;
+    this.maxHp[i] = hp;
+    this.spd[i] = speed;
+    this.type[i] = type;
+    this.facing[i] = 1.0;
+    this.knockResist[i] = knockResist;
+    this.atkPower[i] = atk;
+    this.scale[i] = scale;
+  }
+
+  spawnDrop(x, y, type, val) {
+    if (this.dropCount >= this.maxDrops) return;
+    const i = this.dropCount++;
+    this.dx[i] = x;
+    this.dy[i] = y;
+    this.dtype[i] = type;
+    this.dval[i] = val;
+  }
+
+  spawnProjectile(x, y, vx, vy, dmg, pierce = 1) {
+    if (this.projCount >= this.maxProjectiles) return;
+    const i = this.projCount++;
+    this.px[i] = x;
+    this.py[i] = y;
+    this.pvx[i] = vx;
+    this.pvy[i] = vy;
+    this.pdmg[i] = dmg;
+    this.plife[i] = 1.5;
+    this.ppierce[i] = pierce;
+  }
+
+  kill(i, coinRateBonus = 0) {
+    const isBoss = this.type[i] === 3;
+    if (isBoss) {
+      for (let c = 0; c < 5; c++) this.spawnDrop(this.x[i], this.y[i], 1, 2);
+      for (let e = 0; e < 15; e++) this.spawnDrop(this.x[i], this.y[i], 0, 15);
+    } else {
+      // Modest drop rates: coins are precious!
+      const coinChance = 0.08 + coinRateBonus;
+      if (Math.random() < coinChance) {
+        this.spawnDrop(this.x[i], this.y[i], 1, 1);
+      } else {
+        this.spawnDrop(this.x[i], this.y[i], 0, 4 + this.type[i] * 2);
+      }
+    }
+
+    const last = --this.count;
+    if (i !== last) {
+      this.x[i] = this.x[last];
+      this.y[i] = this.y[last];
+      this.vx[i] = this.vx[last];
+      this.vy[i] = this.vy[last];
+      this.hp[i] = this.hp[last];
+      this.maxHp[i] = this.maxHp[last];
+      this.spd[i] = this.spd[last];
+      this.type[i] = this.type[last];
+      this.facing[i] = this.facing[last];
+      this.knockResist[i] = this.knockResist[last];
+      this.atkPower[i] = this.atkPower[last];
+      this.scale[i] = this.scale[last];
+    }
+  }
+
+  update(dt, player, flow, stats) {
+    const px = player.x;
+    const py = player.y;
+
+    // 1. Projectiles
+    for (let i = 0; i < this.projCount; i++) {
+      this.px[i] += this.pvx[i] * dt;
+      this.py[i] += this.pvy[i] * dt;
+      this.plife[i] -= dt;
+
+      const projX = this.px[i];
+      const projY = this.py[i];
+      const dmg = this.pdmg[i];
+
+      for (let e = 0; e < this.count; e++) {
+        const dx = this.x[e] - projX;
+        const dy = this.y[e] - projY;
+        const hitRadius = (this.scale[e] * 0.5) + 6;
+        if (dx * dx + dy * dy < hitRadius * hitRadius) {
+          this.hp[e] -= dmg;
+          const kForce = 8 * (1.0 - this.knockResist[e]);
+          this.x[e] += (dx || 1) * 0.1 * kForce;
+          this.y[e] += (dy || 1) * 0.1 * kForce;
+
+          if (this.hp[e] <= 0) {
+            this.kill(e, stats.coinRate || 0);
+            e--;
+          }
+          this.ppierce[i]--;
+          if (this.ppierce[i] <= 0) {
+            this.plife[i] = 0;
+            break;
+          }
+        }
+      }
+
+      if (this.plife[i] <= 0) {
+        const lastP = --this.projCount;
+        if (i !== lastP) {
+          this.px[i] = this.px[lastP];
+          this.py[i] = this.py[lastP];
+          this.pvx[i] = this.pvx[lastP];
+          this.pvy[i] = this.pvy[lastP];
+          this.pdmg[i] = this.pdmg[lastP];
+          this.plife[i] = this.plife[lastP];
+          this.ppierce[i] = this.ppierce[lastP];
+        }
+        i--;
+      }
+    }
+
+    // 2. Flow Splat
+    flow.density.fill(0);
+    const cols = flow.cols;
+    const rows = flow.rows;
+    const cs = flow.cellSize;
+    const ox = flow.originX;
+    const oy = flow.originY;
+
+    for (let i = 0; i < this.count; i++) {
+      const gx = Math.floor((this.x[i] - ox) / cs);
+      const gy = Math.floor((this.y[i] - oy) / cs);
+      if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
+        flow.density[gy * cols + gx] += 1.0;
+      }
+    }
+    flow.solvePoissonUIC();
+
+    this.head.fill(-1);
+    const hashMask = this.hashBuckets - 1;
+    const pRadius = 12;
+
+    // 3. Entity Steering & Lethal Player Contact
+    for (let i = 0; i < this.count; i++) {
+      const ex = this.x[i];
+      const ey = this.y[i];
+      const gx = Math.floor((ex - ox) / cs);
+      const gy = Math.floor((ey - oy) / cs);
+      let steerX = 0, steerY = 0;
+
+      if (gx >= 1 && gx < cols - 1 && gy >= 1 && gy < rows - 1) {
+        const idx = gy * cols + gx;
+        const gradPx = (flow.pressure[idx + 1] - flow.pressure[idx - 1]) * 0.5;
+        const gradPy = (flow.pressure[idx + cols] - flow.pressure[idx - cols]) * 0.5;
+        steerX = flow.dirX[idx] - gradPx * 0.7;
+        steerY = flow.dirY[idx] - gradPy * 0.7;
+      } else {
+        const dx = px - ex;
+        const dy = py - ey;
+        const d = Math.hypot(dx, dy) + 0.001;
+        steerX = dx / d;
+        steerY = dy / d;
+      }
+
+      const steerLen = Math.hypot(steerX, steerY);
+      if (steerLen > 0.001) {
+        steerX /= steerLen;
+        steerY /= steerLen;
+      }
+
+      const targetSpd = this.spd[i];
+      this.vx[i] += (steerX * targetSpd - this.vx[i]) * 8.0 * dt;
+      this.vy[i] += (steerY * targetSpd - this.vy[i]) * 8.0 * dt;
+      this.x[i] += this.vx[i] * dt;
+      this.y[i] += this.vy[i] * dt;
+
+      if (this.vx[i] > 2) this.facing[i] = 1.0;
+      else if (this.vx[i] < -2) this.facing[i] = -1.0;
+
+      // Lethal Player Collision: Contact deals continuous high damage!
+      const pdx = this.x[i] - px;
+      const pdy = this.y[i] - py;
+      const pDist = Math.hypot(pdx, pdy);
+      const reach = pRadius + (this.scale[i] * 0.42);
+
+      if (pDist < reach) {
+        // High DPS: 1-2 mobs touching kills in 2-3 seconds if standing still!
+        player.takeDamage(this.atkPower[i] * dt, stats);
+        const pen = reach - pDist;
+        const nx = pdx / (pDist || 1);
+        const ny = pdy / (pDist || 1);
+        this.x[i] += nx * pen * 0.4;
+        this.y[i] += ny * pen * 0.4;
+      }
+
+      // Hash Populate
+      const chx = Math.floor(this.x[i] / this.cellSize) & 127;
+      const chy = Math.floor(this.y[i] / this.cellSize) & 127;
+      const h = (chx * 73856093 ^ chy * 19349663) & hashMask;
+      this.next[i] = this.head[h];
+      this.head[h] = i;
+    }
+
+    // 4. XPBD Relaxation
+    for (let i = 0; i < this.count; i++) {
+      const eRadius = this.scale[i] * 0.42;
+      const cx = Math.floor(this.x[i] / this.cellSize) & 127;
+      const cy = Math.floor(this.y[i] / this.cellSize) & 127;
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const h = (((cx + ox) & 127) * 73856093 ^ (((cy + oy) & 127) * 19349663)) & hashMask;
+          let other = this.head[h];
+          while (other !== -1) {
+            if (other > i) {
+              const oRadius = this.scale[other] * 0.42;
+              const targetDist = eRadius + oRadius;
+              const dx = this.x[other] - this.x[i];
+              const dy = this.y[other] - this.y[i];
+              const d2 = dx * dx + dy * dy;
+              if (d2 < targetDist * targetDist && d2 > 0.0001) {
+                const dist = Math.sqrt(d2);
+                const overlap = (targetDist - dist) * 0.45;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                this.x[i] -= nx * overlap * 0.5;
+                this.y[i] -= ny * overlap * 0.5;
+                this.x[other] += nx * overlap * 0.5;
+                this.y[other] += ny * overlap * 0.5;
+              }
+            }
+            other = this.next[other];
+          }
+        }
+      }
+    }
+
+    // 5. Magnet Pickup
+    const pRad = player.pickupRadius * (1 + (stats.pickupRadius || 0));
+    for (let i = 0; i < this.dropCount; i++) {
+      const dx = px - this.dx[i];
+      const dy = py - this.dy[i];
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < pRad) {
+        const pull = (1.0 - dist / pRad) * 440 + 130;
+        this.dx[i] += (dx / dist) * pull * dt;
+        this.dy[i] += (dy / dist) * pull * dt;
+
+        if (dist < 20) {
+          if (this.dtype[i] === 0) {
+            player.addExp(this.dval[i] * (1 + (stats.expGain || 0)));
+          } else {
+            player.addCoin(this.dval[i]);
+          }
+          const lastD = --this.dropCount;
+          if (i !== lastD) {
+            this.dx[i] = this.dx[lastD];
+            this.dy[i] = this.dy[lastD];
+            this.dtype[i] = this.dtype[lastD];
+            this.dval[i] = this.dval[lastD];
+          }
+          i--;
+        }
+      }
+    }
+  }
+
+  applyAreaDamage(x, y, radius, dmg, knockback = 0, coinRate = 0) {
+    const r2 = radius * radius;
+    for (let i = 0; i < this.count; i++) {
+      const dx = this.x[i] - x;
+      const dy = this.y[i] - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < r2) {
+        this.hp[i] -= dmg;
+        if (knockback > 0) {
+          const actualKnock = knockback * (1.0 - this.knockResist[i]);
+          if (actualKnock > 0.4) {
+            const d = Math.sqrt(d2) || 1;
+            this.x[i] += (dx / d) * actualKnock;
+            this.y[i] += (dy / d) * actualKnock;
+          }
+        }
+        if (this.hp[i] <= 0) {
+          this.kill(i, coinRate);
+          i--;
+        }
+      }
+    }
+  }
+
+  findNearestEnemy(x, y, maxDist = 380) {
+    let nearestIdx = -1;
+    let minDist2 = maxDist * maxDist;
+    for (let i = 0; i < this.count; i++) {
+      const dx = this.x[i] - x;
+      const dy = this.y[i] - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < minDist2) {
+        minDist2 = d2;
+        nearestIdx = i;
+      }
+    }
+    return nearestIdx;
+  }
+}
+
+// ==============================================================================
+// 5. HARDCORE PLAYER & SKILLS (NO AFK CHEESE)
+// ==============================================================================
+class Player {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.facing = 1.0;
+
+    // Hardcore Base Stats (Extremely fragile!)
+    this.hp = 40;
+    this.maxHp = 40;
+    this.baseSpeed = 150;
+    this.pickupRadius = 65;
+
+    // Progression
+    this.level = 1;
+    this.exp = 0;
+    this.expNext = 12;
+    this.runCoins = 0;
+
+    // Starter skill: Magic Wand ONLY (1 projectile, target nearest)
+    this.skills = new Map();
+    this.skills.set('magic_wand', 1);
+
+    // Timers
+    this.wandTimer = 0;
+    this.orbitAngle = 0;
+    this.orbitHitTimer = 0;
+    this.garlicTimer = 0;
+    this.lightningTimer = 0;
+  }
+
+  recalculateStats(treeStats) {
+    this.maxHp = 40 + (treeStats.maxHp || 0);
+    this.hp = Math.min(this.hp, this.maxHp);
+  }
+
+  addExp(amt) {
+    this.exp += amt;
+    while (this.exp >= this.expNext) {
+      this.exp -= this.expNext;
+      this.level++;
+      this.expNext = Math.round(this.expNext * 1.35 + 16);
+      window.dispatchEvent(new CustomEvent('hardcore-levelup', { detail: { level: this.level } }));
+    }
+  }
+
+  addCoin(amt) {
+    this.runCoins += amt;
+  }
+
+  takeDamage(amt, treeStats) {
+    const armor = treeStats.armor || 0;
+    const finalDmg = Math.max(3, amt - armor);
+    this.hp -= finalDmg;
+    if (this.hp <= 0) {
+      if (treeStats.revive && treeStats.revive > 0) {
+        treeStats.revive--;
+        this.hp = this.maxHp * 0.5;
+      } else {
+        this.hp = 0;
+        window.dispatchEvent(new CustomEvent('hardcore-death'));
+      }
+    }
+  }
+
+  update(dt, inputDir, swarm, stats) {
+    // HP Regen
+    if (stats.hpRegen > 0 && this.hp < this.maxHp) {
+      this.hp = Math.min(this.maxHp, this.hp + stats.hpRegen * dt);
+    }
+
+    // Movement
+    const speed = this.baseSpeed * (1 + (stats.moveSpeed || 0));
+    this.vx = inputDir.x * speed;
+    this.vy = inputDir.y * speed;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    if (inputDir.x > 0.1) this.facing = 1.0;
+    else if (inputDir.x < -0.1) this.facing = -1.0;
+
+    // Multipliers
+    const atkMult = 1 + (stats.bulletDmg || 0);
+    const cdFactor = Math.max(0.4, 1 - (stats.cooldown || 0));
+    const areaScale = 1 + (stats.areaSize || 0);
+    const knockMult = 1 + (stats.knockback || 0);
+    const coinRate = stats.coinRate || 0;
+
+    // 1. Magic Wand
+    const wandLvl = this.skills.get('magic_wand') || 0;
+    if (wandLvl > 0) {
+      this.wandTimer += dt;
+      const wandCd = Math.max(0.25, 0.60 - wandLvl * 0.05) * cdFactor;
+      if (this.wandTimer >= wandCd) {
+        this.wandTimer = 0;
+        const target = swarm.findNearestEnemy(this.x, this.y, 380);
+        if (target !== -1) {
+          const dx = swarm.x[target] - this.x;
+          const dy = swarm.y[target] - this.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const pCount = 1 + (stats.bonusProj || 0);
+          for (let p = 0; p < pCount; p++) {
+            const spread = (p - (pCount - 1) / 2) * 0.2;
+            const ang = Math.atan2(dy, dx) + spread;
+            const vx = Math.cos(ang) * 400;
+            const vy = Math.sin(ang) * 400;
+            swarm.spawnProjectile(this.x, this.y, vx, vy, (18 + wandLvl * 6) * atkMult, 1);
+          }
+        }
+      }
+    }
+
+    // 2. Holy Orbit (NERFED: 1-2 orbs only, low damage, does NOT stop swarms)
+    const orbitLvl = this.skills.get('holy_orbit') || 0;
+    if (orbitLvl > 0) {
+      this.orbitAngle += (2.2 + orbitLvl * 0.3) * dt;
+      this.orbitHitTimer += dt;
+      if (this.orbitHitTimer >= 0.25) {
+        this.orbitHitTimer = 0;
+        const numOrbs = Math.min(3, 1 + Math.floor(orbitLvl / 2));
+        const orbDist = 48 * areaScale;
+        for (let o = 0; o < numOrbs; o++) {
+          const ang = this.orbitAngle + (o * Math.PI * 2) / numOrbs;
+          const ox = this.x + Math.cos(ang) * orbDist;
+          const oy = this.y + Math.sin(ang) * orbDist;
+          swarm.applyAreaDamage(ox, oy, 14 * areaScale, (10 + orbitLvl * 4) * atkMult, 6 * knockMult, coinRate);
+        }
+      }
+    }
+
+    // 3. Garlic Aura (NERFED: 2.2 second long cooldown, tiny push, CANNOT be AFK barrier)
+    const garlicLvl = this.skills.get('garlic_aura') || 0;
+    if (garlicLvl > 0) {
+      this.garlicTimer += dt;
+      if (this.garlicTimer >= 2.2 * cdFactor) {
+        this.garlicTimer = 0;
+        const radius = (42 + garlicLvl * 8) * areaScale;
+        swarm.applyAreaDamage(this.x, this.y, radius, (14 + garlicLvl * 6) * atkMult, 8 * knockMult, coinRate);
+      }
+    }
+
+    // 4. Lightning Strike
+    const lightLvl = this.skills.get('lightning_strike') || 0;
+    if (lightLvl > 0) {
+      this.lightningTimer += dt;
+      if (this.lightningTimer >= 2.0 * cdFactor) {
+        this.lightningTimer = 0;
+        const target = swarm.findNearestEnemy(this.x, this.y, 350);
+        if (target !== -1) {
+          swarm.applyAreaDamage(swarm.x[target], swarm.y[target], 38 * areaScale, (45 + lightLvl * 20) * atkMult, 14 * knockMult, coinRate);
+        }
+      }
+    }
+  }
+}
+
+// ==============================================================================
+// 6. WEBGL2 SURVIVOR RENDERER
+// ==============================================================================
+const VS_SOURCE = `#version 300 es
+layout(location = 0) in vec2 a_quad;
+layout(location = 1) in vec4 a_instPosScale;
+layout(location = 2) in vec4 a_instTexColor;
+
+uniform mat3 u_cameraMatrix;
+uniform vec2 u_resolution;
+
+out vec2 v_texCoord;
+out vec2 v_worldPos;
+flat out int v_type;
+
+void main() {
+  vec2 localPos = a_quad * a_instPosScale.z;
+  localPos.x *= a_instPosScale.w;
+  vec2 worldPos = a_instPosScale.xy + localPos;
+  v_worldPos = worldPos;
+  v_type = int(a_instTexColor.z);
+
+  vec2 uv = a_quad + vec2(0.5);
+  v_texCoord = a_instTexColor.xy + uv * vec2(24.0 / 256.0, 24.0 / 256.0);
+
+  vec3 screenPos = u_cameraMatrix * vec3(worldPos, 1.0);
+  vec2 clipPos = (screenPos.xy / u_resolution) * 2.0 - 1.0;
+  clipPos.y = -clipPos.y;
+  gl_Position = vec4(clipPos, 0.0, 1.0);
+}
+`;
+
+const FS_SOURCE = `#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+in vec2 v_worldPos;
+flat in int v_type;
+
+uniform sampler2D u_atlas;
+uniform vec2 u_playerPos;
+
+out vec4 fragColor;
+
+void main() {
+  vec4 albedo = texture(u_atlas, v_texCoord);
+  if (albedo.a < 0.15) discard;
+
+  float distToPlayer = length(v_worldPos - u_playerPos);
+  float atten = 1.0 - smoothstep(120.0, 360.0, distToPlayer);
+
+  vec3 col = albedo.rgb * (atten * 0.7 + 0.35);
+  if (v_type == 3) col *= vec3(1.3, 0.8, 1.5); // Boss Tint
+
+  fragColor = vec4(col, albedo.a);
+}
+`;
+
+class SwarmGameRenderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.gl = canvas.getContext('webgl2', { alpha: false, antialias: false });
+    const gl = this.gl;
+
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, VS_SOURCE); gl.compileShader(vs);
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, FS_SOURCE); gl.compileShader(fs);
+
+    this.program = gl.createProgram();
+    gl.attachShader(this.program, vs);
+    gl.attachShader(this.program, fs);
+    gl.linkProgram(this.program);
+
+    this.u_cameraMatrix = gl.getUniformLocation(this.program, 'u_cameraMatrix');
+    this.u_resolution = gl.getUniformLocation(this.program, 'u_resolution');
+    this.u_playerPos = gl.getUniformLocation(this.program, 'u_playerPos');
+
+    this.vao = gl.createVertexArray();
+    gl.bindVertexArray(this.vao);
+
+    this.quadBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    this.maxInstances = 50000;
+    this.instanceData = new Float32Array(this.maxInstances * 8);
+    this.instBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.instanceData.byteLength, gl.DYNAMIC_DRAW);
+
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 0);
+    gl.vertexAttribDivisor(1, 1);
+
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16);
+    gl.vertexAttribDivisor(2, 1);
+
+    gl.bindVertexArray(null);
+
+    const { atlas } = generateProceduralPixelAtlas();
+    this.texAtlas = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.texAtlas);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  }
+
+  render(player, swarm, camX, camY, zoom, animTime) {
+    const gl = this.gl;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0.02, 0.03, 0.06, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    gl.useProgram(this.program);
+    gl.bindVertexArray(this.vao);
+
+    const hw = this.canvas.width * 0.5;
+    const hh = this.canvas.height * 0.5;
+    gl.uniformMatrix3fv(this.u_cameraMatrix, false, [zoom, 0, 0, 0, zoom, 0, hw - camX * zoom, hh - camY * zoom, 1]);
+    gl.uniform2f(this.u_resolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(this.u_playerPos, player.x, player.y);
+
+    let idx = 0;
+    const data = this.instanceData;
+
+    // 1. Player
+    data[idx++] = player.x; data[idx++] = player.y; data[idx++] = 28.0; data[idx++] = player.facing;
+    data[idx++] = 0.0; data[idx++] = 0.0; data[idx++] = 99.0; data[idx++] = 0.0;
+
+    // 2. Projectiles
+    for (let i = 0; i < swarm.projCount; i++) {
+      if (idx >= data.length - 8) break;
+      data[idx++] = swarm.px[i]; data[idx++] = swarm.py[i]; data[idx++] = 12.0; data[idx++] = 1.0;
+      data[idx++] = 216.0 / 256.0; data[idx++] = 0.0; data[idx++] = 97.0; data[idx++] = 0.0;
+    }
+
+    // 3. Drops
+    for (let i = 0; i < swarm.dropCount; i++) {
+      if (idx >= data.length - 8) break;
+      data[idx++] = swarm.dx[i]; data[idx++] = swarm.dy[i]; data[idx++] = 14.0; data[idx++] = 1.0;
+      data[idx++] = (swarm.dtype[i] === 0 ? 160.0 : 192.0) / 256.0; data[idx++] = 0.0;
+      data[idx++] = 10.0 + swarm.dtype[i]; data[idx++] = 0.0;
+    }
+
+    // 4. Horde
+    const frame = Math.floor(animTime * 8) % 3;
+    for (let i = 0; i < swarm.count; i++) {
+      if (idx >= data.length - 8) break;
+      data[idx++] = swarm.x[i]; data[idx++] = swarm.y[i]; data[idx++] = swarm.scale[i]; data[idx++] = swarm.facing[i];
+      const sType = swarm.type[i];
+      data[idx++] = (32 + frame * 24) / 256.0; data[idx++] = (sType * 24) / 256.0;
+      data[idx++] = sType; data[idx++] = frame;
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data.subarray(0, idx));
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, idx / 8);
+    gl.bindVertexArray(null);
+  }
+}
+
+// ==============================================================================
+// 7. INTERACTIVE SKILL TREE CANVAS CONTROLLER (Zoomable & Pannable Graph)
+// ==============================================================================
+class InteractiveSkillTreeUI {
+  constructor(treeGraph, saveData, onUpdateCallback) {
+    this.tree = treeGraph;
+    this.saveData = saveData;
+    this.onUpdateCallback = onUpdateCallback;
+
+    this.canvas = document.getElementById('tree-canvas');
+    this.ctx = this.canvas.getContext('2d');
+
+    // Camera Transform (Pan & Zoom)
+    this.camX = 0;
+    this.camY = 0;
+    this.zoom = 1.0;
+
+    this.isDragging = false;
+    this.lastPointer = { x: 0, y: 0 };
+    this.selectedNodeId = null;
+
+    this.initEvents();
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.render();
+  }
+
+  initEvents() {
+    const canvas = this.canvas;
+
+    // Mouse / Touch Drag Pan
+    const onStart = (cx, cy) => {
+      this.isDragging = true;
+      this.lastPointer = { x: cx, y: cy };
+    };
+
+    const onMove = (cx, cy) => {
+      if (!this.isDragging) return;
+      const dx = cx - this.lastPointer.x;
+      const dy = cy - this.lastPointer.y;
+      this.camX += dx / this.zoom;
+      this.camY += dy / this.zoom;
+      this.lastPointer = { x: cx, y: cy };
+      this.render();
+    };
+
+    const onEnd = () => { this.isDragging = false; };
+
+    canvas.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', onEnd);
+
+    // Touch
+    let initialTouchDist = null;
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        onStart(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        this.isDragging = false;
+        initialTouchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2 && initialTouchDist !== null) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const factor = dist / initialTouchDist;
+        this.zoom = Math.max(0.35, Math.min(2.5, this.zoom * factor));
+        initialTouchDist = dist;
+        this.render();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (e.touches.length === 0) {
+        onEnd();
+        initialTouchDist = null;
+      }
+    });
+
+    // Mouse Wheel Zoom
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      this.zoom = Math.max(0.35, Math.min(2.5, this.zoom * zoomFactor));
+      this.render();
+    }, { passive: false });
+
+    // Node Click / Tap Selection
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = this.canvas.width / rect.width;
+      const screenX = (e.clientX - rect.left) * dpr;
+      const screenY = (e.clientY - rect.top) * dpr;
+
+      const worldX = (screenX - this.canvas.width * 0.5) / this.zoom - this.camX;
+      const worldY = (screenY - this.canvas.height * 0.5) / this.zoom - this.camY;
+
+      let clicked = null;
+      for (const [id, node] of this.tree.nodes) {
+        const dist = Math.hypot(node.x - worldX, node.y - worldY);
+        const hitR = node.isSpecial ? 22 : 16;
+        if (dist < hitR) {
+          clicked = node;
+          break;
+        }
+      }
+
+      if (clicked) {
+        this.selectedNodeId = clicked.id;
+        this.showInspector(clicked);
+        this.render();
+      }
+    });
+
+    // Floating Zoom Buttons
+    document.getElementById('btn-tree-zoom-in').onclick = () => {
+      this.zoom = Math.min(2.5, this.zoom * 1.25);
+      this.render();
+    };
+    document.getElementById('btn-tree-zoom-out').onclick = () => {
+      this.zoom = Math.max(0.35, this.zoom / 1.25);
+      this.render();
+    };
+    document.getElementById('btn-tree-reset').onclick = () => {
+      this.camX = 0; this.camY = 0; this.zoom = 1.0;
+      this.render();
+    };
+
+    // Inspector Upgrade Button
+    document.getElementById('btn-node-upgrade').onclick = () => {
+      if (!this.selectedNodeId) return;
+      this.upgradeNode(this.selectedNodeId);
+    };
+  }
+
+  showInspector(node) {
+    const card = document.getElementById('node-inspector');
+    card.classList.remove('hidden');
+
+    const curLvl = this.saveData.nodeLevels[node.id] || 0;
+    const isMax = curLvl >= node.maxLvl;
+    const cost = Math.round(node.baseCost * Math.pow(node.costScale, curLvl));
+    const isPurchasable = this.tree.isNodePurchasable(node.id, this.saveData.nodeLevels);
+    const canAfford = this.saveData.coins >= cost && isPurchasable && !isMax;
+
+    document.getElementById('inspector-cat').innerText = node.cat.toUpperCase();
+    document.getElementById('inspector-title').innerText = node.title;
+    document.getElementById('inspector-level').innerText = `Lv.${curLvl}/${node.maxLvl}`;
+    document.getElementById('inspector-desc').innerText = node.desc;
+    document.getElementById('inspector-cost').innerText = isMax ? 'MAX' : `🪙 ${cost.toLocaleString()}`;
+
+    const btn = document.getElementById('btn-node-upgrade');
+    if (isMax) {
+      btn.innerText = '習得済';
+      btn.className = 'px-3 py-1 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed';
+      btn.disabled = true;
+    } else if (!isPurchasable) {
+      btn.innerText = '未開放（隣接ノードを習得してください）';
+      btn.className = 'px-3 py-1 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed';
+      btn.disabled = true;
+    } else if (!canAfford) {
+      btn.innerText = 'コイン不足';
+      btn.className = 'px-3 py-1 bg-slate-800 text-slate-500 text-xs font-bold rounded-lg cursor-not-allowed';
+      btn.disabled = true;
+    } else {
+      btn.innerText = '強化する';
+      btn.className = 'px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-lg active:scale-95 transition-all';
+      btn.disabled = false;
+    }
+  }
+
+  upgradeNode(nodeId) {
+    const node = this.tree.nodes.get(nodeId);
+    if (!node) return;
+    const curLvl = this.saveData.nodeLevels[node.id] || 0;
+    if (curLvl >= node.maxLvl) return;
+    const cost = Math.round(node.baseCost * Math.pow(node.costScale, curLvl));
+    if (this.saveData.coins < cost) return;
+
+    this.saveData.coins -= cost;
+    this.saveData.nodeLevels[node.id] = curLvl + 1;
+    SaveManager.save(this.saveData.coins, this.saveData.nodeLevels);
+
+    document.getElementById('total-coins').innerText = this.saveData.coins.toLocaleString();
+    this.showInspector(node);
+    this.onUpdateCallback();
+    this.render();
+  }
+
+  render() {
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(w * 0.5, h * 0.5);
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(this.camX, this.camY);
+
+    // 1. Draw Edges
+    for (const [fromId, toId] of this.tree.edges) {
+      const fromNode = this.tree.nodes.get(fromId);
+      const toNode = this.tree.nodes.get(toId);
+      if (!fromNode || !toNode) continue;
+
+      const fromActive = fromId === 'core' || (this.saveData.nodeLevels[fromId] && this.saveData.nodeLevels[fromId] > 0);
+      const toActive = toId === 'core' || (this.saveData.nodeLevels[toId] && this.saveData.nodeLevels[toId] > 0);
+      const edgeConnected = fromActive && toActive;
+      const edgeAvailable = fromActive || toActive;
+
+      ctx.beginPath();
+      ctx.moveTo(fromNode.x, fromNode.y);
+      ctx.lineTo(toNode.x, toNode.y);
+      ctx.lineWidth = edgeConnected ? 3.5 : 1.5;
+      ctx.strokeStyle = edgeConnected ? '#f59e0b' : edgeAvailable ? '#334155' : '#1e293b';
+      ctx.stroke();
+    }
+
+    // 2. Draw Nodes
+    for (const [id, node] of this.tree.nodes) {
+      const lvl = this.saveData.nodeLevels[id] || 0;
+      const isMax = lvl >= node.maxLvl;
+      const isActive = id === 'core' || lvl > 0;
+      const isPurchasable = this.tree.isNodePurchasable(id, this.saveData.nodeLevels);
+      const isSelected = this.selectedNodeId === id;
+
+      const radius = node.isSpecial ? 16 : 10;
+
+      // Glow if selected or special
+      if (isSelected || (node.isSpecial && isActive)) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, radius + 6, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? 'rgba(251, 191, 36, 0.35)' : 'rgba(56, 189, 248, 0.25)';
+        ctx.fill();
+      }
+
+      // Outer Ring
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+      ctx.lineWidth = isSelected ? 3 : 2;
+
+      let color = '#475569'; // locked
+      if (node.cat === 'offense') color = isActive ? '#ef4444' : isPurchasable ? '#f87171' : '#334155';
+      else if (node.cat === 'defense') color = isActive ? '#38bdf8' : isPurchasable ? '#7dd3fc' : '#1e293b';
+      else if (node.cat === 'utility') color = isActive ? '#10b981' : isPurchasable ? '#6ee7b7' : '#1e293b';
+      else if (id === 'core') color = '#fbbf24';
+
+      ctx.strokeStyle = color;
+      ctx.fillStyle = isActive ? (isMax ? '#f59e0b' : color) : '#0f172a';
+      ctx.fill();
+      ctx.stroke();
+
+      // Node Inner Icon / Dot
+      if (node.isSpecial) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Level Indicator Text
+      if (node.maxLvl > 1 && (isActive || isPurchasable)) {
+        ctx.fillStyle = isActive ? '#fef08a' : '#94a3b8';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${lvl}/${node.maxLvl}`, node.x, node.y + radius + 11);
+      }
+    }
+
+    ctx.restore();
+  }
+}
+
+// ==============================================================================
+// 8. WAVE DIRECTOR & GAME APP
+// ==============================================================================
+class GameApp {
+  constructor() {
+    this.canvas = document.getElementById('game-canvas');
+    this.saveData = SaveManager.load();
+
+    this.treeGraph = new SkillTreeGraph();
+    this.treeUI = new InteractiveSkillTreeUI(this.treeGraph, this.saveData, () => {
+      this.player.recalculateStats(this.getComputedTreeStats());
+    });
+
+    this.resize();
+    window.addEventListener('resize', () => {
+      this.resize();
+      this.treeUI.resize();
+    });
+
+    this.renderer = new SwarmGameRenderer(this.canvas);
+    this.flow = new ContinuumFlowGrid(96, 96, 24);
+    this.swarm = new SwarmContainer(40000, 15000);
+    this.player = new Player(0, 0);
+
+    this.surviveDuration = 10 * 60;
+    this.elapsedTime = 0;
+    this.isGameOver = false;
+    this.isPaused = false;
+    this.animTime = 0;
+
+    this.bossSpawnsDone = new Set();
+    this.inputDir = { x: 0, y: 0 };
+    this.initControls();
+
+    window.addEventListener('hardcore-levelup', (e) => this.showLevelUpModal(e.detail.level));
+    window.addEventListener('hardcore-death', () => this.triggerGameOver(false));
+
+    document.getElementById('btn-tree-restart').onclick = () => this.restartGame();
+
+    this.restartGame();
+
+    this.lastTime = performance.now();
+    this.accumulator = 0;
+    this.fixedStep = 1 / 60;
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = window.innerWidth * dpr;
+    this.canvas.height = window.innerHeight * dpr;
+    this.canvas.style.width = `${window.innerWidth}px`;
+    this.canvas.style.height = `${window.innerHeight}px`;
+  }
+
+  getComputedTreeStats() {
+    const stats = {};
+    for (const [id, node] of this.treeGraph.nodes) {
+      const lvl = this.saveData.nodeLevels[id] || 0;
+      if (lvl > 0 && node.statKey !== 'none') {
+        stats[node.statKey] = (stats[node.statKey] || 0) + node.stepVal * lvl;
+      }
+    }
+    return stats;
+  }
+
+  restartGame() {
+    this.elapsedTime = 0;
+    this.isGameOver = false;
+    this.isPaused = false;
+    this.bossSpawnsDone.clear();
+    this.player = new Player(0, 0);
+    this.player.recalculateStats(this.getComputedTreeStats());
+    this.swarm.count = 0;
+    this.swarm.dropCount = 0;
+    this.swarm.projCount = 0;
+
+    document.getElementById('boss-alert').classList.add('hidden');
+    document.getElementById('tree-modal').classList.add('hidden');
+    document.getElementById('tree-modal').classList.remove('flex');
+    document.getElementById('levelup-modal').classList.add('hidden');
+    document.getElementById('levelup-modal').classList.remove('flex');
+
+    // Hardcore Opening: Spawn fast, hungry goblin pack!
+    this.spawnNormalHorde(18);
+  }
+
+  spawnNormalHorde(count) {
+    const p = this.player;
+    const timeMin = this.elapsedTime / 60;
+    // Aggressive HP & Speed Scaling
+    const hpFactor = Math.pow(1.0 + timeMin * 0.5, 2.5);
+
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 280 + Math.random() * 220;
+
+      let type = 0;
+      let hp = 18 * hpFactor;
+      let spd = 62 + Math.random() * 20; // FAST!
+      let knockResist = 0.0;
+      let atk = 22 + timeMin * 6;
+      let scale = 20;
+
+      if (timeMin >= 0.5 && Math.random() < 0.35) {
+        type = 1; // Red Orc
+        hp = 45 * hpFactor;
+        spd = 72 + Math.random() * 15;
+        knockResist = 0.25;
+        atk = 32 + timeMin * 8;
+      }
+
+      if (timeMin >= 1.5 && Math.random() < 0.25) {
+        type = 2; // Armored Knight (Walks straight through)
+        hp = 110 * hpFactor;
+        spd = 50 + Math.random() * 10;
+        knockResist = 0.85;
+        atk = 48 + timeMin * 10;
+        scale = 24;
+      }
+
+      this.swarm.spawn(p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist, type, hp, spd, knockResist, atk, scale);
+    }
+  }
+
+  spawnBoss(tier = 1) {
+    const p = this.player;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 320;
+    const hp = 1800 * Math.pow(tier, 2.3);
+    const spd = 48 + tier * 8;
+    const knockResist = 1.0; // IMMUNE
+    const atk = 65 + tier * 30; // Contact is lethal!
+    const scale = 44;
+
+    this.swarm.spawn(p.x + Math.cos(ang) * dist, p.y + Math.sin(ang) * dist, 3, hp, spd, knockResist, atk, scale);
+
+    const alert = document.getElementById('boss-alert');
+    alert.innerText = `⚠️ Tier ${tier} ボス出現！ノックバック完全無効 (HP ${Math.round(hp)}) ⚠️`;
+    alert.classList.remove('hidden');
+    setTimeout(() => alert.classList.add('hidden'), 4500);
+  }
+
+  initControls() {
+    const base = document.getElementById('joystick-base');
+    const thumb = document.getElementById('joystick-thumb');
+    let touchId = null;
+    let startX = 0, startY = 0;
+
+    window.addEventListener('touchstart', (e) => {
+      if (this.isPaused || this.isGameOver || touchId !== null) return;
+      const t = e.changedTouches[0];
+      if (t.clientY > window.innerHeight * 0.3) {
+        touchId = t.identifier;
+        startX = t.clientX;
+        startY = t.clientY;
+        base.style.left = `${startX - 56}px`;
+        base.style.top = `${startY - 56}px`;
+        thumb.style.transform = `translate(-50%, -50%)`;
+        base.classList.remove('hidden');
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (touchId === null) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchId) {
+          const dx = t.clientX - startX;
+          const dy = t.clientY - startY;
+          const dist = Math.hypot(dx, dy);
+          const maxR = 45;
+          const clampedR = Math.min(dist, maxR);
+          const ang = Math.atan2(dy, dx);
+          const nx = Math.cos(ang) * clampedR;
+          const ny = Math.sin(ang) * clampedR;
+          thumb.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+          this.inputDir.x = (dist > 5) ? Math.cos(ang) * (clampedR / maxR) : 0;
+          this.inputDir.y = (dist > 5) ? Math.sin(ang) * (clampedR / maxR) : 0;
+          break;
+        }
+      }
+    }, { passive: false });
+
+    const endTouch = (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchId) {
+          touchId = null;
+          base.classList.add('hidden');
+          this.inputDir.x = 0;
+          this.inputDir.y = 0;
+          break;
+        }
+      }
+    };
+    window.addEventListener('touchend', endTouch);
+    window.addEventListener('touchcancel', endTouch);
+
+    const keys = {};
+    window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    this.updateKeyInput = () => {
+      if (touchId !== null) return;
+      let kx = 0, ky = 0;
+      if (keys['KeyW'] || keys['ArrowUp']) ky -= 1;
+      if (keys['KeyS'] || keys['ArrowDown']) ky += 1;
+      if (keys['KeyA'] || keys['ArrowLeft']) kx -= 1;
+      if (keys['KeyD'] || keys['ArrowRight']) kx += 1;
+      const len = Math.hypot(kx, ky);
+      this.inputDir.x = len > 0 ? kx / len : 0;
+      this.inputDir.y = len > 0 ? ky / len : 0;
+    };
+  }
+
+  showLevelUpModal(lvl) {
+    this.isPaused = true;
+    const modal = document.getElementById('levelup-modal');
+    const container = document.getElementById('skill-choices');
+    container.innerHTML = '';
+
+    const catalog = [
+      { id: 'magic_wand', name: '魔導弾', desc: '近接敵へ誘導弾を連射' },
+      { id: 'holy_orbit', name: '聖球', desc: '周囲を旋回する聖なる球（小ノックバック）' },
+      { id: 'garlic_aura', name: '聖域衝撃', desc: '数秒ごとに周囲へ小波紋を放つ' },
+      { id: 'lightning_strike', name: '天罰雷雲', desc: 'ランダムな敵1体へ落雷' }
+    ];
+
+    const pool = [...catalog].sort(() => Math.random() - 0.5).slice(0, 3);
+    for (const skill of pool) {
+      const curLvl = this.player.skills.get(skill.id) || 0;
+      const btn = document.createElement('button');
+      btn.className = 'w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl p-2.5 flex items-center justify-between text-left transition-all active:scale-95';
+      btn.innerHTML = `
+        <div>
+          <div class="font-black text-amber-300 text-xs sm:text-sm">${skill.name} <span class="text-[10px] text-cyan-400 font-mono">Lv.${curLvl} → ${curLvl + 1}</span></div>
+          <p class="text-[10px] text-slate-400 mt-0.5">${skill.desc}</p>
+        </div>
+        <span class="text-base">✨</span>
+      `;
+      btn.onclick = () => {
+        this.player.skills.set(skill.id, curLvl + 1);
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        this.isPaused = false;
+      };
+      container.appendChild(btn);
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  triggerGameOver(won = false) {
+    this.isGameOver = true;
+    this.isPaused = true;
+
+    this.saveData.coins += this.player.runCoins;
+    SaveManager.save(this.saveData.coins, this.saveData.nodeLevels);
+
+    const modal = document.getElementById('tree-modal');
+    const title = document.getElementById('tree-modal-title');
+    const sub = document.getElementById('tree-modal-sub');
+
+    const m = Math.floor(this.elapsedTime / 60).toString().padStart(2, '0');
+    const s = Math.floor(this.elapsedTime % 60).toString().padStart(2, '0');
+    sub.innerText = `生存時間: ${m}:${s} | 獲得コイン: +${this.player.runCoins}🪙 | スキルツリーを開放して次へ挑め`;
+
+    title.innerText = won ? '🎉 10-MINUTE VICTORY!' : 'SURVIVAL FAILED';
+    title.className = `text-base sm:text-lg font-black ${won ? 'text-amber-400' : 'text-rose-500'}`;
+
+    document.getElementById('total-coins').innerText = this.saveData.coins.toLocaleString();
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    setTimeout(() => {
+      this.treeUI.resize();
+      this.treeUI.render();
+    }, 50);
+  }
+
+  loop(timestamp) {
+    const dt = Math.min((timestamp - this.lastTime) / 1000, 0.1);
+    this.lastTime = timestamp;
+
+    if (!this.isPaused && !this.isGameOver) {
+      this.accumulator += dt;
+      while (this.accumulator >= this.fixedStep) {
+        this.fixedUpdate(this.fixedStep);
+        this.accumulator -= this.fixedStep;
+      }
+    }
+
+    const p = this.player;
+    this.renderer.render(p, this.swarm, p.x, p.y, 1.4, this.animTime);
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  fixedUpdate(dt) {
+    this.elapsedTime += dt;
+    this.animTime += dt;
+
+    if (this.elapsedTime >= this.surviveDuration) {
+      this.triggerGameOver(true);
+      return;
+    }
+
+    this.updateKeyInput();
+    const treeStats = this.getComputedTreeStats();
+
+    // Boss Timers: 2m, 5m, 8m
+    if (this.elapsedTime >= 120 && !this.bossSpawnsDone.has(1)) {
+      this.bossSpawnsDone.add(1);
+      this.spawnBoss(1);
+    }
+    if (this.elapsedTime >= 300 && !this.bossSpawnsDone.has(2)) {
+      this.bossSpawnsDone.add(2);
+      this.spawnBoss(2);
+    }
+    if (this.elapsedTime >= 480 && !this.bossSpawnsDone.has(3)) {
+      this.bossSpawnsDone.add(3);
+      this.spawnBoss(3);
+    }
+
+    // Dynamic Swarm Pressure
+    const targetCount = Math.min(15000, Math.floor(25 + Math.pow(this.elapsedTime / 60, 2.2) * 220));
+    if (this.swarm.count < targetCount) {
+      this.spawnNormalHorde(Math.min(targetCount - this.swarm.count, 15));
+    }
+
+    this.flow.updatePlayerCenter(this.player.x, this.player.y);
+    this.player.update(dt, this.inputDir, this.swarm, treeStats);
+    this.swarm.update(dt, this.player, this.flow, treeStats);
+
+    this.updateHUD();
+  }
+
+  updateHUD() {
+    const p = this.player;
+    const hpPct = Math.max(0, Math.min(100, (p.hp / p.maxHp) * 100));
+    document.getElementById('hp-bar').style.width = `${hpPct}%`;
+    document.getElementById('hp-text').innerText = `${Math.ceil(p.hp)}/${p.maxHp}`;
+
+    document.getElementById('player-lvl').innerText = `Lv.${p.level}`;
+    const expPct = Math.min(100, (p.exp / p.expNext) * 100);
+    document.getElementById('exp-bar').style.width = `${expPct}%`;
+
+    const rem = Math.max(0, this.surviveDuration - this.elapsedTime);
+    const m = Math.floor(rem / 60).toString().padStart(2, '0');
+    const s = Math.floor(rem % 60).toString().padStart(2, '0');
+    document.getElementById('game-timer').innerText = `${m}:${s}`;
+
+    document.getElementById('run-coins').innerText = p.runCoins.toLocaleString();
+    document.getElementById('horde-count').innerText = this.swarm.count.toLocaleString();
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  new GameApp();
+});
+</script>
+</body>
+</html>

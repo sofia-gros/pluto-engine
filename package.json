@@ -1,0 +1,20 @@
+{
+  "name": "pluto-engine-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "bun run --cwd apps/demo dev",
+    "build": "bun --filter \"packages/*\" run build",
+    "test": "vitest run --browser.enabled=true --browser.name=chromium --browser.provider=playwright",
+    "test:watch": "vitest --browser.enabled=true --browser.name=chromium --browser.provider=playwright",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0",
+    "@vitest/browser": "^2.0.0",
+    "playwright": "^1.40.0"
+  }
+}
