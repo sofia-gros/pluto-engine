@@ -45,6 +45,11 @@ jobs:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Strip workspace protocol for publishing
+        run: |
+          # Replace "workspace:*" with the actual version (e.g. "0.1.0") so npm publish doesn't reject it
+          find packages -name "package.json" -exec sed -i 's/"workspace:\*"/"0.1.0"/g' {} +
+
       - name: Publish to NPM
         run: |
           for dir in packages/*; do
