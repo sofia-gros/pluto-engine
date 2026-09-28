@@ -4,6 +4,8 @@ import {
   LineController,
   LineElement,
   PointElement,
+  BarController,
+  BarElement,
   LinearScale,
   CategoryScale,
   Filler,
@@ -16,6 +18,8 @@ Chart.register(
   LineController,
   LineElement,
   PointElement,
+  BarController,
+  BarElement,
   LinearScale,
   CategoryScale,
   Filler,
@@ -25,34 +29,50 @@ Chart.register(
 );
 
 /**
- * 各フレームの詳細なプロファイリングデータを保持する型
+ * 1フレームの詳細な分解プロファイリングサンプル
  */
-interface FrameSample {
+interface DetailedFrameSample {
   entities: number;
   fps: number;
   frameTimeMs: number;
-  gridPrepMs: number;
-  poissonMs: number;
-  simMs: number;
-  packMs: number;
-  uploadMs: number;
-  drawMs: number;
-  totalCpuMs: number;
+  
+  // Entity Update の詳細分解 (ms)
+  densitySplatMs: number;     // 1. 密度蓄積 (Grid Density Splatting)
+  poissonMs: number;          // 2. ポアソン方程式解法 (Poisson UIC Solver)
+  steeringMs: number;         // 3. AI / フロー場ステアリング計算 (Pressure Gradient & Normalization)
+  integrationMs: number;      // 4. 座標・速度積分 (Position & Velocity Integration)
+  spatialHashMs: number;      // 5. 空間ハッシュ構築 & クエリ (Spatial Hash / Morton Partition)
+  separationMs: number;       // 6. ペア衝突判定・押し戻し緩和 (Pairwise Separation Relaxation)
+  pureMemoryMs: number;       // 7. 純粋な TypedArray 読書ベースライン (Pure Memory Bandwidth Limit)
+  randomMemoryMs: number;     // 8. キャッシュミス（ランダムアクセス）時の読書時間 (Cache Miss Penalty)
+  
+  totalSimMs: number;         // 合計シミュレーション時間
+  packMs: number;             // Data Packing (0.0ms)
+  uploadMs: number;           // CPU -> GPU Upload
+  drawMs: number;             // WebGL2 Draw Call
+  totalCpuMs: number;         // 1フレームの合計CPU時間
 }
 
 /**
- * エンティティ数ごとに集計したベンチマーク結果
+ * 集計済みベンチマークエントリ
  */
-interface BenchmarkEntry {
+export interface DetailedBenchmarkEntry {
   entities: number;
-  fps: number;
-  fps_p5: number; // 5パーセンタイル（最悪値に近い）
-  fps_p50: number; // 中央値
-  fps_p95: number; // 95パーセンタイル（最良値に近い）
+  fps_p5: number;
+  fps_p50: number;
+  fps_p95: number;
   frameTimeMs: number;
-  gridPrepMs: number;
+
+  densitySplatMs: number;
   poissonMs: number;
-  simMs: number;
+  steeringMs: number;
+  integrationMs: number;
+  spatialHashMs: number;
+  separationMs: number;
+  pureMemoryMs: number;
+  randomMemoryMs: number;
+
+  totalSimMs: number;
   packMs: number;
   uploadMs: number;
   drawMs: number;
@@ -121,7 +141,7 @@ class BenchmarkFlowGrid {
     this.density[r * this.cols + c] += amount;
   }
 
-  solvePoissonUIC(iterations = 2) {
+  solvePoissonUIC(iterations = 1) {
     const cols = this.cols;
     const rows = this.rows;
     const p = this.pressure;
@@ -149,17 +169,26 @@ class BenchmarkScene extends Scene {
 
   private isFinished = false;
 
-  /** 現在のバーストグループにおけるフレームサンプル */
-  private currentBurstSamples: FrameSample[] = [];
-  /** 確定済みの集計結果 */
-  private benchmarkResults: BenchmarkEntry[] = [];
+  // メモリ帯域 & キャッシュミス測定用スクラッチ配列
+  private scratchA!: Float32Array;
+  private scratchB!: Float32Array;
+  private randomIndices!: Int32Array;
 
-  /** 次にスポーンするエンティティ数のステップ */
+  // 速度バッファ
+  private vx!: Float32Array;
+  private vy!: Float32Array;
+
+  // 空間ハッシュテスト用セルバッファ
+  private spatialCellHeads!: Int32Array;
+  private spatialNext!: Int32Array;
+
+  private currentBurstSamples: DetailedFrameSample[] = [];
+  private benchmarkResults: DetailedBenchmarkEntry[] = [];
+
   private readonly spawnStep = 25000;
-  private readonly warmupFrames = 30; // スポーン後のウォームアップフレーム数
-  private readonly measureFrames = 45; // 計測するフレーム数
+  private readonly warmupFrames = 25;
+  private readonly measureFrames = 40;
   private framesSinceSpawn = 0;
-  private currentEntityTarget = 0;
 
   private statsDiv!: HTMLElement;
 
@@ -170,11 +199,32 @@ class BenchmarkScene extends Scene {
   create() {
     this.statsDiv = document.getElementById('stats')!;
     this.flow = new BenchmarkFlowGrid(128, 128, 20);
+
+    const maxCap = 1000000;
+    this.scratchA = new Float32Array(maxCap);
+    this.scratchB = new Float32Array(maxCap);
+    this.vx = new Float32Array(maxCap);
+    this.vy = new Float32Array(maxCap);
+    this.spatialCellHeads = new Int32Array(128 * 128).fill(-1);
+    this.spatialNext = new Int32Array(maxCap);
+
+    // ランダムインデックス（キャッシュミス測定用）
+    this.randomIndices = new Int32Array(maxCap);
+    for (let i = 0; i < maxCap; i++) {
+      this.randomIndices[i] = i;
+    }
+    // 部分シャッフル
+    for (let i = maxCap - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = this.randomIndices[i];
+      this.randomIndices[i] = this.randomIndices[j];
+      this.randomIndices[j] = temp;
+    }
+
     this._nextSpawn(25000);
   }
 
   private _nextSpawn(count: number) {
-    this.currentEntityTarget = this.arena.activeCount + count;
     this._spawnBatch(count);
     this.framesSinceSpawn = 0;
     this.currentBurstSamples = [];
@@ -197,26 +247,34 @@ class BenchmarkScene extends Scene {
     if (this.isFinished) return;
 
     const frameStart = performance.now();
-
-    // ---- Flow Field Update ----
-    this.flow.updatePlayerCenter(this.px, this.py);
-    this.flow.clearDensity();
-
     const activeCount = this.arena.activeCount;
     const posX = this.arena.posX;
     const posY = this.arena.posY;
+    const vx = this.vx;
+    const vy = this.vy;
 
+    // =========================================================================
+    // 1. Density Splatting (グリッドへの密度蓄積)
+    // =========================================================================
+    this.flow.updatePlayerCenter(this.px, this.py);
+    this.flow.clearDensity();
+
+    const tSplatStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
       this.flow.addDensity(posX[i], posY[i], 1);
     }
-    const t1 = performance.now();
-    const gridPrepMs = t1 - frameStart;
+    const tSplatEnd = performance.now();
+    const densitySplatMs = tSplatEnd - tSplatStart;
 
+    // =========================================================================
+    // 2. Poisson UIC Solver (圧力場計算)
+    // =========================================================================
+    const tPoissonStart = performance.now();
     this.flow.solvePoissonUIC(1);
-    const t2 = performance.now();
-    const poissonMs = t2 - t1;
+    const tPoissonEnd = performance.now();
+    const poissonMs = tPoissonEnd - tPoissonStart;
 
-    // ---- Player Auto-Move ----
+    // プレイヤー自動移動
     let minPressure = 999999;
     let bestX = this.px;
     let bestY = this.py;
@@ -244,7 +302,9 @@ class BenchmarkScene extends Scene {
     this.camera.x = this.px;
     this.camera.y = this.py;
 
-    // ---- Enemy Movement ----
+    // =========================================================================
+    // 3. AI / Flow Steering (圧力勾配・方向ベクトル・Math.hypot 正規化)
+    // =========================================================================
     const ox = this.flow.originX,
       oy = this.flow.originY;
     const fw = this.flow.width,
@@ -255,6 +315,7 @@ class BenchmarkScene extends Scene {
     const pressure = this.flow.pressure;
     const cols = this.flow.cols;
 
+    const tSteerStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
       const x = posX[i],
         y = posY[i];
@@ -264,76 +325,168 @@ class BenchmarkScene extends Scene {
         const c = Math.floor(lx / cs);
         const r = Math.floor(ly / cs);
         const idx = r * cols + c;
-        let vx = dX[idx],
-          vy = dY[idx];
+        let svx = dX[idx],
+          svy = dY[idx];
         if (r > 0 && r < this.flow.rows - 1 && c > 0 && c < cols - 1) {
-          vx -= (pressure[idx + 1] - pressure[idx - 1]) * 0.1;
-          vy -= (pressure[idx + cols] - pressure[idx - cols]) * 0.1;
+          svx -= (pressure[idx + 1] - pressure[idx - 1]) * 0.1;
+          svy -= (pressure[idx + cols] - pressure[idx - cols]) * 0.1;
         }
-        const len = Math.hypot(vx, vy) + 0.001;
-        posX[i] += (vx / len) * 80 * dt;
-        posY[i] += (vy / len) * 80 * dt;
+        const len = Math.hypot(svx, svy) + 0.001;
+        vx[i] = (svx / len) * 80;
+        vy[i] = (svy / len) * 80;
       } else {
         const dx = this.px - x,
           dy = this.py - y;
         const len = Math.hypot(dx, dy) + 0.001;
-        posX[i] += (dx / len) * 80 * dt;
-        posY[i] += (dy / len) * 80 * dt;
+        vx[i] = (dx / len) * 80;
+        vy[i] = (dy / len) * 80;
       }
     }
-    this.arena.dirtyPos = true;
+    const tSteerEnd = performance.now();
+    const steeringMs = tSteerEnd - tSteerStart;
 
-    const t3 = performance.now();
-    const simMs = t3 - t2;
+    // =========================================================================
+    // 4. Position Integration (速度適用 & 座標積分)
+    // =========================================================================
+    const tIntegStart = performance.now();
+    for (let i = 0; i < activeCount; i++) {
+      posX[i] += vx[i] * dt;
+      posY[i] += vy[i] * dt;
+    }
+    this.arena.dirtyPos = true;
+    const tIntegEnd = performance.now();
+    const integrationMs = tIntegEnd - tIntegStart;
+
+    // =========================================================================
+    // 5. Spatial Hash / Query (空間ハッシュ構築 & 近傍ペア走査)
+    // =========================================================================
+    const tSpatialStart = performance.now();
+    this.spatialCellHeads.fill(-1);
+    for (let i = 0; i < activeCount; i++) {
+      const gx = Math.floor((posX[i] - ox) / (cs * 2));
+      const gy = Math.floor((posY[i] - oy) / (cs * 2));
+      if (gx >= 0 && gx < 64 && gy >= 0 && gy < 64) {
+        const cell = gy * 64 + gx;
+        this.spatialNext[i] = this.spatialCellHeads[cell];
+        this.spatialCellHeads[cell] = i;
+      }
+    }
+    const tSpatialEnd = performance.now();
+    const spatialHashMs = tSpatialEnd - tSpatialStart;
+
+    // =========================================================================
+    // 6. Separation / Relaxation (近傍ペア反発・押し戻し計算 - 2000体サンプリング)
+    // =========================================================================
+    const tSepStart = performance.now();
+    const sepSampleCount = Math.min(activeCount, 2000);
+    for (let i = 0; i < sepSampleCount; i++) {
+      const gx = Math.floor((posX[i] - ox) / (cs * 2));
+      const gy = Math.floor((posY[i] - oy) / (cs * 2));
+      if (gx >= 0 && gx < 64 && gy >= 0 && gy < 64) {
+        const cell = gy * 64 + gx;
+        let other = this.spatialCellHeads[cell];
+        while (other !== -1) {
+          if (other > i) {
+            const dx = posX[other] - posX[i];
+            const dy = posY[other] - posY[i];
+            const d2 = dx * dx + dy * dy;
+            if (d2 < 400 && d2 > 0.001) {
+              const dist = Math.sqrt(d2);
+              const push = (20 - dist) * 0.1;
+              posX[i] -= (dx / dist) * push;
+              posY[i] -= (dy / dist) * push;
+            }
+          }
+          other = this.spatialNext[other];
+        }
+      }
+    }
+    const tSepEnd = performance.now();
+    // 全体推計値（2000体サンプルを activeCount に比例換算）
+    const separationMs = (tSepEnd - tSepStart) * (activeCount / Math.max(1, sepSampleCount));
+
+    // =========================================================================
+    // 7. Pure Memory Bandwidth Baseline (連続アクセス時の純粋な限界速度)
+    // =========================================================================
+    const tMemStart = performance.now();
+    const scA = this.scratchA;
+    const scB = this.scratchB;
+    for (let i = 0; i < activeCount; i++) {
+      scA[i] = posX[i] + 1.0;
+      scB[i] = posY[i] + 1.0;
+    }
+    const tMemEnd = performance.now();
+    const pureMemoryMs = tMemEnd - tMemStart;
+
+    // =========================================================================
+    // 8. Cache Miss Penalty (ランダムアクセス時の帯域低下・ペナルティ)
+    // =========================================================================
+    const tRandStart = performance.now();
+    const randIdx = this.randomIndices;
+    for (let i = 0; i < activeCount; i++) {
+      const idx = randIdx[i];
+      if (idx < activeCount) {
+        scA[i] = posX[idx] + 1.0;
+      }
+    }
+    const tRandEnd = performance.now();
+    const randomMemoryMs = tRandEnd - tRandStart;
+
+    const tSimEnd = performance.now();
+    const totalSimMs = tSimEnd - frameStart;
 
     const packMs = this.engine.packTimeMs;
     const uploadMs = this.engine.uploadTimeMs;
     const drawMs = this.engine.drawTimeMs;
-    const totalCpuMs = t3 - frameStart;
+    const totalCpuMs = totalSimMs + packMs + uploadMs + drawMs;
     const fps = dt > 0.0001 ? Math.round(1 / dt) : 60;
 
     // HUD更新
     this.statsDiv.innerHTML = `
       <p>FPS: ${fps}</p>
       <p>Entities: ${activeCount}</p>
-      <p>GridPrep: ${gridPrepMs.toFixed(2)} ms</p>
-      <p>Poisson: ${poissonMs.toFixed(2)} ms</p>
-      <p>Sim: ${simMs.toFixed(2)} ms</p>
-      <p>Pack: ${packMs.toFixed(2)} ms</p>
-      <p>CPU→GPU: ${uploadMs.toFixed(2)} ms</p>
-      <p>DrawCall: ${drawMs.toFixed(2)} ms</p>
-      <p>Phase: ${this.framesSinceSpawn < this.warmupFrames ? 'Warmup' : 'Measuring'}</p>
+      <p>1. Density Splat: ${densitySplatMs.toFixed(2)} ms</p>
+      <p>2. Poisson UIC: ${poissonMs.toFixed(2)} ms</p>
+      <p>3. AI / Steering: ${steeringMs.toFixed(2)} ms</p>
+      <p>4. Integration: ${integrationMs.toFixed(2)} ms</p>
+      <p>5. Spatial Hash: ${spatialHashMs.toFixed(2)} ms</p>
+      <p>6. Separation: ${separationMs.toFixed(2)} ms</p>
+      <p>-- Pure Mem Baseline: ${pureMemoryMs.toFixed(2)} ms</p>
+      <p>-- Cache Miss Penalty: ${randomMemoryMs.toFixed(2)} ms</p>
+      <p>Pack: ${packMs.toFixed(2)} ms | GPU: ${uploadMs.toFixed(2)} ms | Draw: ${drawMs.toFixed(2)} ms</p>
     `;
 
     this.framesSinceSpawn++;
 
-    // ウォームアップ後に計測
     if (this.framesSinceSpawn > this.warmupFrames) {
       this.currentBurstSamples.push({
         entities: activeCount,
         fps,
         frameTimeMs: dt * 1000,
-        gridPrepMs,
+        densitySplatMs,
         poissonMs,
-        simMs,
+        steeringMs,
+        integrationMs,
+        spatialHashMs,
+        separationMs,
+        pureMemoryMs,
+        randomMemoryMs,
+        totalSimMs,
         packMs,
         uploadMs,
         drawMs,
         totalCpuMs,
       });
 
-      // 指定フレーム数の計測が完了
       if (this.currentBurstSamples.length >= this.measureFrames) {
         this._recordResult();
-        const latestResult = this.benchmarkResults[this.benchmarkResults.length - 1];
+        const latest = this.benchmarkResults[this.benchmarkResults.length - 1];
 
-        // 中央値FPSが20を下回った場合、または30万体に達したら終了
-        if (latestResult.fps_p50 < 20 || this.arena.activeCount >= 300000) {
+        if (latest.fps_p50 < 20 || this.arena.activeCount >= 300000) {
           this._finishBenchmark();
           return;
         }
 
-        // 次のバーストをスポーン
         this._nextSpawn(this.spawnStep);
       }
     }
@@ -352,16 +505,21 @@ class BenchmarkScene extends Scene {
   private _recordResult() {
     const s = this.currentBurstSamples;
     const fpsList = s.map((x) => x.fps);
-    const entry: BenchmarkEntry = {
+    const entry: DetailedBenchmarkEntry = {
       entities: Math.round(this._avg(s.map((x) => x.entities))),
-      fps: Math.round(this._avg(fpsList)),
       fps_p5: Math.round(this._percentile(fpsList, 0.05)),
       fps_p50: Math.round(this._percentile(fpsList, 0.5)),
       fps_p95: Math.round(this._percentile(fpsList, 0.95)),
       frameTimeMs: parseFloat(this._avg(s.map((x) => x.frameTimeMs)).toFixed(2)),
-      gridPrepMs: parseFloat(this._avg(s.map((x) => x.gridPrepMs)).toFixed(2)),
+      densitySplatMs: parseFloat(this._avg(s.map((x) => x.densitySplatMs)).toFixed(2)),
       poissonMs: parseFloat(this._avg(s.map((x) => x.poissonMs)).toFixed(2)),
-      simMs: parseFloat(this._avg(s.map((x) => x.simMs)).toFixed(2)),
+      steeringMs: parseFloat(this._avg(s.map((x) => x.steeringMs)).toFixed(2)),
+      integrationMs: parseFloat(this._avg(s.map((x) => x.integrationMs)).toFixed(2)),
+      spatialHashMs: parseFloat(this._avg(s.map((x) => x.spatialHashMs)).toFixed(2)),
+      separationMs: parseFloat(this._avg(s.map((x) => x.separationMs)).toFixed(2)),
+      pureMemoryMs: parseFloat(this._avg(s.map((x) => x.pureMemoryMs)).toFixed(2)),
+      randomMemoryMs: parseFloat(this._avg(s.map((x) => x.randomMemoryMs)).toFixed(2)),
+      totalSimMs: parseFloat(this._avg(s.map((x) => x.totalSimMs)).toFixed(2)),
       packMs: parseFloat(this._avg(s.map((x) => x.packMs)).toFixed(2)),
       uploadMs: parseFloat(this._avg(s.map((x) => x.uploadMs)).toFixed(2)),
       drawMs: parseFloat(this._avg(s.map((x) => x.drawMs)).toFixed(2)),
@@ -374,108 +532,46 @@ class BenchmarkScene extends Scene {
   private _finishBenchmark() {
     this.isFinished = true;
 
-    let tableRows = '';
-    const labels: string[] = [];
-    const dataFpsAvg: number[] = [];
-    const dataFpsP5: number[] = [];
-    const dataFpsP95: number[] = [];
-    const dataGridPrep: number[] = [];
-    const dataPoisson: number[] = [];
-    const dataSim: number[] = [];
-    const dataPack: number[] = [];
-    const dataUpload: number[] = [];
-    const dataDraw: number[] = [];
-
-    for (const res of this.benchmarkResults) {
-      const entityK = (res.entities / 1000).toFixed(0) + 'k';
-      labels.push(entityK);
-      dataFpsAvg.push(res.fps_p50);
-      dataFpsP5.push(res.fps_p5);
-      dataFpsP95.push(res.fps_p95);
-      dataGridPrep.push(res.gridPrepMs);
-      dataPoisson.push(res.poissonMs);
-      dataSim.push(res.simMs);
-      dataPack.push(res.packMs);
-      dataUpload.push(res.uploadMs);
-      dataDraw.push(res.drawMs);
-
-      tableRows += `<tr>
-        <td style="padding:0 8px;">${entityK}</td>
-        <td style="padding:0 8px;">${res.fps_p5}</td>
-        <td style="padding:0 8px;">${res.fps_p50}</td>
-        <td style="padding:0 8px;">${res.fps_p95}</td>
-        <td style="padding:0 8px;">${res.gridPrepMs}</td>
-        <td style="padding:0 8px;">${res.poissonMs}</td>
-        <td style="padding:0 8px;">${res.simMs}</td>
-        <td style="padding:0 8px;">${res.packMs}</td>
-        <td style="padding:0 8px;">${res.uploadMs}</td>
-        <td style="padding:0 8px;">${res.drawMs}</td>
-        <td style="padding:0 8px;">${res.sampleCount}</td>
-      </tr>`;
-    }
-
-    this.statsDiv.innerHTML += `
-      <hr>
-      <h2 style='color: #ff0; margin-top:10px;'>Benchmark Complete</h2>
-      <table style="text-align: right; font-size: 11px; border-collapse: collapse;">
-        <tr>
-          <th style="padding:0 8px;">Entities</th>
-          <th style="padding:0 8px;">P5 FPS</th>
-          <th style="padding:0 8px;">P50 FPS</th>
-          <th style="padding:0 8px;">P95 FPS</th>
-          <th style="padding:0 8px;">GridPrep</th>
-          <th style="padding:0 8px;">Poisson</th>
-          <th style="padding:0 8px;">Sim</th>
-          <th style="padding:0 8px;">Pack</th>
-          <th style="padding:0 8px;">Upload</th>
-          <th style="padding:0 8px;">Draw</th>
-          <th style="padding:0 8px;">N</th>
-        </tr>
-        ${tableRows}
-      </table>
-    `;
-
-    // FPS折れ線グラフ（p5/p50/p95帯）
     const chartContainer = document.getElementById('chart-container');
     const chartCanvas = document.getElementById('benchmark-chart') as HTMLCanvasElement;
     if (chartContainer && chartCanvas) {
       chartContainer.style.display = 'block';
+      const labels = this.benchmarkResults.map((r) => `${(r.entities / 1000).toFixed(0)}k`);
+      
       new Chart(chartCanvas, {
-        type: 'line',
+        type: 'bar',
         data: {
           labels,
           datasets: [
             {
-              label: 'FPS P95 (Best)',
-              data: dataFpsP95,
-              borderColor: '#4fc3f7',
-              backgroundColor: 'rgba(79, 195, 247, 0.08)',
-              borderWidth: 1.5,
-              borderDash: [4, 2],
-              fill: false,
-              tension: 0.3,
-              pointRadius: 3,
+              label: '1. Density Splat',
+              data: this.benchmarkResults.map((r) => r.densitySplatMs),
+              backgroundColor: '#3b82f6',
             },
             {
-              label: 'FPS P50 (Median)',
-              data: dataFpsAvg,
-              borderColor: '#00ff00',
-              backgroundColor: 'rgba(0, 255, 0, 0.12)',
-              borderWidth: 2.5,
-              fill: '+1',
-              tension: 0.3,
-              pointRadius: 4,
+              label: '2. Poisson UIC',
+              data: this.benchmarkResults.map((r) => r.poissonMs),
+              backgroundColor: '#6366f1',
             },
             {
-              label: 'FPS P5 (Worst)',
-              data: dataFpsP5,
-              borderColor: '#ff6b35',
-              backgroundColor: 'rgba(255, 107, 53, 0.08)',
-              borderWidth: 1.5,
-              borderDash: [4, 2],
-              fill: false,
-              tension: 0.3,
-              pointRadius: 3,
+              label: '3. AI / Steering',
+              data: this.benchmarkResults.map((r) => r.steeringMs),
+              backgroundColor: '#f59e0b',
+            },
+            {
+              label: '4. Integration',
+              data: this.benchmarkResults.map((r) => r.integrationMs),
+              backgroundColor: '#10b981',
+            },
+            {
+              label: '5. Spatial Hash',
+              data: this.benchmarkResults.map((r) => r.spatialHashMs),
+              backgroundColor: '#ec4899',
+            },
+            {
+              label: '6. Separation',
+              data: this.benchmarkResults.map((r) => r.separationMs),
+              backgroundColor: '#8b5cf6',
             },
           ],
         },
@@ -483,23 +579,17 @@ class BenchmarkScene extends Scene {
           responsive: true,
           maintainAspectRatio: false,
           scales: {
-            y: { beginAtZero: true, max: 150, grid: { color: '#333' }, ticks: { color: '#ccc' } },
-            x: { grid: { color: '#333' }, ticks: { color: '#ccc' } },
+            x: { stacked: true, grid: { color: '#333' } },
+            y: { stacked: true, grid: { color: '#333' }, title: { display: true, text: 'Execution Time (ms)', color: '#fff' } },
           },
           plugins: {
-            title: {
-              display: true,
-              text: 'PlutoEngine v1.0.8 – FPS vs Entity Count',
-              color: '#fff',
-              font: { size: 14 },
-            },
+            title: { display: true, text: 'Entity Update Sub-phase Breakdown (ms)', color: '#fff' },
             legend: { labels: { color: '#fff' } },
           },
         },
       });
     }
 
-    // 完全な結果をconsoleに出力（Playwright が拾う）
     console.log('BENCHMARK FINISHED:', JSON.stringify(this.benchmarkResults));
   }
 }
