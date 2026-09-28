@@ -29,6 +29,11 @@ export class InstanceBufferArena {
   public readonly localY: Float32Array;
   public readonly localRotation: Float32Array;
 
+  // --- Interaction ---
+  public readonly interactive: Uint8Array;
+  public readonly hitWidth: Float32Array;
+  public readonly hitHeight: Float32Array;
+
   // 生存フラグ
   public readonly active: Uint8Array;
 
@@ -60,6 +65,10 @@ export class InstanceBufferArena {
     this.localX = new Float32Array(maxInstances);
     this.localY = new Float32Array(maxInstances);
     this.localRotation = new Float32Array(maxInstances);
+
+    this.interactive = new Uint8Array(maxInstances);
+    this.hitWidth = new Float32Array(maxInstances);
+    this.hitHeight = new Float32Array(maxInstances);
 
     this.active = new Uint8Array(maxInstances);
 
@@ -98,6 +107,9 @@ export class InstanceBufferArena {
     this.localX[id] = 0.0;
     this.localY[id] = 0.0;
     this.localRotation[id] = 0.0;
+    this.interactive[id] = 0;
+    this.hitWidth[id] = 0.0;
+    this.hitHeight[id] = 0.0;
 
     return id;
   }

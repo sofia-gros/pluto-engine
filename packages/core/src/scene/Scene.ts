@@ -148,6 +148,52 @@ export class Scene {
         arena.rotation[i] = arena.rotation[pid] + arena.localRotation[i];
       }
     }
+
+    // ポインターイベントの処理
+    const input = this.input;
+    if (input.isPointerJustPressed()) {
+      const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
+      const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
+
+      // 手前に描画されるものから逆順に判定する (簡略化のためIDの大きい順=後に生成された順を前面と仮定)
+      for (let i = count - 1; i >= 0; i--) {
+        if (arena.active[i] === 0 || arena.interactive[i] === 0) continue;
+
+        const hw = arena.hitWidth[i] * arena.scale[i];
+        const hh = arena.hitHeight[i] * arena.scale[i];
+        if (hw <= 0 || hh <= 0) continue;
+
+        // Originを中心と仮定
+        const left = arena.posX[i] - hw / 2;
+        const right = arena.posX[i] + hw / 2;
+        const top = arena.posY[i] - hh / 2;
+        const bottom = arena.posY[i] + hh / 2;
+
+        if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
+          input.emit(i, 'pointerdown');
+          // 一番上の要素のみクリック判定する場合は break;
+          break;
+        }
+      }
+    }
+    if (input.isPointerJustReleased()) {
+      const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
+      const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
+      for (let i = count - 1; i >= 0; i--) {
+        if (arena.active[i] === 0 || arena.interactive[i] === 0) continue;
+        const hw = arena.hitWidth[i] * arena.scale[i];
+        const hh = arena.hitHeight[i] * arena.scale[i];
+        if (hw <= 0 || hh <= 0) continue;
+        const left = arena.posX[i] - hw / 2;
+        const right = arena.posX[i] + hw / 2;
+        const top = arena.posY[i] - hh / 2;
+        const bottom = arena.posY[i] + hh / 2;
+        if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
+          input.emit(i, 'pointerup');
+          break;
+        }
+      }
+    }
   }
 
   public sysFixedUpdate(fixedDt: number): void {

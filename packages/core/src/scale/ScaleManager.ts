@@ -100,4 +100,16 @@ export class ScaleManager {
       window.removeEventListener('resize', this.resizeListener);
     }
   }
+
+  public transformX(screenX: number): number {
+    if (!this.canvas) return screenX;
+    const rect = this.canvas.getBoundingClientRect();
+    return (screenX - rect.left) * (this.width / rect.width);
+  }
+
+  public transformY(screenY: number): number {
+    if (!this.canvas) return screenY;
+    const rect = this.canvas.getBoundingClientRect();
+    return (screenY - rect.top) * (this.height / rect.height);
+  }
 }

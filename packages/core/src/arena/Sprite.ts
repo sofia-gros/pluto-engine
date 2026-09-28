@@ -106,6 +106,27 @@ export class Sprite {
   }
 
   /**
+   * インタラクティブ (ポインター判定) を有効にします。
+   */
+  public setInteractive(hitWidth?: number, hitHeight?: number): this {
+    this._arena.interactive[this.id] = 1;
+    // デフォルトのヒットボックス幅・高さを適用
+    if (hitWidth !== undefined) {
+      this._arena.hitWidth[this.id] = hitWidth;
+    } else {
+      // asset からサイズを取得できるかチェック。未実装の場合は1.0などを仮置き
+      this._arena.hitWidth[this.id] = this._asset ? (this._asset.width ?? 0) : 0;
+    }
+
+    if (hitHeight !== undefined) {
+      this._arena.hitHeight[this.id] = hitHeight;
+    } else {
+      this._arena.hitHeight[this.id] = this._asset ? (this._asset.height ?? 0) : 0;
+    }
+    return this;
+  }
+
+  /**
    * このスプライトをアリーナから解放（破壊）します。
    * 以降このハンドルへのアクセスは未定義の動作を引き起こす可能性があります。
    */

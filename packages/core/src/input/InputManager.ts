@@ -8,6 +8,9 @@
  */
 
 export class InputManager {
+  // --- Events ---
+  private _entityListeners: Map<number, Record<string, Function[]>> = new Map();
+
   // --- Keyboard ---
   private _rawKeys = new Set<string>();
   private _currentKeys = new Set<string>();
@@ -152,5 +155,33 @@ export class InputManager {
     const val = pad.axes[axisIndex];
     // デッドゾーン処理 (0.1)
     return Math.abs(val) > 0.1 ? val : 0;
+  }
+
+  // --- Entity Events ---
+
+  public on(target: { id: number }, event: string, callback: Function): this {
+    let listeners = this._entityListeners.get(target.id);
+    if (!listeners) {
+      listeners = {};
+      this._entityListeners.set(target.id, listeners);
+    }
+    if (!listeners[event]) listeners[event] = [];
+    listeners[event].push(callback);
+    return this;
+  }
+
+  public off(target: { id: number }, event: string, callback: Function): this {
+    const listeners = this._entityListeners.get(target.id);
+    if (!listeners || !listeners[event]) return this;
+    listeners[event] = listeners[event].filter((cb) => cb !== callback);
+    return this;
+  }
+
+  public emit(entityId: number, event: string, ...args: any[]): void {
+    const listeners = this._entityListeners.get(entityId);
+    if (!listeners || !listeners[event]) return;
+    for (let i = 0; i < listeners[event].length; i++) {
+      listeners[event][i](...args);
+    }
   }
 }
