@@ -16,6 +16,11 @@ export class InstanceBufferArena {
   public readonly rotation: Float32Array;
   public readonly scale: Float32Array;
   public readonly facing: Float32Array;
+  public readonly uvX: Float32Array;
+  public readonly uvY: Float32Array;
+  public readonly uvW: Float32Array;
+  public readonly uvH: Float32Array;
+  public readonly frameIdx: Float32Array;
   public readonly tint: Uint32Array; // 0xAABBGGRR 形式などを想定
 
   // --- Hierarchy ---
@@ -44,8 +49,13 @@ export class InstanceBufferArena {
     this.rotation = new Float32Array(maxInstances);
     this.scale = new Float32Array(maxInstances);
     this.facing = new Float32Array(maxInstances);
+    this.uvX = new Float32Array(maxInstances);
+    this.uvY = new Float32Array(maxInstances);
+    this.uvW = new Float32Array(maxInstances);
+    this.uvH = new Float32Array(maxInstances);
+    this.frameIdx = new Float32Array(maxInstances);
     this.tint = new Uint32Array(maxInstances);
-    
+
     this.parentId = new Int32Array(maxInstances).fill(-1);
     this.localX = new Float32Array(maxInstances);
     this.localY = new Float32Array(maxInstances);

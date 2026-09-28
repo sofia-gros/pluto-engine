@@ -24,7 +24,7 @@ export class MortonPlugin implements Plugin {
   public init(scene: Scene): void {
     // Scene のアリーナ最大容量に合わせて空間ハッシュを初期化
     this.hash = new MortonSpatialHash(scene.arena.capacity, this.cellSize);
-    
+
     // Scene に直接インスタンスを注入（this.spatialHash としてアクセス可能に）
     scene.spatialHash = this.hash;
   }

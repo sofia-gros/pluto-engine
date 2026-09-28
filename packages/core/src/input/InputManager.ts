@@ -55,16 +55,24 @@ export class InputManager {
     target.removeEventListener('pointerup', this._boundOnPointerUp as EventListener);
   }
 
-  private onKeyDown(e: KeyboardEvent): void { this._rawKeys.add(e.code); }
-  private onKeyUp(e: KeyboardEvent): void { this._rawKeys.delete(e.code); }
-  
+  private onKeyDown(e: KeyboardEvent): void {
+    this._rawKeys.add(e.code);
+  }
+  private onKeyUp(e: KeyboardEvent): void {
+    this._rawKeys.delete(e.code);
+  }
+
   private onPointerMove(e: PointerEvent): void {
     // 実際のキャンバス内座標への変換は後続のScaleManagerとの連携が必要ですが、一旦スクリーン座標
     this.pointerX = e.clientX;
     this.pointerY = e.clientY;
   }
-  private onPointerDown(): void { this._rawPointerDown = true; }
-  private onPointerUp(): void { this._rawPointerDown = false; }
+  private onPointerDown(): void {
+    this._rawPointerDown = true;
+  }
+  private onPointerUp(): void {
+    this._rawPointerDown = false;
+  }
 
   public update(): void {
     // Keyboard
@@ -83,7 +91,7 @@ export class InputManager {
       for (let i = 0; i < pads.length; i++) {
         const pad = pads[i];
         if (!pad) continue;
-        
+
         // 前フレームのボタン状態を保存
         if (!this._previousGamepadButtons[i]) {
           this._previousGamepadButtons[i] = new Array(pad.buttons.length).fill(false);
@@ -104,13 +112,27 @@ export class InputManager {
 
   // --- API ---
 
-  public isKeyPressed(code: string): boolean { return this._currentKeys.has(code); }
-  public isKeyJustPressed(code: string): boolean { return this._currentKeys.has(code) && !this._previousKeys.has(code); }
-  
-  public isPointerDown(): boolean { return this._currentPointerDown; }
-  public isPointerJustPressed(): boolean { return this._currentPointerDown && !this._previousPointerDown; }
+  public isKeyPressed(code: string): boolean {
+    return this._currentKeys.has(code);
+  }
+  public isKeyJustPressed(code: string): boolean {
+    return this._currentKeys.has(code) && !this._previousKeys.has(code);
+  }
+  public isKeyJustReleased(code: string): boolean {
+    return !this._currentKeys.has(code) && this._previousKeys.has(code);
+  }
 
-  /** 
+  public isPointerDown(): boolean {
+    return this._currentPointerDown;
+  }
+  public isPointerJustPressed(): boolean {
+    return this._currentPointerDown && !this._previousPointerDown;
+  }
+  public isPointerJustReleased(): boolean {
+    return !this._currentPointerDown && this._previousPointerDown;
+  }
+
+  /**
    * Gamepadの指定ボタンが押されているか (buttonIndex: 0=A, 1=B, etc)
    */
   public isGamepadButtonPressed(padIndex: number, buttonIndex: number): boolean {

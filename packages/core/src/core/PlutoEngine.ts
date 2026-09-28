@@ -35,6 +35,11 @@ export class PlutoEngine {
   private packedPosX: Float32Array;
   private packedPosY: Float32Array;
   private packedScale: Float32Array;
+  private packedUvX: Float32Array;
+  private packedUvY: Float32Array;
+  private packedUvW: Float32Array;
+  private packedUvH: Float32Array;
+  private packedFrameIdx: Float32Array;
 
   constructor(config: EngineConfig) {
     this.config = Object.assign(
@@ -52,6 +57,11 @@ export class PlutoEngine {
     this.packedPosX = new Float32Array(this.config.maxInstances!);
     this.packedPosY = new Float32Array(this.config.maxInstances!);
     this.packedScale = new Float32Array(this.config.maxInstances!);
+    this.packedUvX = new Float32Array(this.config.maxInstances!);
+    this.packedUvY = new Float32Array(this.config.maxInstances!);
+    this.packedUvW = new Float32Array(this.config.maxInstances!);
+    this.packedUvH = new Float32Array(this.config.maxInstances!);
+    this.packedFrameIdx = new Float32Array(this.config.maxInstances!);
 
     this.scale = new ScaleManager({
       width: this.config.width,
@@ -88,11 +98,16 @@ export class PlutoEngine {
     this.gpuBuffers['posX'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['posY'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['scale'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['uvX'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['uvY'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['uvW'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['uvH'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['frameIdx'] = this.device.createBuffer(maxInstances * 4);
 
     for (let i = 0; i < this.config.scene.length; i++) {
       const SceneClass = this.config.scene[i];
       const tempInstance = new SceneClass();
-      const key = tempInstance.key || SceneClass.name;
+      const key = tempInstance.id || SceneClass.name;
       this.scene.add(key, SceneClass);
 
       if (i === 0) {
@@ -143,6 +158,11 @@ export class PlutoEngine {
         this.packedPosX[idx] = arena.posX[i];
         this.packedPosY[idx] = arena.posY[i];
         this.packedScale[idx] = arena.scale[i];
+        this.packedUvX[idx] = arena.uvX[i];
+        this.packedUvY[idx] = arena.uvY[i];
+        this.packedUvW[idx] = arena.uvW[i];
+        this.packedUvH[idx] = arena.uvH[i];
+        this.packedFrameIdx[idx] = arena.frameIdx[i];
         idx++;
       }
     }
@@ -153,6 +173,14 @@ export class PlutoEngine {
       this.device.updateBuffer(this.gpuBuffers['posX'], this.packedPosX.subarray(0, renderCount));
       this.device.updateBuffer(this.gpuBuffers['posY'], this.packedPosY.subarray(0, renderCount));
       this.device.updateBuffer(this.gpuBuffers['scale'], this.packedScale.subarray(0, renderCount));
+      this.device.updateBuffer(this.gpuBuffers['uvX'], this.packedUvX.subarray(0, renderCount));
+      this.device.updateBuffer(this.gpuBuffers['uvY'], this.packedUvY.subarray(0, renderCount));
+      this.device.updateBuffer(this.gpuBuffers['uvW'], this.packedUvW.subarray(0, renderCount));
+      this.device.updateBuffer(this.gpuBuffers['uvH'], this.packedUvH.subarray(0, renderCount));
+      this.device.updateBuffer(
+        this.gpuBuffers['frameIdx'],
+        this.packedFrameIdx.subarray(0, renderCount),
+      );
     }
 
     this.device.clear(0.01, 0.02, 0.05, 1.0);
@@ -171,10 +199,22 @@ export class PlutoEngine {
     const sy = -(2 / h) * zoom;
 
     const proj = new Float32Array([
-      sx * cosR,           sy * sinR,          0, 0,
-      sx * -sinR,          sy * cosR,          0, 0,
-      0,                   0,                  1, 0,
-      sx * (-cx * cosR + cy * sinR), sy * (-cx * sinR - cy * cosR), 0, 1
+      sx * cosR,
+      sy * sinR,
+      0,
+      0,
+      sx * -sinR,
+      sy * cosR,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      sx * (-cx * cosR + cy * sinR),
+      sy * (-cx * sinR - cy * cosR),
+      0,
+      1,
     ]);
 
     this.device.setUniformMatrix4fv('projectionMatrix', proj);

@@ -106,20 +106,6 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.enableVertexAttribArray(1);
     this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
 
-    // Instance attributes
-    // According to sprite.vert.glsl:
-    // 2: posX
-    // 3: posY
-    // 4: scale
-    // 5: facing
-    // 6: uvX
-    // 7: uvY
-    // 8: layerDepth
-    // 9: frameIdx
-    // 10: tint (vec4) - we might pass a single color or per-instance
-
-    // We bind the provided buffers.
-    // Usually, we'd pass 'posX', 'posY', etc. buffers.
     const bindInstancedAttr = (loc: number, bufName: string, size: number) => {
       const b = buffers[bufName];
       if (b && this.gl) {
@@ -130,21 +116,6 @@ export class WebGL2Device implements GraphicsDevice {
       }
     };
 
-    bindInstancedAttr(2, 'posX', 1);
-    bindInstancedAttr(3, 'posY', 1);
-    bindInstancedAttr(4, 'scale', 1);
-    // bindInstancedAttr(5, 'facing', 1);
-    // bindInstancedAttr(6, 'uvX', 1);
-    // bindInstancedAttr(7, 'uvY', 1);
-    // bindInstancedAttr(8, 'layerDepth', 1);
-    // bindInstancedAttr(9, 'frameIdx', 1);
-    // bindInstancedAttr(10, 'tint', 4);
-
-    // If facing isn't provided, just disable it or provide default
-    // We'll just assume they are 1.0 or 0.0 using vertexAttrib1f etc if not in buffers
-    // Actually vertexAttrib1f doesn't work well with instancing if the array is enabled.
-    // We MUST disable arrays for missing buffers and set default values.
-
     const setDef1f = (loc: number, bufName: string, def: number) => {
       if (buffers[bufName]) {
         bindInstancedAttr(loc, bufName, 1);
@@ -154,17 +125,23 @@ export class WebGL2Device implements GraphicsDevice {
       }
     };
 
+    bindInstancedAttr(2, 'posX', 1);
+    bindInstancedAttr(3, 'posY', 1);
+    bindInstancedAttr(4, 'scale', 1);
+
     setDef1f(5, 'facing', 1.0);
     setDef1f(6, 'uvX', 0.0);
     setDef1f(7, 'uvY', 0.0);
-    setDef1f(8, 'layerDepth', 0.0);
-    setDef1f(9, 'frameIdx', 0.0);
+    setDef1f(8, 'uvW', 1.0);
+    setDef1f(9, 'uvH', 1.0);
+    setDef1f(10, 'layerDepth', 0.0);
+    setDef1f(11, 'frameIdx', 0.0);
 
     if (buffers['tint']) {
-      bindInstancedAttr(10, 'tint', 4);
+      bindInstancedAttr(12, 'tint', 4);
     } else {
-      this.gl.disableVertexAttribArray(10);
-      this.gl.vertexAttrib4f(10, 1.0, 1.0, 1.0, 1.0);
+      this.gl.disableVertexAttribArray(12);
+      this.gl.vertexAttrib4f(12, 1.0, 1.0, 1.0, 1.0);
     }
   }
 

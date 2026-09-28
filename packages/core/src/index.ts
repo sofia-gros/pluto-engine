@@ -13,4 +13,5 @@ export * from './scale/ScaleManager';
 export * from './time/TimeManager';
 export * from './math/Math';
 export * from './tween/TweenManager';
+export * from './anim/AnimationManager';
 export * from './tilemap/Tilemap';

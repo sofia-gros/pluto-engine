@@ -12,13 +12,20 @@ import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';
 import { mathHelpers } from '../math/Math';
 import { TweenManager } from '../tween/TweenManager';
+import { AnimationManager } from '../anim/AnimationManager';
 import type { Plugin } from './Plugin';
 import type { SceneManager } from './SceneManager';
 import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
 
+export interface SceneProps {
+  id?: string;
+  maxInstances?: number;
+  [key: string]: any;
+}
+
 export class Scene {
-  public key = '';
+  public id = '';
   public scene!: SceneManager;
   public engine!: PlutoEngine;
 
@@ -26,7 +33,8 @@ export class Scene {
   public input!: InputManager;
   public load!: LoaderManager;
   public tweens!: TweenManager;
-  
+  public anim!: AnimationManager;
+
   public camera: Camera;
 
   private _plugins: Plugin[] = [];
@@ -42,29 +50,47 @@ export class Scene {
   }
 
   public readonly add = {
-    sprite: (x = 0, y = 0, scale = 20): Sprite => {
+    sprite: (x = 0, y = 0, textureKey?: string, frameKey?: string | number): Sprite => {
       const id = this.arena.allocate();
       if (id === -1) {
         throw new Error('アリーナの容量が上限に達しています。');
       }
       this.arena.posX[id] = x;
       this.arena.posY[id] = y;
-      this.arena.scale[id] = scale;
-      return new Sprite(id, this.arena);
+
+      const sprite = new Sprite(id, this.arena);
+
+      if (textureKey) {
+        // Simple integration with loader cache (assumes 0 layer index for now if no texture array manager yet)
+        const asset = this.load.get(textureKey);
+        if (asset && asset.type === 'spritesheet') {
+          sprite.setTexture(asset, frameKey ?? 0);
+        }
+      }
+      return sprite;
     },
     text: (x = 0, y = 0, text = '', style: TextStyle = {}): Text => {
       return new Text(x, y, text, style, this.arena);
     },
     tilemap: (mapData: number[][], tileSize = 32): Tilemap => {
       return new Tilemap(this.arena, mapData, tileSize);
-    }
+    },
   };
 
-  constructor(maxInstances = 100000) {
+  constructor(props: SceneProps | string = {}) {
+    let maxInstances = 100000;
+    if (typeof props === 'string') {
+      this.id = props;
+    } else {
+      this.id = props.id || this.constructor.name;
+      maxInstances = props.maxInstances ?? 100000;
+      Object.assign(this, props); // Bind extra props
+    }
     this.arena = new InstanceBufferArena(maxInstances);
     this.input = new InputManager();
     this.load = new LoaderManager();
     this.tweens = new TweenManager(this.arena);
+    this.anim = new AnimationManager(this.arena);
     this.camera = new Camera();
   }
 
@@ -91,11 +117,12 @@ export class Scene {
     this.camera.update(dt);
     this.input.update();
     this.tweens.update(dt);
+    this.anim.update(dt);
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {
       this._plugins[i].update?.(dt);
     }
-    
+
     // シーングラフ（親子階層）の更新
     // キャッシュ効率のため、ループを分けるかまとめますが、ここでは単純に回します。
     const arena = this.arena;
@@ -108,7 +135,7 @@ export class Scene {
         const pr = arena.rotation[pid];
         const lx = arena.localX[i];
         const ly = arena.localY[i];
-        
+
         if (pr !== 0.0) {
           const cosR = Math.cos(pr);
           const sinR = Math.sin(pr);

@@ -1,6 +1,5 @@
 import type { Scene, Sprite } from '@pluto-engine/core';
 
-
 export class Player {
   sprite: Sprite;
 

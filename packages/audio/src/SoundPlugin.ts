@@ -11,13 +11,23 @@ import { SoundManager } from './SoundManager';
 export class SoundPlugin implements Plugin {
   public soundManager: SoundManager;
 
-  constructor() {
-    this.soundManager = new SoundManager();
+  private scene?: Scene;
+
+  constructor(config?: any) {
+    this.soundManager = new SoundManager(config);
   }
 
   public init(scene: Scene): void {
-    // Scene に soundManager を動的に生やすか、Plugin 側からアクセスさせる
+    this.scene = scene;
     (scene as any).sound = this.soundManager;
+  }
+
+  public update(): void {
+    if (this.scene && this.scene.camera) {
+      const cx = this.scene.camera.actualX || 0;
+      const cy = this.scene.camera.actualY || 0;
+      this.soundManager.setListenerPosition(cx, cy, 100);
+    }
   }
 
   public destroy(): void {

@@ -2,11 +2,41 @@ const fs = require('fs');
 const path = require('path');
 
 const packages = [
-  { name: 'ai', className: 'AIPlugin', prop: 'ai', implClass: 'UtilityAISystem', importFrom: './UtilityAISystem' },
-  { name: 'poisson', className: 'PoissonPlugin', prop: 'poisson', implClass: 'PoissonSolver', importFrom: './PoissonSolver' },
-  { name: 'sdf-collider', className: 'SDFPlugin', prop: 'sdf', implClass: 'SDFCollider', importFrom: './SDFCollider' },
-  { name: 'verlet-ik', className: 'VerletPlugin', prop: 'verlet', implClass: 'VerletSolver', importFrom: './VerletSolver' },
-  { name: 'xpbd', className: 'XPBDPlugin', prop: 'xpbd', implClass: 'XPBDSolver', importFrom: './XPBDSolver' }
+  {
+    name: 'ai',
+    className: 'AIPlugin',
+    prop: 'ai',
+    implClass: 'UtilityAISystem',
+    importFrom: './UtilityAISystem',
+  },
+  {
+    name: 'poisson',
+    className: 'PoissonPlugin',
+    prop: 'poisson',
+    implClass: 'PoissonSolver',
+    importFrom: './PoissonSolver',
+  },
+  {
+    name: 'sdf-collider',
+    className: 'SDFPlugin',
+    prop: 'sdf',
+    implClass: 'SDFCollider',
+    importFrom: './SDFCollider',
+  },
+  {
+    name: 'verlet-ik',
+    className: 'VerletPlugin',
+    prop: 'verlet',
+    implClass: 'VerletSolver',
+    importFrom: './VerletSolver',
+  },
+  {
+    name: 'xpbd',
+    className: 'XPBDPlugin',
+    prop: 'xpbd',
+    implClass: 'XPBDSolver',
+    importFrom: './XPBDSolver',
+  },
 ];
 
 for (const pkg of packages) {

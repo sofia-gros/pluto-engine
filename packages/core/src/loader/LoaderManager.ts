@@ -5,12 +5,18 @@
  * PhaserのLoaderのように、this.load.image(...) でキューに積み、後でまとめてロードする仕組みを提供します。
  */
 
-type AssetType = 'image' | 'json' | 'csv' | 'yaml';
+type AssetType = 'image' | 'spritesheet' | 'json' | 'csv' | 'yaml';
+
+export interface SpritesheetConfig {
+  frameWidth: number;
+  frameHeight: number;
+}
 
 interface LoadItem {
   key: string;
   url: string;
   type: AssetType;
+  config?: SpritesheetConfig;
 }
 
 export class LoaderManager {
@@ -22,7 +28,19 @@ export class LoaderManager {
    * 画像アセットをキューに追加します。
    */
   public image(key: string, url: string): this {
-    this._queue.push({ key, url, type: 'image' });
+    if (!this._cache.has(key)) {
+      this._queue.push({ key, url, type: 'image' });
+    }
+    return this;
+  }
+
+  /**
+   * スプライトシートをキューに追加します。
+   */
+  public spritesheet(key: string, url: string, config: SpritesheetConfig): this {
+    if (!this._cache.has(key)) {
+      this._queue.push({ key, url, type: 'spritesheet', config });
+    }
     return this;
   }
 
@@ -81,6 +99,38 @@ export class LoaderManager {
             image.onerror = reject;
           });
           this._cache.set(item.key, image);
+          break;
+        }
+        case 'spritesheet': {
+          const blob = await response.blob();
+          const image = new Image();
+          image.src = URL.createObjectURL(blob);
+          await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = reject;
+          });
+
+          const config = item.config!;
+          const frames = [];
+          const cols = Math.floor(image.width / config.frameWidth);
+          const rows = Math.floor(image.height / config.frameHeight);
+
+          for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+              frames.push({
+                uvX: (x * config.frameWidth) / image.width,
+                uvY: (y * config.frameHeight) / image.height,
+                uvW: config.frameWidth / image.width,
+                uvH: config.frameHeight / image.height,
+              });
+            }
+          }
+
+          this._cache.set(item.key, {
+            type: 'spritesheet',
+            image,
+            frames,
+          });
           break;
         }
         case 'json': {

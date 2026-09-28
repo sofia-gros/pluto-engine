@@ -24,9 +24,7 @@ export default defineConfig({
           {
             text: 'デモゲーム',
             collapsed: false,
-            items: [
-              { text: '🎮 プレイアブルデモ一覧', link: '/demos' }
-            ]
+            items: [{ text: '🎮 プレイアブルデモ一覧', link: '/demos' }],
           },
           {
             text: 'ガイド (Guide)',
@@ -124,9 +122,7 @@ export default defineConfig({
           {
             text: 'Demos',
             collapsed: false,
-            items: [
-              { text: '🎮 Playable Demos', link: '/en/demos' }
-            ]
+            items: [{ text: '🎮 Playable Demos', link: '/en/demos' }],
           },
           {
             text: 'Guide',

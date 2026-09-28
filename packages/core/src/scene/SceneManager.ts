@@ -18,7 +18,7 @@ export class SceneManager {
 
   public add(key: string, sceneClass: new () => Scene, autoStart = false): void {
     const scene = new sceneClass();
-    scene.key = key;
+    scene.id = key;
     scene.scene = this;
     this._scenes.set(key, scene);
 

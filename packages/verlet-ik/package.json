@@ -1,6 +1,6 @@
 {
   "name": "@pluto-engine/verlet-ik",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Zero-allocation Verlet integration and IK for rope and cloth physics",
   "type": "module",
   "main": "./dist/index.js",

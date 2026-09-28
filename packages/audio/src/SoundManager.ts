@@ -3,19 +3,21 @@
  * @description
  * Web Audio API を使用したサウンドマネージャー。
  * 動的メモリ確保を避けるため、GainNodeやPannerNodeなどをプーリングして使い回します。
- * （AudioBufferSourceNode は Web Audio API の仕様上再利用できないため、再生時に都度生成します）
  */
 
 export interface PlayOptions {
   volume?: number;
-  pan?: [number, number, number];
+  loop?: boolean;
+  x?: number;
+  y?: number;
+  z?: number;
 }
 
-class VoiceNode {
+export class Voice {
   private context: AudioContext;
   private panner: PannerNode;
   private gain: GainNode;
-  
+
   public isPlaying: boolean = false;
   private source: AudioBufferSourceNode | null = null;
   private onEndedCallback: () => void;
@@ -26,7 +28,10 @@ class VoiceNode {
     this.panner = context.createPanner();
     this.panner.panningModel = 'HRTF';
     this.panner.distanceModel = 'inverse';
-    
+    this.panner.refDistance = 100;
+    this.panner.maxDistance = 10000;
+    this.panner.rolloffFactor = 1;
+
     this.gain = context.createGain();
 
     this.panner.connect(this.gain);
@@ -40,45 +45,76 @@ class VoiceNode {
 
   public play(buffer: AudioBuffer, options?: PlayOptions): void {
     this.isPlaying = true;
-    
+
     this.source = this.context.createBufferSource();
     this.source.buffer = buffer;
+    this.source.loop = options?.loop ?? false;
     this.source.connect(this.panner);
 
-    if (options?.volume !== undefined) {
-      this.gain.gain.value = options.volume;
-    } else {
-      this.gain.gain.value = 1.0;
-    }
+    this.gain.gain.value = options?.volume ?? 1.0;
 
-    if (options?.pan) {
-      const [x, y, z] = options.pan;
-      this.panner.positionX.value = x;
-      this.panner.positionY.value = y;
-      this.panner.positionZ.value = z;
-    } else {
-      this.panner.positionX.value = 0;
-      this.panner.positionY.value = 0;
-      this.panner.positionZ.value = 0;
-    }
+    this.x = options?.x ?? 0;
+    this.y = options?.y ?? 0;
+    this.z = options?.z ?? 0;
 
     this.source.onended = this.onEndedCallback;
     this.source.start(0);
   }
+
+  public stop(): void {
+    if (this.isPlaying && this.source) {
+      this.source.stop();
+      this.isPlaying = false;
+    }
+  }
+
+  public get x(): number {
+    return this.panner.positionX.value;
+  }
+  public set x(val: number) {
+    this.panner.positionX.value = val;
+  }
+
+  public get y(): number {
+    return this.panner.positionY.value;
+  }
+  public set y(val: number) {
+    this.panner.positionY.value = val;
+  }
+
+  public get z(): number {
+    return this.panner.positionZ.value;
+  }
+  public set z(val: number) {
+    this.panner.positionZ.value = val;
+  }
+
+  public get volume(): number {
+    return this.gain.gain.value;
+  }
+  public set volume(val: number) {
+    this.gain.gain.value = val;
+  }
+}
+
+export interface AudioConfig {
+  defaultVolume?: number;
+  poolSize?: number;
 }
 
 export class SoundManager {
   public context: AudioContext;
   private masterGain: GainNode;
   private compressor: DynamicsCompressorNode;
-  
-  private buffers: Map<string, AudioBuffer> = new Map();
-  private voicePool: VoiceNode[] = [];
-  private poolSize = 32;
 
-  constructor() {
+  private buffers: Map<string, AudioBuffer> = new Map();
+  private voicePool: Voice[] = [];
+
+  private _defaultVolume = 1.0;
+
+  constructor(config: AudioConfig = {}) {
     this.context = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
+
     this.compressor = this.context.createDynamicsCompressor();
     this.compressor.threshold.setValueAtTime(-24, this.context.currentTime);
     this.compressor.knee.setValueAtTime(30, this.context.currentTime);
@@ -87,45 +123,42 @@ export class SoundManager {
     this.compressor.release.setValueAtTime(0.25, this.context.currentTime);
 
     this.masterGain = this.context.createGain();
-    this.masterGain.gain.value = 1.0;
+    this.masterGain.gain.value = this._defaultVolume;
 
     this.masterGain.connect(this.compressor);
     this.compressor.connect(this.context.destination);
 
-    for (let i = 0; i < this.poolSize; i++) {
-      this.voicePool.push(new VoiceNode(this.context, this.masterGain));
+    const poolSize = config.poolSize ?? 32;
+    for (let i = 0; i < poolSize; i++) {
+      this.voicePool.push(new Voice(this.context, this.masterGain));
     }
   }
 
-  /**
-   * オーディオバッファの追加
-   */
+  public setConfig(config: AudioConfig): void {
+    if (config.defaultVolume !== undefined) {
+      this._defaultVolume = config.defaultVolume;
+      this.masterGain.gain.value = this._defaultVolume;
+    }
+  }
+
   public addBuffer(key: string, buffer: AudioBuffer): void {
     this.buffers.set(key, buffer);
   }
 
-  /**
-   * ArrayBufferなどからデコードして追加
-   */
   public async loadAudioData(key: string, audioData: ArrayBuffer): Promise<void> {
     const buffer = await this.context.decodeAudioData(audioData);
     this.buffers.set(key, buffer);
   }
 
-  /**
-   * サウンドの再生
-   * @param key サウンドキー
-   * @param options オプション（音量、位置など）
-   */
-  public play(key: string, options?: PlayOptions): void {
+  public play(key: string, options?: PlayOptions): Voice | null {
     const buffer = this.buffers.get(key);
     if (!buffer) {
       console.warn(`SoundManager: Buffer not found for key: ${key}`);
-      return;
+      return null;
     }
 
-    let voice: VoiceNode | undefined = undefined;
-    for (let i = 0; i < this.poolSize; i++) {
+    let voice: Voice | null = null;
+    for (let i = 0; i < this.voicePool.length; i++) {
       if (!this.voicePool[i].isPlaying) {
         voice = this.voicePool[i];
         break;
@@ -133,9 +166,21 @@ export class SoundManager {
     }
 
     if (!voice) {
-      return;
+      return null;
     }
 
     voice.play(buffer, options);
+    return voice;
+  }
+
+  public setListenerPosition(x: number, y: number, z: number = 100): void {
+    const listener = this.context.listener;
+    if (listener.positionX) {
+      listener.positionX.value = x;
+      listener.positionY.value = y;
+      listener.positionZ.value = z;
+    } else {
+      listener.setPosition(x, y, z);
+    }
   }
 }

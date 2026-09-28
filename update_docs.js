@@ -235,25 +235,26 @@ for (const p of pkgs) {
     const file = lang + '/' + p + '.md';
     let content = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : `# ${cap}\n\n`;
     if (!content.includes('Standalone Usage')) {
-      content += `\n## Standalone Usage\n\n` +
-                 `\`\`\`typescript\n` +
-                 `import { ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n` +
-                 `const solver = new ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'}();\n` +
-                 `\`\`\`\n\n` +
-                 `## Plugin Usage (this.registerPlugin)\n\n` +
-                 `\`\`\`typescript\n` +
-                 `import { ${cap} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n\n` +
-                 `class MyScene extends Scene {\n` +
-                 `  constructor() {\n` +
-                 `    super();\n` +
-                 `    this.registerPlugin(new ${cap}());\n` +
-                 `  }\n\n` +
-                 `  update() {\n` +
-                 `    // Use it via this.${p === 'morton' ? 'spatialHash' : p}\n` +
-                 `    // this.${p === 'morton' ? 'spatialHash' : p}...\n` +
-                 `  }\n` +
-                 `}\n` +
-                 `\`\`\`\n`;
+      content +=
+        `\n## Standalone Usage\n\n` +
+        `\`\`\`typescript\n` +
+        `import { ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n` +
+        `const solver = new ${p === 'ai' ? 'UtilityAISystem' : p === 'morton' ? 'MortonSpatialHash' : p === 'sdf' ? 'SDFCollider' : p === 'xpbd' ? 'XPBDSolver' : p === 'poisson' ? 'PoissonSolver' : 'VerletSolver'}();\n` +
+        `\`\`\`\n\n` +
+        `## Plugin Usage (this.registerPlugin)\n\n` +
+        `\`\`\`typescript\n` +
+        `import { ${cap} } from '@pluto-engine/${p === 'sdf' ? 'sdf-collider' : p === 'verlet' ? 'verlet-ik' : p}';\n\n` +
+        `class MyScene extends Scene {\n` +
+        `  constructor() {\n` +
+        `    super();\n` +
+        `    this.registerPlugin(new ${cap}());\n` +
+        `  }\n\n` +
+        `  update() {\n` +
+        `    // Use it via this.${p === 'morton' ? 'spatialHash' : p}\n` +
+        `    // this.${p === 'morton' ? 'spatialHash' : p}...\n` +
+        `  }\n` +
+        `}\n` +
+        `\`\`\`\n`;
       fs.writeFileSync(file, content);
     }
   }

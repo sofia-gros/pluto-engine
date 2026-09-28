@@ -1,6 +1,5 @@
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 
-
 export class Tilemap {
   private arena: InstanceBufferArena;
   public mapWidth: number;
