@@ -284,6 +284,9 @@ class BenchmarkScene extends Scene {
   finishBenchmark() {
     this.isFinished = true;
     let tableRows = '';
+    const labels: string[] = [];
+    const dataFps: number[] = [];
+    
     for (const res of this.benchmarkResults) {
       tableRows += `<tr>
         <td style="padding:0 10px;">${res.entities}</td>
@@ -293,6 +296,9 @@ class BenchmarkScene extends Scene {
         <td style="padding:0 10px;">${res.upload}</td>
         <td style="padding:0 10px;">${res.draw}</td>
       </tr>`;
+      
+      labels.push((res.entities / 1000).toFixed(0) + 'k');
+      dataFps.push(res.fps);
     }
 
     this.statsDiv.innerHTML += `
@@ -310,6 +316,53 @@ class BenchmarkScene extends Scene {
         ${tableRows}
       </table>
     `;
+    
+    // Draw Chart
+    const chartContainer = document.getElementById('chart-container');
+    const chartCanvas = document.getElementById('benchmark-chart') as HTMLCanvasElement;
+    if (chartContainer && chartCanvas && (window as any).Chart) {
+      chartContainer.style.display = 'block';
+      new (window as any).Chart(chartCanvas, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'FPS',
+            data: dataFps,
+            borderColor: '#0f0',
+            backgroundColor: 'rgba(0, 255, 0, 0.1)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 150,
+              grid: { color: '#333' }
+            },
+            x: {
+              grid: { color: '#333' }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'FPS vs Entity Count',
+              color: '#fff'
+            },
+            legend: {
+              labels: { color: '#fff' }
+            }
+          }
+        }
+      });
+    }
+
     console.log('BENCHMARK FINISHED:', this.benchmarkResults);
   }
 }

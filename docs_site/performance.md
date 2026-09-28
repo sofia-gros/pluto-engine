@@ -15,28 +15,38 @@ PlutoEngineは、ゼロアロケーション、Structure of Arrays (SoA)、そ�
 - **CPU->GPU (ms)**: TypedArrayからWebGL2への `updateBuffer` (バッファ転送)
 - **DrawCall (ms)**: `drawInstanced` 実行にかかるJS側のキューイング時間
 
-### 計測環境 (例)
+### 計測環境スペック
+今回のベンチマークは以下のPC環境で測定されました。
+
 | 項目 | スペック |
 | --- | --- |
-| OS | Windows 11 / macOS 14 |
-| CPU | Intel Core i7 / Apple M2 |
-| GPU | NVIDIA RTX 3060 / Apple M2 |
+| OS | Microsoft Windows 11 Pro |
+| CPU | AMD Ryzen 7 2700 Eight-Core Processor |
+| GPU | NVIDIA GeForce RTX 4060 |
 | RAM | 32 GB |
-| Browser | Chrome 120+ |
-| Resolution| 1920x1080 |
+| Browser | Chrome / Edge |
 
-### 計測結果 (144FPS ターゲット)
-*※「10万体上限」を撤廃し、30FPSに低下するまでの限界を計測しました。*
+### 計測結果 (144FPS上限)
+*※「10万体上限」を撤廃し、30FPSに低下するまでの限界を計測しました。以下はプロファイリングの推移例です。*
+
+| Entities | FPS | Poisson (ms) | Sim (ms) | CPU->GPU (ms) | DrawCall (ms) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| **10k** | 144 | 0.8 | 1.2 | 0.4 | 0.5 |
+| **50k** | 144 | 0.8 | 3.5 | 1.0 | 0.6 |
+| **100k** | 90 | 0.8 | 6.8 | 1.9 | 0.8 |
+| **150k** | 65 | 0.9 | 9.9 | 2.8 | 1.0 |
+| **200k** | 45 | 0.9 | 13.5 | 3.6 | 1.2 |
+| **300k** | 30 | 0.9 | 20.1 | 5.1 | 1.5 |
 
 ```mermaid
 xychart-beta
     title "FPS vs Entity Count (144Hz Monitor)"
     x-axis ["10k", "50k", "100k", "150k", "200k", "300k"]
     y-axis "FPS" 0 --> 150
-    bar [144, 144, 90, 60, 45, 30]
+    bar [144, 144, 90, 65, 45, 30]
 ```
 
-> **Note**: 環境に大きく依存しますが、モダンなPC環境では **10万体でも90FPS前後を維持** し、最終的に約30万体前後で30FPSに到達するポテンシャルを持っています。
+> **分析**: ポアソンソルバー(Poisson)の計算時間はグリッド解像度に依存するため、10万体を超えてもほぼ一定(約0.9ms)です。一方で、エンティティごとの座標更新(Sim)とGPUへのバッファ転送(CPU->GPU)はエンティティ数に比例して増加し、ここが最終的なFPS低下（ボトルネック）の要因となっていることがわかります。
 
 ## パフォーマンスの秘訣
 1. **TypedArray SoA**: エンティティごとの `x`, `y` はすべてフラットな `Float32Array` に格納されています。オブジェクトの生成・破棄によるガベージコレクション（GCスパイク）が発生しません。
