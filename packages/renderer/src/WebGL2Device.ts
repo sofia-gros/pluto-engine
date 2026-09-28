@@ -1,5 +1,64 @@
 import type { BufferInfo, GraphicsDevice, PipelineInfo } from './GraphicsDevice';
-import { glsl } from './shaders/sprite.wgsl';
+
+/**
+ * WebGL2 スプライト描画用の頂点シェーダー（GLSL ES 3.0）
+ * インスタンシング属性を使用し、SoA データを直接処理する。
+ */
+const SPRITE_VERT_GLSL = `#version 300 es
+precision highp float;
+
+layout(location = 0) in vec2 vertexPos;
+layout(location = 1) in vec2 vertexUV;
+layout(location = 2) in float posX;
+layout(location = 3) in float posY;
+layout(location = 4) in float scale;
+layout(location = 5) in float facing;
+layout(location = 6) in float uvX;
+layout(location = 7) in float uvY;
+layout(location = 8) in float uvW;
+layout(location = 9) in float uvH;
+layout(location = 10) in float layerDepth;
+layout(location = 11) in float frameIdx;
+layout(location = 12) in vec4 tint;
+
+uniform mat4 projectionMatrix;
+
+out vec2 v_uv;
+out float v_layerDepth;
+out vec4 v_tint;
+
+void main() {
+    vec2 scaledPos = vec2(vertexPos.x * scale * facing, vertexPos.y * scale);
+    vec2 worldPos = scaledPos + vec2(posX, posY);
+    gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
+    v_uv = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
+    v_layerDepth = frameIdx;
+    v_tint = tint;
+}
+`;
+
+/**
+ * WebGL2 スプライト描画用のフラグメントシェーダー（GLSL ES 3.0）
+ * sampler2DArray でテクスチャアトラスを参照し、Tint 色を乗算する。
+ */
+const SPRITE_FRAG_GLSL = `#version 300 es
+precision highp float;
+precision highp sampler2DArray;
+precision highp int;
+
+uniform sampler2DArray textureArray;
+
+in vec2 v_uv;
+in float v_layerDepth;
+in vec4 v_tint;
+
+out vec4 fragColor;
+
+void main() {
+    vec4 texColor = texture(textureArray, vec3(v_uv, float(int(v_layerDepth))));
+    fragColor = texColor * v_tint;
+}
+`;
 
 export class WebGL2Device implements GraphicsDevice {
   private gl: WebGL2RenderingContext | null = null;
@@ -40,7 +99,7 @@ export class WebGL2Device implements GraphicsDevice {
   }
 
   initPipelines(): void {
-    this.spritePipeline = this.createPipeline(glsl.vert, glsl.frag);
+    this.spritePipeline = this.createPipeline(SPRITE_VERT_GLSL, SPRITE_FRAG_GLSL);
     this.createQuadBuffer();
   }
 

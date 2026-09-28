@@ -1,4 +1,64 @@
 import { PlutoEngine, Scene } from '@pluto-engine/core';
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Filler,
+  Title,
+  Legend,
+  Tooltip,
+} from 'chart.js';
+
+Chart.register(
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Filler,
+  Title,
+  Legend,
+  Tooltip,
+);
+
+/**
+ * 各フレームの詳細なプロファイリングデータを保持する型
+ */
+interface FrameSample {
+  entities: number;
+  fps: number;
+  frameTimeMs: number;
+  gridPrepMs: number;
+  poissonMs: number;
+  simMs: number;
+  packMs: number;
+  uploadMs: number;
+  drawMs: number;
+  totalCpuMs: number;
+}
+
+/**
+ * エンティティ数ごとに集計したベンチマーク結果
+ */
+interface BenchmarkEntry {
+  entities: number;
+  fps: number;
+  fps_p5: number; // 5パーセンタイル（最悪値に近い）
+  fps_p50: number; // 中央値
+  fps_p95: number; // 95パーセンタイル（最良値に近い）
+  frameTimeMs: number;
+  gridPrepMs: number;
+  poissonMs: number;
+  simMs: number;
+  packMs: number;
+  uploadMs: number;
+  drawMs: number;
+  totalCpuMs: number;
+  sampleCount: number;
+}
 
 class BenchmarkFlowGrid {
   cols: number;
@@ -14,7 +74,7 @@ class BenchmarkFlowGrid {
   originX = 0;
   originY = 0;
 
-  constructor(cols = 128, rows = 128, cellSize = 24) {
+  constructor(cols = 128, rows = 128, cellSize = 20) {
     this.cols = cols;
     this.rows = rows;
     this.cellSize = cellSize;
@@ -87,12 +147,19 @@ class BenchmarkScene extends Scene {
   private px = 0;
   private py = 0;
 
-  private enemyCount = 1000;
-  private maxEnemyCount = 1000000;
-  private spawnTimer = 0;
-
   private isFinished = false;
-  private benchmarkResults: any[] = [];
+
+  /** 現在のバーストグループにおけるフレームサンプル */
+  private currentBurstSamples: FrameSample[] = [];
+  /** 確定済みの集計結果 */
+  private benchmarkResults: BenchmarkEntry[] = [];
+
+  /** 次にスポーンするエンティティ数のステップ */
+  private readonly spawnStep = 25000;
+  private readonly warmupFrames = 30; // スポーン後のウォームアップフレーム数
+  private readonly measureFrames = 45; // 計測するフレーム数
+  private framesSinceSpawn = 0;
+  private currentEntityTarget = 0;
 
   private statsDiv!: HTMLElement;
 
@@ -103,35 +170,38 @@ class BenchmarkScene extends Scene {
   create() {
     this.statsDiv = document.getElementById('stats')!;
     this.flow = new BenchmarkFlowGrid(128, 128, 20);
-
-    // Initial 1000 enemies
-    this.spawnEnemies(1000);
+    this._nextSpawn(25000);
   }
 
-  spawnEnemies(count: number) {
+  private _nextSpawn(count: number) {
+    this.currentEntityTarget = this.arena.activeCount + count;
+    this._spawnBatch(count);
+    this.framesSinceSpawn = 0;
+    this.currentBurstSamples = [];
+  }
+
+  private _spawnBatch(count: number) {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 500 + Math.random() * 500;
-      const ex = this.px + Math.cos(angle) * radius;
-      const ey = this.py + Math.sin(angle) * radius;
-
-      const sprite = this.add.sprite(ex, ey, 'enemy');
-      sprite.scale = 12 + Math.random() * 8;
+      const radius = 300 + Math.random() * 700;
+      const sprite = this.add.sprite(
+        this.px + Math.cos(angle) * radius,
+        this.py + Math.sin(angle) * radius,
+        'enemy',
+      );
+      sprite.scale = 10 + Math.random() * 10;
     }
   }
 
   update(dt: number) {
     if (this.isFinished) return;
 
-    const fps = this.engine.time.fps;
-    const active = this.arena.activeCount;
+    const frameStart = performance.now();
 
-    const tUpdateStart = performance.now();
-
+    // ---- Flow Field Update ----
     this.flow.updatePlayerCenter(this.px, this.py);
     this.flow.clearDensity();
 
-    // Splat density
     const activeCount = this.arena.activeCount;
     const posX = this.arena.posX;
     const posY = this.arena.posY;
@@ -139,246 +209,304 @@ class BenchmarkScene extends Scene {
     for (let i = 0; i < activeCount; i++) {
       this.flow.addDensity(posX[i], posY[i], 1);
     }
-    
-    const tGridPrepEnd = performance.now();
-    const gridPrepTime = (tGridPrepEnd - tUpdateStart).toFixed(2);
+    const t1 = performance.now();
+    const gridPrepMs = t1 - frameStart;
 
     this.flow.solvePoissonUIC(1);
-    
-    const tPoissonEnd = performance.now();
-    const poissonTime = (tPoissonEnd - tGridPrepEnd).toFixed(2);
+    const t2 = performance.now();
+    const poissonMs = t2 - t1;
 
-    // Auto Player Avoidance Logic
+    // ---- Player Auto-Move ----
     let minPressure = 999999;
     let bestX = this.px;
     let bestY = this.py;
-
-    // Sample around player to find lowest density/pressure
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-      const sampleX = this.px + Math.cos(a) * 40;
-      const sampleY = this.py + Math.sin(a) * 40;
-
-      const lx = sampleX - this.flow.originX;
-      const ly = sampleY - this.flow.originY;
+      const sx = this.px + Math.cos(a) * 40;
+      const sy = this.py + Math.sin(a) * 40;
+      const lx = sx - this.flow.originX;
+      const ly = sy - this.flow.originY;
       if (lx >= 0 && lx < this.flow.width && ly >= 0 && ly < this.flow.height) {
         const c = Math.floor(lx / this.flow.cellSize);
         const r = Math.floor(ly / this.flow.cellSize);
-        const p = this.flow.pressure[r * this.flow.cols + c];
-        if (p < minPressure) {
-          minPressure = p;
-          bestX = sampleX;
-          bestY = sampleY;
+        const pr = this.flow.pressure[r * this.flow.cols + c];
+        if (pr < minPressure) {
+          minPressure = pr;
+          bestX = sx;
+          bestY = sy;
         }
       }
     }
-
-    // Move player
     const pdx = bestX - this.px;
     const pdy = bestY - this.py;
     const pdist = Math.hypot(pdx, pdy) + 0.001;
     this.px += (pdx / pdist) * 150 * dt;
     this.py += (pdy / pdist) * 150 * dt;
-
     this.camera.x = this.px;
     this.camera.y = this.py;
 
-    // Enemy movement
-    const ox = this.flow.originX;
-    const oy = this.flow.originY;
-    const w = this.flow.width;
-    const h = this.flow.height;
+    // ---- Enemy Movement ----
+    const ox = this.flow.originX,
+      oy = this.flow.originY;
+    const fw = this.flow.width,
+      fh = this.flow.height;
     const cs = this.flow.cellSize;
-    const dX = this.flow.dirX;
-    const dY = this.flow.dirY;
-    const p = this.flow.pressure;
+    const dX = this.flow.dirX,
+      dY = this.flow.dirY;
+    const pressure = this.flow.pressure;
     const cols = this.flow.cols;
 
     for (let i = 0; i < activeCount; i++) {
-      const x = posX[i];
-      const y = posY[i];
-
-      const lx = x - ox;
-      const ly = y - oy;
-
-      if (lx >= 0 && lx < w && ly >= 0 && ly < h) {
+      const x = posX[i],
+        y = posY[i];
+      const lx = x - ox,
+        ly = y - oy;
+      if (lx >= 0 && lx < fw && ly >= 0 && ly < fh) {
         const c = Math.floor(lx / cs);
         const r = Math.floor(ly / cs);
         const idx = r * cols + c;
-
-        // Base flow direction (towards player)
-        let vx = dX[idx];
-        let vy = dY[idx];
-
-        // Separation from pressure gradient
+        let vx = dX[idx],
+          vy = dY[idx];
         if (r > 0 && r < this.flow.rows - 1 && c > 0 && c < cols - 1) {
-          const pr = p[idx + 1];
-          const pl = p[idx - 1];
-          const pb = p[idx + cols];
-          const pt = p[idx - cols];
-
-          vx -= (pr - pl) * 0.1;
-          vy -= (pb - pt) * 0.1;
+          vx -= (pressure[idx + 1] - pressure[idx - 1]) * 0.1;
+          vy -= (pressure[idx + cols] - pressure[idx - cols]) * 0.1;
         }
-
         const len = Math.hypot(vx, vy) + 0.001;
         posX[i] += (vx / len) * 80 * dt;
         posY[i] += (vy / len) * 80 * dt;
       } else {
-        // Fallback: move straight to player if outside grid
-        const dx = this.px - x;
-        const dy = this.py - y;
+        const dx = this.px - x,
+          dy = this.py - y;
         const len = Math.hypot(dx, dy) + 0.001;
         posX[i] += (dx / len) * 80 * dt;
         posY[i] += (dy / len) * 80 * dt;
       }
     }
-    
     this.arena.dirtyPos = true;
-    
-    const tSimEnd = performance.now();
-    const simTime = (tSimEnd - tPoissonEnd).toFixed(2);
-    
-    const packTime = this.engine.packTimeMs.toFixed(2);
-    const uploadTime = this.engine.uploadTimeMs.toFixed(2);
-    const drawTime = this.engine.drawTimeMs.toFixed(2);
 
+    const t3 = performance.now();
+    const simMs = t3 - t2;
+
+    const packMs = this.engine.packTimeMs;
+    const uploadMs = this.engine.uploadTimeMs;
+    const drawMs = this.engine.drawTimeMs;
+    const totalCpuMs = t3 - frameStart;
+    const fps = dt > 0.0001 ? Math.round(1 / dt) : 60;
+
+    // HUD更新
     this.statsDiv.innerHTML = `
       <p>FPS: ${fps}</p>
-      <p>Entities: ${active}</p>
-      <p>GridPrep: ${gridPrepTime} ms</p>
-      <p>Poisson: ${poissonTime} ms</p>
-      <p>Simulation: ${simTime} ms</p>
-      <p>Packing: ${packTime} ms</p>
-      <p>CPU->GPU: ${uploadTime} ms</p>
-      <p>DrawCall: ${drawTime} ms</p>
+      <p>Entities: ${activeCount}</p>
+      <p>GridPrep: ${gridPrepMs.toFixed(2)} ms</p>
+      <p>Poisson: ${poissonMs.toFixed(2)} ms</p>
+      <p>Sim: ${simMs.toFixed(2)} ms</p>
+      <p>Pack: ${packMs.toFixed(2)} ms</p>
+      <p>CPU→GPU: ${uploadMs.toFixed(2)} ms</p>
+      <p>DrawCall: ${drawMs.toFixed(2)} ms</p>
+      <p>Phase: ${this.framesSinceSpawn < this.warmupFrames ? 'Warmup' : 'Measuring'}</p>
     `;
 
-    // Benchmark Logic
-    this.spawnTimer += dt;
-    if (this.spawnTimer > 1.5) {
-      this.spawnTimer = 0;
+    this.framesSinceSpawn++;
 
-      // Target FPS check
-      if (this.engine.time.time > 3.0) {
-        // Wait 3s before starting measurements
-        this.benchmarkResults.push({ 
-          entities: active, 
-          fps,
-          grid: parseFloat(gridPrepTime),
-          poisson: parseFloat(poissonTime),
-          sim: parseFloat(simTime),
-          pack: parseFloat(packTime),
-          upload: parseFloat(uploadTime),
-          draw: parseFloat(drawTime)
-        });
+    // ウォームアップ後に計測
+    if (this.framesSinceSpawn > this.warmupFrames) {
+      this.currentBurstSamples.push({
+        entities: activeCount,
+        fps,
+        frameTimeMs: dt * 1000,
+        gridPrepMs,
+        poissonMs,
+        simMs,
+        packMs,
+        uploadMs,
+        drawMs,
+        totalCpuMs,
+      });
 
-        if (fps < 30) {
-          this.finishBenchmark();
+      // 指定フレーム数の計測が完了
+      if (this.currentBurstSamples.length >= this.measureFrames) {
+        this._recordResult();
+        const latestResult = this.benchmarkResults[this.benchmarkResults.length - 1];
+
+        // 中央値FPSが20を下回った場合、または30万体に達したら終了
+        if (latestResult.fps_p50 < 20 || this.arena.activeCount >= 300000) {
+          this._finishBenchmark();
           return;
         }
-      }
 
-      if (active < 300000) {
-        this.spawnEnemies(5000);
-      } else {
-        this.finishBenchmark();
+        // 次のバーストをスポーン
+        this._nextSpawn(this.spawnStep);
       }
     }
   }
 
-  finishBenchmark() {
+  private _percentile(arr: number[], p: number): number {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const idx = Math.floor(sorted.length * p);
+    return sorted[Math.min(idx, sorted.length - 1)];
+  }
+
+  private _avg(arr: number[]): number {
+    return arr.reduce((s, v) => s + v, 0) / arr.length;
+  }
+
+  private _recordResult() {
+    const s = this.currentBurstSamples;
+    const fpsList = s.map((x) => x.fps);
+    const entry: BenchmarkEntry = {
+      entities: Math.round(this._avg(s.map((x) => x.entities))),
+      fps: Math.round(this._avg(fpsList)),
+      fps_p5: Math.round(this._percentile(fpsList, 0.05)),
+      fps_p50: Math.round(this._percentile(fpsList, 0.5)),
+      fps_p95: Math.round(this._percentile(fpsList, 0.95)),
+      frameTimeMs: parseFloat(this._avg(s.map((x) => x.frameTimeMs)).toFixed(2)),
+      gridPrepMs: parseFloat(this._avg(s.map((x) => x.gridPrepMs)).toFixed(2)),
+      poissonMs: parseFloat(this._avg(s.map((x) => x.poissonMs)).toFixed(2)),
+      simMs: parseFloat(this._avg(s.map((x) => x.simMs)).toFixed(2)),
+      packMs: parseFloat(this._avg(s.map((x) => x.packMs)).toFixed(2)),
+      uploadMs: parseFloat(this._avg(s.map((x) => x.uploadMs)).toFixed(2)),
+      drawMs: parseFloat(this._avg(s.map((x) => x.drawMs)).toFixed(2)),
+      totalCpuMs: parseFloat(this._avg(s.map((x) => x.totalCpuMs)).toFixed(2)),
+      sampleCount: s.length,
+    };
+    this.benchmarkResults.push(entry);
+  }
+
+  private _finishBenchmark() {
     this.isFinished = true;
+
     let tableRows = '';
     const labels: string[] = [];
-    const dataFps: number[] = [];
-    
+    const dataFpsAvg: number[] = [];
+    const dataFpsP5: number[] = [];
+    const dataFpsP95: number[] = [];
+    const dataGridPrep: number[] = [];
+    const dataPoisson: number[] = [];
+    const dataSim: number[] = [];
+    const dataPack: number[] = [];
+    const dataUpload: number[] = [];
+    const dataDraw: number[] = [];
+
     for (const res of this.benchmarkResults) {
+      const entityK = (res.entities / 1000).toFixed(0) + 'k';
+      labels.push(entityK);
+      dataFpsAvg.push(res.fps_p50);
+      dataFpsP5.push(res.fps_p5);
+      dataFpsP95.push(res.fps_p95);
+      dataGridPrep.push(res.gridPrepMs);
+      dataPoisson.push(res.poissonMs);
+      dataSim.push(res.simMs);
+      dataPack.push(res.packMs);
+      dataUpload.push(res.uploadMs);
+      dataDraw.push(res.drawMs);
+
       tableRows += `<tr>
-        <td style="padding:0 10px;">${res.entities}</td>
-        <td style="padding:0 10px;">${res.fps}</td>
-        <td style="padding:0 10px;">${res.grid}</td>
-        <td style="padding:0 10px;">${res.poisson}</td>
-        <td style="padding:0 10px;">${res.sim}</td>
-        <td style="padding:0 10px;">${res.pack}</td>
-        <td style="padding:0 10px;">${res.upload}</td>
-        <td style="padding:0 10px;">${res.draw}</td>
+        <td style="padding:0 8px;">${entityK}</td>
+        <td style="padding:0 8px;">${res.fps_p5}</td>
+        <td style="padding:0 8px;">${res.fps_p50}</td>
+        <td style="padding:0 8px;">${res.fps_p95}</td>
+        <td style="padding:0 8px;">${res.gridPrepMs}</td>
+        <td style="padding:0 8px;">${res.poissonMs}</td>
+        <td style="padding:0 8px;">${res.simMs}</td>
+        <td style="padding:0 8px;">${res.packMs}</td>
+        <td style="padding:0 8px;">${res.uploadMs}</td>
+        <td style="padding:0 8px;">${res.drawMs}</td>
+        <td style="padding:0 8px;">${res.sampleCount}</td>
       </tr>`;
-      
-      labels.push((res.entities / 1000).toFixed(0) + 'k');
-      dataFps.push(res.fps);
     }
 
     this.statsDiv.innerHTML += `
       <hr>
-      <h2 style='color: #ff0; margin-top:10px;'>Benchmark Finished</h2>
-      <table style="text-align: right; font-size: 12px;">
+      <h2 style='color: #ff0; margin-top:10px;'>Benchmark Complete</h2>
+      <table style="text-align: right; font-size: 11px; border-collapse: collapse;">
         <tr>
-          <th style="padding:0 10px;">Entities</th>
-          <th style="padding:0 10px;">FPS</th>
-          <th style="padding:0 10px;">Grid(ms)</th>
-          <th style="padding:0 10px;">Poisson(ms)</th>
-          <th style="padding:0 10px;">Sim(ms)</th>
-          <th style="padding:0 10px;">Pack(ms)</th>
-          <th style="padding:0 10px;">Upload(ms)</th>
-          <th style="padding:0 10px;">DrawCall(ms)</th>
+          <th style="padding:0 8px;">Entities</th>
+          <th style="padding:0 8px;">P5 FPS</th>
+          <th style="padding:0 8px;">P50 FPS</th>
+          <th style="padding:0 8px;">P95 FPS</th>
+          <th style="padding:0 8px;">GridPrep</th>
+          <th style="padding:0 8px;">Poisson</th>
+          <th style="padding:0 8px;">Sim</th>
+          <th style="padding:0 8px;">Pack</th>
+          <th style="padding:0 8px;">Upload</th>
+          <th style="padding:0 8px;">Draw</th>
+          <th style="padding:0 8px;">N</th>
         </tr>
         ${tableRows}
       </table>
     `;
-    
-    // Draw Chart
+
+    // FPS折れ線グラフ（p5/p50/p95帯）
     const chartContainer = document.getElementById('chart-container');
     const chartCanvas = document.getElementById('benchmark-chart') as HTMLCanvasElement;
-    if (chartContainer && chartCanvas && (window as any).Chart) {
+    if (chartContainer && chartCanvas) {
       chartContainer.style.display = 'block';
-      new (window as any).Chart(chartCanvas, {
+      new Chart(chartCanvas, {
         type: 'line',
         data: {
-          labels: labels,
-          datasets: [{
-            label: 'FPS',
-            data: dataFps,
-            borderColor: '#0f0',
-            backgroundColor: 'rgba(0, 255, 0, 0.1)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.3
-          }]
+          labels,
+          datasets: [
+            {
+              label: 'FPS P95 (Best)',
+              data: dataFpsP95,
+              borderColor: '#4fc3f7',
+              backgroundColor: 'rgba(79, 195, 247, 0.08)',
+              borderWidth: 1.5,
+              borderDash: [4, 2],
+              fill: false,
+              tension: 0.3,
+              pointRadius: 3,
+            },
+            {
+              label: 'FPS P50 (Median)',
+              data: dataFpsAvg,
+              borderColor: '#00ff00',
+              backgroundColor: 'rgba(0, 255, 0, 0.12)',
+              borderWidth: 2.5,
+              fill: '+1',
+              tension: 0.3,
+              pointRadius: 4,
+            },
+            {
+              label: 'FPS P5 (Worst)',
+              data: dataFpsP5,
+              borderColor: '#ff6b35',
+              backgroundColor: 'rgba(255, 107, 53, 0.08)',
+              borderWidth: 1.5,
+              borderDash: [4, 2],
+              fill: false,
+              tension: 0.3,
+              pointRadius: 3,
+            },
+          ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           scales: {
-            y: {
-              beginAtZero: true,
-              max: 150,
-              grid: { color: '#333' }
-            },
-            x: {
-              grid: { color: '#333' }
-            }
+            y: { beginAtZero: true, max: 150, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+            x: { grid: { color: '#333' }, ticks: { color: '#ccc' } },
           },
           plugins: {
             title: {
               display: true,
-              text: 'FPS vs Entity Count',
-              color: '#fff'
+              text: 'PlutoEngine v1.0.8 – FPS vs Entity Count',
+              color: '#fff',
+              font: { size: 14 },
             },
-            legend: {
-              labels: { color: '#fff' }
-            }
-          }
-        }
+            legend: { labels: { color: '#fff' } },
+          },
+        },
       });
     }
 
-    console.log('BENCHMARK FINISHED:', this.benchmarkResults);
+    // 完全な結果をconsoleに出力（Playwright が拾う）
+    console.log('BENCHMARK FINISHED:', JSON.stringify(this.benchmarkResults));
   }
 }
 
 new PlutoEngine({
   canvas: 'game-canvas',
   maxInstances: 1000000,
-  scaleMode: 2, // RESIZE
+  scaleMode: 2,
   scene: [BenchmarkScene],
 });

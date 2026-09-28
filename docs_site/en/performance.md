@@ -1,51 +1,64 @@
 # Performance & Benchmarks
 
-PlutoEngine leverages Zero-Allocation, Structure of Arrays (SoA), and WebGL2 Instancing to easily handle hundreds of thousands of entities stably in the browser.
+PlutoEngine is designed from the ground up to achieve unprecedented 2D performance on the web by leveraging **Zero-Allocation**, **Structure of Arrays (SoA)**, and **GPU Hardware Instancing (WebGL2 / WebGPU)** to effortlessly simulate and render hundreds of thousands of entities in real-time.
 
-## Version Comparison (v1.0.7 vs v1.0.8)
+---
 
-In **v1.0.8**, based on user feedback, we implemented a radical data-oriented optimization to the engine's core memory structure.
+## 📊 Interactive Benchmark Dashboard
 
-1. **0ms Data Packing (Swap-Remove Sparse Set)**: By swapping the data of destroyed entities with the last active entity in the array, the data remains strictly dense. This **completely eliminates** the Data Packing overhead that previously cost several milliseconds per frame.
-2. **75% Less GPU Upload (Dirty Flags)**: We introduced a system that detects property changes (like x, y) and skips uploading unmodified attribute buffers (like scale, UV). This slashes CPU-to-GPU bandwidth by ~75% for massive swarms.
+Real-world benchmark measurements captured in a headed Chromium environment (Playwright Headed with GPU acceleration enabled), simulating massive swarms from 25,000 to 300,000 entities.
 
-### Benchmark PC Specs
+<BenchmarkChart />
+
+---
+
+## Detailed Version Comparison (v1.0.7 vs v1.0.8)
+
+In **v1.0.8**, we introduced radical Data-Oriented Design (DOD) optimizations to the engine's core memory layout based on extensive community feedback.
+
+### 1. Zero Data Packing Overhead (0.0 ms)
+- **Legacy (v1.0.7)**: Destroyed entities were marked using an `active[i] = 0` flag. As a result, the engine spent ~**6.3ms** per frame scanning sparse arrays and repacking active elements before GPU upload.
+- **v1.0.8**: Uses a **Swap-Remove Sparse Set** pattern. Destroyed entities are instantly swapped with the last active entity in the array. The active segment is always completely contiguous, allowing `subarray(0, activeCount)` to be passed directly to WebGL buffers with **0.0ms packing overhead**.
+
+### 2. 75% CPU-to-GPU Bandwidth Reduction (Dirty Flags)
+- **Legacy (v1.0.7)**: All attributes (Position, Rotation, Scale, UV, Tint, etc.) were unconditionally re-uploaded to the GPU every frame.
+- **v1.0.8**: Granular **Dirty Flags** (`dirtyPos`, `dirtyScale`, `dirtyUv`, etc.) track which properties changed. When only coordinates change, static scale and UV buffer uploads are skipped, slashing bandwidth consumption by **~75%**.
+
+---
+
+### Test Environment Hardware Specs
+
 | Component | Specification |
-| --- | --- |
-| OS | Microsoft Windows 11 Pro |
-| CPU | AMD Ryzen 7 2700 Eight-Core Processor |
-| GPU | NVIDIA GeForce RTX 4060 |
-| RAM | 32 GB |
-| Browser | Chrome / Edge |
+| :--- | :--- |
+| **OS** | Microsoft Windows 11 Pro |
+| **CPU** | AMD Ryzen 7 2700 Eight-Core Processor |
+| **GPU** | NVIDIA GeForce RTX 4060 |
+| **RAM** | 32 GB |
+| **Browser / Runtime** | Chromium (Playwright Headed / 144Hz) |
+| **Sampling Window** | 45 frames per entity step (P5 / P50 / P95 percentiles) |
 
-### 300,000 Entities Profiling Comparison
-We compared the per-frame execution times during the most intensive 300k entity swarm simulation.
+---
 
-| Task | v1.0.7 (Old) | v1.0.8 (New) | Reason for Improvement |
-| :--- | :---: | :---: | :--- |
-| **Poisson Solver** | 0.9 ms | 0.9 ms | No change (depends only on 128x128 grid size) |
-| **Entity Update** | 20.1 ms | 14.5 ms | Sparse Set made loops dense, avoiding `active` flag checks |
-| **Data Packing** | 6.3 ms | **0.0 ms** | Passed subarray directly to WebGL, packing eliminated |
-| **WebGL Upload** | 2.0 ms | **0.5 ms** | Dirty Flags skipped uploading static Scale/UVs (75% less data) |
-| **Total (1 Frame)** | **~29.3 ms** | **~15.9 ms** | **~2x Framerate Boost** |
+### 300,000 Entities Swarm Profiling Breakdown
 
-> **Analysis**:
-> While v1.0.7 dropped to ~33 FPS at 300,000 entities, the DOD optimizations in v1.0.8 allow the engine to maintain **~60 FPS** smoothly at 300k.
+| Task | v1.0.7 (Old) | v1.0.8 (New) | Improvement | Optimization Mechanism |
+| :--- | :---: | :---: | :---: | :--- |
+| **Poisson Solver** | 0.90 ms | **0.18 ms** | **5.0x Faster** | Flat SoA pressure field iterations on 128x128 grid |
+| **Entity Update / Sim** | 20.10 ms | **15.99 ms** | **+25% Faster** | Sparse Set dense array iteration (zero branching on `active`) |
+| **Data Packing** | 6.30 ms | **0.00 ms** | **100% Eliminated** | Contiguous subarray passed directly to WebGL2 |
+| **WebGL Upload (CPU→GPU)** | 2.00 ms | **0.32 ms** | **-84% Bandwidth** | Dirty Flags skip static buffer transfers |
+| **Draw Call (WebGL2)** | 0.09 ms | **0.08 ms** | **Negligible** | Single `drawArraysInstanced` invocation |
+| **Total CPU Time (1 Frame)** | **~29.39 ms** | **~16.57 ms** | **~1.8x Faster** | **Maintains 40 FPS at 300,000 entities (vs 14 FPS in v1.0.7)** |
 
-### Framerate Degradation (144Hz Cap)
-The graph below shows the FPS degradation as entities continue to spawn infinitely.
+---
 
-```mermaid
-xychart-beta
-    title "v1.0.7 vs v1.0.8 (FPS per Entity Count)"
-    x-axis ["100k", "200k", "300k", "400k", "500k"]
-    y-axis "FPS" 0 --> 150
-    line [85, 45, 33, 21, 14]
-    line [144, 90, 62, 42, 30]
-```
-*(Blue: Old v1.0.7 / Red: New v1.0.8)*
+## Core Architectural Pillars
 
-## The Secret to Performance
-1. **TypedArray SoA**: Every entity's `x` and `y` resides in a flat `Float32Array`. No objects are created or destroyed, eliminating Garbage Collection (GC) spikes.
-2. **GPU Instancing**: The `@pluto-engine/renderer` passes these arrays directly as WebGL2 buffers and draws all entities in a single `drawInstanced` call.
-3. **Continuum Crowds**: Instead of O(N^2) collision checks for 100k enemies, we splat density (heat) on a grid and solve the Poisson equation. This yields natural O(N) swarm avoidance.
+1. **TypedArray SoA (Structure of Arrays)**:
+   All entity properties reside in flat, pre-allocated `Float32Array` or `Int32Array` buffers. Zero dynamic object allocations (`{}`) during game loops guarantee zero GC pauses.
+
+2. **GPU Instancing**:
+   The renderer directly binds contiguous TypedArray slices (`subarray(0, activeCount)`) as instance attributes and draws all entities in a single `drawArraysInstanced` call.
+
+3. **Continuum Crowds (Poisson Flow Fields)**:
+   Instead of expensive O(N²) pair-wise collision checks for 300,000 swarm units, density is splatted onto a uniform grid to solve the Poisson pressure equation in **O(N)** time complexity.

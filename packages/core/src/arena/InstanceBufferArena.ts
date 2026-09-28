@@ -21,7 +21,7 @@ export class InstanceBufferArena {
   public readonly uvW: Float32Array;
   public readonly uvH: Float32Array;
   public readonly frameIdx: Float32Array;
-  public readonly tint: Uint32Array; 
+  public readonly tint: Uint32Array;
 
   // --- Hierarchy ---
   public readonly parentId: Int32Array;
@@ -39,7 +39,7 @@ export class InstanceBufferArena {
   // indexToId[Dense Array Index] = ID
   public readonly idToIndex: Int32Array;
   public readonly indexToId: Int32Array;
-  
+
   // --- Dirty Flags (属性ごとの変更検知) ---
   public dirtyPos = true;
   public dirtyScale = true;
@@ -123,7 +123,7 @@ export class InstanceBufferArena {
   public free(id: number): void {
     const idx = this.idToIndex[id];
     if (idx < 0 || idx >= this._activeCount) {
-      return; 
+      return;
     }
 
     const lastIdx = this._activeCount - 1;
@@ -158,7 +158,7 @@ export class InstanceBufferArena {
     this.idToIndex[id] = -1;
     this.indexToId[lastIdx] = -1;
     this._activeCount--;
-    
+
     // データ配列がずれるためDirtyフラグを立てる
     this.dirtyPos = true;
     this.dirtyScale = true;

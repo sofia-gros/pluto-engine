@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "@pluto-engine/core": "workspace:*",
-    "@pluto-engine/poisson": "workspace:*",
     "@pluto-engine/morton": "workspace:*",
+    "@pluto-engine/poisson": "workspace:*",
     "@pluto-engine/renderer": "workspace:*",
-    "@pluto-engine/xpbd": "workspace:*"
+    "@pluto-engine/xpbd": "workspace:*",
+    "chart.js": "^4.5.1"
   },
   "devDependencies": {
     "@pluto-engine/vite-plugin-wgsl": "workspace:*",

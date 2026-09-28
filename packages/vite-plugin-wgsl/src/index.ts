@@ -39,20 +39,24 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
     return t;
   }
 
-  // Parse globals (uniforms, textures)
-  const globals: string[] = [];
-  const globalRegex =
+  // Parse globals: vertex shader用（samplerを除く）とfragment shader用に分離
+  const vertGlobals: string[] = [];
+  const fragGlobals: string[] = [];
+  const globalRegex2 =
     /@group\(\d+\)\s*@binding\(\d+\)\s*var(?:<uniform>)?\s+([a-zA-Z0-9_]+)\s*:\s*([a-zA-Z0-9_<>]+);/g;
-  let gm;
-  while ((gm = globalRegex.exec(wgsl)) !== null) {
-    const name = gm[1];
-    const type = gm[2];
+  let gm2;
+  while ((gm2 = globalRegex2.exec(wgsl)) !== null) {
+    const name = gm2[1];
+    const type = gm2[2];
     if (type.includes('texture_2d_array')) {
-      globals.push(`uniform sampler2DArray ${name};`);
+      // sampler2DArray はフラグメントシェーダーのみ
+      fragGlobals.push(`uniform sampler2DArray ${name};`);
     } else if (type === 'sampler') {
-      // GLSL combines texture and sampler, skip
+      // GLSL はテクスチャとサンプラーを統合するためスキップ
     } else {
-      globals.push(`uniform ${convertType(type)} ${name};`);
+      const glslDecl = `uniform ${convertType(type)} ${name};`;
+      vertGlobals.push(glslDecl);
+      fragGlobals.push(glslDecl);
     }
   }
 
@@ -70,11 +74,18 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
   }
 
   let vertBody = vertexMatch[4];
-  // Naive replacement for `let x = vec2<f32>(...)` -> `vec2 x = vec2(...)`
-  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec2<f32>/g, 'vec2 $1 = vec2');
-  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec3<f32>/g, 'vec3 $1 = vec3');
-  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*vec4<f32>/g, 'vec4 $1 = vec4');
-  vertBody = vertBody.replace(/let\s+([a-zA-Z0-9_]+)\s*=\s*/g, (_, name) => `${name} = `); // Need types for lets in GLSL...
+  // まず型付き let を GLSL の変数宣言に変換（順序が重要）
+  vertBody = vertBody.replace(/\blet\s+([a-zA-Z0-9_]+)\s*=\s*vec4<f32>/g, 'vec4 $1 = vec4');
+  vertBody = vertBody.replace(/\blet\s+([a-zA-Z0-9_]+)\s*=\s*vec3<f32>/g, 'vec3 $1 = vec3');
+  vertBody = vertBody.replace(/\blet\s+([a-zA-Z0-9_]+)\s*=\s*vec2<f32>/g, 'vec2 $1 = vec2');
+  vertBody = vertBody.replace(/\blet\s+([a-zA-Z0-9_]+)\s*=\s*mat4x4<f32>/g, 'mat4 $1 = mat4');
+  // vec2型変数への代入から右辺の型を推論（例: scaledPos + vec2(...) は vec2）
+  vertBody = vertBody.replace(
+    /\blet\s+([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+)\s*\+\s*vec2/g,
+    'vec2 $1 = $2 + vec2',
+  );
+  // 残った型なし let はスカラー（float）として変換
+  vertBody = vertBody.replace(/\blet\s+([a-zA-Z0-9_]+)\s*=\s*/g, 'float $1 = ');
   vertBody = vertBody.replace(/vec2<f32>/g, 'vec2');
   vertBody = vertBody.replace(/vec3<f32>/g, 'vec3');
   vertBody = vertBody.replace(/vec4<f32>/g, 'vec4');
@@ -91,7 +102,7 @@ export function transpileWGSLtoGLSL(wgsl: string): { vert: string; frag: string 
 precision highp float;
 
 ${vertAttrs.join('\n')}
-${globals.join('\n')}
+${vertGlobals.join('\n')}
 
 ${vertVaryings}
 
@@ -116,8 +127,9 @@ ${vertBody}
   const glslFrag = `#version 300 es
 precision highp float;
 precision highp sampler2DArray;
+precision highp int;
 
-${globals.join('\n')}
+${fragGlobals.join('\n')}
 ${fragVaryings}
 
 out vec4 fragColor;

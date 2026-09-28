@@ -22,6 +22,7 @@
         "@pluto-engine/poisson": "workspace:*",
         "@pluto-engine/renderer": "workspace:*",
         "@pluto-engine/xpbd": "workspace:*",
+        "chart.js": "^4.5.1",
       },
       "devDependencies": {
         "@pluto-engine/vite-plugin-wgsl": "workspace:*",
@@ -39,7 +40,7 @@
     },
     "packages/ai": {
       "name": "@pluto-engine/ai",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -51,7 +52,7 @@
     },
     "packages/audio": {
       "name": "@pluto-engine/audio",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -62,7 +63,7 @@
     },
     "packages/core": {
       "name": "@pluto-engine/core",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/renderer": "workspace:*",
       },
@@ -73,7 +74,7 @@
     },
     "packages/morton": {
       "name": "@pluto-engine/morton",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -85,7 +86,7 @@
     },
     "packages/pluto": {
       "name": "pluto-engine",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/ai": "workspace:*",
         "@pluto-engine/core": "workspace:*",
@@ -104,7 +105,7 @@
     },
     "packages/poisson": {
       "name": "@pluto-engine/poisson",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -116,7 +117,7 @@
     },
     "packages/renderer": {
       "name": "@pluto-engine/renderer",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -133,7 +134,7 @@
     },
     "packages/sdf-collider": {
       "name": "@pluto-engine/sdf-collider",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -145,7 +146,7 @@
     },
     "packages/verlet-ik": {
       "name": "@pluto-engine/verlet-ik",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -157,7 +158,7 @@
     },
     "packages/vite-plugin-wgsl": {
       "name": "@pluto-engine/vite-plugin-wgsl",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^5.0.0",
@@ -169,7 +170,7 @@
     },
     "packages/xpbd": {
       "name": "@pluto-engine/xpbd",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -328,6 +329,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@kurkle/color": ["@kurkle/color@0.3.4", "", {}, "sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w=="],
 
     "@mswjs/interceptors": ["@mswjs/interceptors@0.41.9", "", { "dependencies": { "@open-draft/deferred-promise": "^2.2.0", "@open-draft/logger": "^0.3.0", "@open-draft/until": "^2.0.0", "is-node-process": "^1.2.0", "outvariant": "^1.4.3", "strict-event-emitter": "^0.5.1" } }, "sha512-VVPPgHyQ6ShqnrmDWuxjmUIsO9gWyOZFmuOfLd9LfBGQJwZfy0gvv9pbHSJuoFNIYC7ZDX9aoFwowjcdSC4E8w=="],
 
@@ -544,6 +547,8 @@
     "character-entities-html4": ["character-entities-html4@2.1.0", "", {}, "sha512-1v7fgQRj6hnSwFpq1Eu0ynr/CDEw0rXo2B61qXrLNdHZmPKgb7fqS1a2JwF0rISo9q77jDI8VMEHoApn8qDoZA=="],
 
     "character-entities-legacy": ["character-entities-legacy@3.0.0", "", {}, "sha512-RpPp0asT/6ufRm//AJVwpViZbGM/MkjQFxJccQRHmISF/22NBtsHqAWmL+/pmkPWoIUJdWyeVleTl1wydHATVQ=="],
+
+    "chart.js": ["chart.js@4.5.1", "", { "dependencies": { "@kurkle/color": "^0.3.0" } }, "sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw=="],
 
     "check-error": ["check-error@2.1.3", "", {}, "sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA=="],
 

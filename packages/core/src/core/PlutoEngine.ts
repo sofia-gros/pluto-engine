@@ -142,13 +142,12 @@ export class PlutoEngine {
     if (!activeScene) return;
 
     const arena = activeScene.arena;
-    
+
     // Dense Setのためそのまま利用可能
     const renderCount = arena.activeCount;
 
-    
-    
-    const tPackEnd = performance.now(); this.packTimeMs = 0;
+    const tPackEnd = performance.now();
+    this.packTimeMs = 0;
 
     if (renderCount > 0) {
       // Dirty Flag に基づく選択的転送
@@ -157,7 +156,7 @@ export class PlutoEngine {
         this.device.updateBuffer(this.gpuBuffers['posY'], arena.posY.subarray(0, renderCount));
         arena.dirtyPos = false;
       }
-      
+
       if (arena.dirtyScale) {
         this.device.updateBuffer(this.gpuBuffers['scale'], arena.scale.subarray(0, renderCount));
         arena.dirtyScale = false;
@@ -172,7 +171,10 @@ export class PlutoEngine {
       }
 
       if (arena.dirtyFrameIdx) {
-        this.device.updateBuffer(this.gpuBuffers['frameIdx'], arena.frameIdx.subarray(0, renderCount));
+        this.device.updateBuffer(
+          this.gpuBuffers['frameIdx'],
+          arena.frameIdx.subarray(0, renderCount),
+        );
         arena.dirtyFrameIdx = false;
       }
     }
