@@ -128,6 +128,8 @@ export class PlutoEngine {
 
   public updateTimeMs = 0;
   public renderTimeMs = 0;
+  public uploadTimeMs = 0;
+  public drawTimeMs = 0;
 
   private step(now: number) {
     const dt = this.time.step(now);
@@ -147,8 +149,9 @@ export class PlutoEngine {
     const t1 = performance.now();
     this.updateTimeMs = t1 - t0;
 
+    const tRenderStart = performance.now();
     this.render();
-    this.renderTimeMs = performance.now() - t1;
+    this.renderTimeMs = performance.now() - tRenderStart;
   }
 
   private render() {
@@ -158,6 +161,8 @@ export class PlutoEngine {
 
     const arena = activeScene.arena;
     let idx = 0;
+
+    const tUploadStart = performance.now();
 
     // アリーナの生存エンティティをパック
     for (let i = 0; i < arena.capacity; i++) {
@@ -189,6 +194,8 @@ export class PlutoEngine {
         this.packedFrameIdx.subarray(0, renderCount),
       );
     }
+    const tUploadEnd = performance.now();
+    this.uploadTimeMs = tUploadEnd - tUploadStart;
 
     this.device.clear(0.01, 0.02, 0.05, 1.0);
     this.device.bindShaders();
@@ -230,5 +237,6 @@ export class PlutoEngine {
       this.device.setupInstancedAttributes(this.gpuBuffers);
       this.device.drawInstanced(renderCount);
     }
+    this.drawTimeMs = performance.now() - tUploadEnd;
   }
 }

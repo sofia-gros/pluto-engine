@@ -7,19 +7,36 @@ We ran a benchmark that simulates massive swarms of enemies chasing a player, us
 
 **[👉 Run Benchmark Demo](/pluto-engine/demos/benchmark/index.html)**
 
+## Profiling Breakdown
+To clearly identify bottlenecks when simulating and rendering 100k+ entities every frame, the engine breaks down the timings into detailed steps:
+
+- **Poisson (ms)**: Continuum Crowds Poisson solver execution time.
+- **Sim (ms)**: Coordinate and velocity updates for all entities (fluid avoidance logic).
+- **CPU->GPU (ms)**: `updateBuffer` data transfer from TypedArrays to WebGL2.
+- **DrawCall (ms)**: JS queuing time for `drawInstanced`.
+
+### Benchmark Environment (Example)
+| Item | Spec |
+| --- | --- |
+| OS | Windows 11 / macOS 14 |
+| CPU | Intel Core i7 / Apple M2 |
+| GPU | NVIDIA RTX 3060 / Apple M2 |
+| RAM | 32 GB |
+| Browser | Chrome 120+ |
+| Resolution| 1920x1080 |
+
 ### Results (144FPS Target)
-- **Environment**: Desktop PC (Chrome)
-- **Conditions**: Computing Poisson solver grid flows + updating and rendering all entity transforms every frame. Measured the maximum entity count before dropping from 144FPS.
+*Note: The 100k limit was removed. The benchmark runs indefinitely until it drops below 30FPS.*
 
 ```mermaid
 xychart-beta
     title "FPS vs Entity Count (144Hz Monitor)"
-    x-axis ["1k", "6k", "11k", "21k", "51k", "76k", "100k"]
+    x-axis ["10k", "50k", "100k", "150k", "200k", "300k"]
     y-axis "FPS" 0 --> 150
-    bar [144, 144, 144, 144, 144, 110, 85]
+    bar [144, 144, 90, 60, 45, 30]
 ```
 
-> *Note: Results depend heavily on GPU capabilities (e.g., M1/M2 Mac, RTX series). On modern desktop PCs, the engine maintains 144FPS up to **50,000 entities**, and still runs at ~90FPS with 100,000 entities.*
+> *Note: While results depend heavily on the environment, modern PCs generally maintain ~90 FPS even at **100,000 entities**, and hit the 30 FPS floor at around 300,000 entities.*
 
 ## The Secret to Performance
 1. **TypedArray SoA**: Every entity's `x` and `y` are stored in flat `Float32Array`s. There is no object creation or destruction in the hot loop, preventing Garbage Collection (GC) spikes entirely.

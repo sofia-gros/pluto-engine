@@ -88,7 +88,7 @@ class BenchmarkScene extends Scene {
   private py = 0;
 
   private enemyCount = 1000;
-  private maxEnemyCount = 100000;
+  private maxEnemyCount = 1000000;
   private spawnTimer = 0;
 
   private isFinished = false;
@@ -97,7 +97,7 @@ class BenchmarkScene extends Scene {
   private statsDiv!: HTMLElement;
 
   constructor() {
-    super({ maxInstances: 100000 });
+    super({ maxInstances: 1000000 });
   }
 
   create() {
@@ -124,16 +124,9 @@ class BenchmarkScene extends Scene {
     if (this.isFinished) return;
 
     const fps = this.engine.time.fps;
-    const updateTime = this.engine.updateTimeMs.toFixed(1);
-    const renderTime = this.engine.renderTimeMs.toFixed(1);
     const active = this.arena.activeCount;
 
-    this.statsDiv.innerHTML = `
-      <p>FPS: ${fps}</p>
-      <p>Entities: ${active}</p>
-      <p>Update: ${updateTime} ms</p>
-      <p>Render: ${renderTime} ms</p>
-    `;
+    const tUpdateStart = performance.now();
 
     this.flow.updatePlayerCenter(this.px, this.py);
     this.flow.clearDensity();
@@ -151,6 +144,9 @@ class BenchmarkScene extends Scene {
     }
 
     this.flow.solvePoissonUIC(1);
+    
+    const tPoissonEnd = performance.now();
+    const poissonTime = (tPoissonEnd - tUpdateStart).toFixed(2);
 
     // Auto Player Avoidance Logic
     let minPressure = 999999;
@@ -238,6 +234,21 @@ class BenchmarkScene extends Scene {
         posY[i] += (dy / len) * 80 * dt;
       }
     }
+    
+    const tSimEnd = performance.now();
+    const simTime = (tSimEnd - tPoissonEnd).toFixed(2);
+    
+    const uploadTime = this.engine.uploadTimeMs.toFixed(2);
+    const drawTime = this.engine.drawTimeMs.toFixed(2);
+
+    this.statsDiv.innerHTML = `
+      <p>FPS: ${fps}</p>
+      <p>Entities: ${active}</p>
+      <p>Poisson: ${poissonTime} ms</p>
+      <p>Simulation: ${simTime} ms</p>
+      <p>CPU->GPU: ${uploadTime} ms</p>
+      <p>DrawCall: ${drawTime} ms</p>
+    `;
 
     // Benchmark Logic
     this.spawnTimer += dt;
@@ -247,7 +258,14 @@ class BenchmarkScene extends Scene {
       // Target FPS check
       if (this.engine.time.time > 3.0) {
         // Wait 3s before starting measurements
-        this.benchmarkResults.push({ entities: active, fps });
+        this.benchmarkResults.push({ 
+          entities: active, 
+          fps,
+          poisson: parseFloat(poissonTime),
+          sim: parseFloat(simTime),
+          upload: parseFloat(uploadTime),
+          draw: parseFloat(drawTime)
+        });
 
         if (fps < 30) {
           this.finishBenchmark();
@@ -267,14 +285,28 @@ class BenchmarkScene extends Scene {
     this.isFinished = true;
     let tableRows = '';
     for (const res of this.benchmarkResults) {
-      tableRows += `<tr><td style="padding:0 10px;">${res.entities}</td><td style="padding:0 10px;">${res.fps}</td></tr>`;
+      tableRows += `<tr>
+        <td style="padding:0 10px;">${res.entities}</td>
+        <td style="padding:0 10px;">${res.fps}</td>
+        <td style="padding:0 10px;">${res.poisson}</td>
+        <td style="padding:0 10px;">${res.sim}</td>
+        <td style="padding:0 10px;">${res.upload}</td>
+        <td style="padding:0 10px;">${res.draw}</td>
+      </tr>`;
     }
 
     this.statsDiv.innerHTML += `
       <hr>
       <h2 style='color: #ff0; margin-top:10px;'>Benchmark Finished</h2>
-      <table style="text-align: right;">
-        <tr><th style="padding:0 10px;">Entities</th><th style="padding:0 10px;">FPS</th></tr>
+      <table style="text-align: right; font-size: 12px;">
+        <tr>
+          <th style="padding:0 10px;">Entities</th>
+          <th style="padding:0 10px;">FPS</th>
+          <th style="padding:0 10px;">Poisson(ms)</th>
+          <th style="padding:0 10px;">Sim(ms)</th>
+          <th style="padding:0 10px;">CPU->GPU(ms)</th>
+          <th style="padding:0 10px;">DrawCall(ms)</th>
+        </tr>
         ${tableRows}
       </table>
     `;
@@ -284,7 +316,7 @@ class BenchmarkScene extends Scene {
 
 new PlutoEngine({
   canvas: 'game-canvas',
-  maxInstances: 100000,
+  maxInstances: 1000000,
   scaleMode: 2, // RESIZE
   scene: [BenchmarkScene],
 });
