@@ -18,6 +18,7 @@ import type { SceneManager } from './SceneManager';
 import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
 import { ParticleManager } from '../particles/ParticleManager';
+import { ArcadePhysics } from '../physics/ArcadePhysics';
 
 export interface SceneProps {
   id?: string;
@@ -36,6 +37,7 @@ export class Scene {
   public tweens!: TweenManager;
   public anim!: AnimationManager;
   public particles!: ParticleManager;
+  public physics!: ArcadePhysics;
 
   public camera: Camera;
 
@@ -97,6 +99,7 @@ export class Scene {
     this.tweens = new TweenManager(this.arena);
     this.anim = new AnimationManager(this.arena);
     this.particles = new ParticleManager(maxInstances);
+    this.physics = new ArcadePhysics(maxInstances);
     this.camera = new Camera();
   }
 
@@ -112,6 +115,7 @@ export class Scene {
   public sysInit(engine: PlutoEngine): void {
     this.engine = engine;
     this.particles.init(this);
+    this.physics.init(this);
     this.init();
   }
 
@@ -126,6 +130,8 @@ export class Scene {
     this.tweens.update(dt);
     this.anim.update(dt);
     this.particles.update(dt);
+    this.physics.update(dt);
+    this.physics.collide();
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {
       this._plugins[i].update?.(dt);

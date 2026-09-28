@@ -15,4 +15,5 @@ export * from './tween/TweenManager';
 export * from './anim/AnimationManager';
 export * from './tilemap/Tilemap';
 export * from './particles/ParticleManager';
+export * from './physics/ArcadePhysics';
 
