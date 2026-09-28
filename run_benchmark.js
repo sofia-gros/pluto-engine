@@ -6,20 +6,28 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const BENCHMARK_URL = 'http://localhost:5173/benchmark/index.html';
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 (async () => {
   let browser = null;
+  let devServer = null;
 
-  // 終了時に確実にブラウザを終了するクリーンアップ
+  // 終了時に確実にブラウザとdevサーバーを終了するクリーンアップ
   const cleanup = async () => {
     if (browser) {
       try {
         await browser.close();
       } catch (_) {}
       browser = null;
+    }
+    if (devServer) {
+      try {
+        devServer.kill();
+      } catch (_) {}
+      devServer = null;
     }
   };
 
@@ -33,6 +41,16 @@ const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
   });
 
   try {
+    // サーバーが動いていない場合は自動起動
+    console.log('▶ Starting Vite dev server for benchmark...');
+    devServer = spawn('bun', ['run', '--cwd', 'apps/demo', 'dev'], {
+      stdio: 'pipe',
+      shell: true,
+    });
+
+    // サーバーの起動待ち (2秒)
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
     console.log('▶ Launching browser (headed)...');
     browser = await chromium.launch({
       headless: false,

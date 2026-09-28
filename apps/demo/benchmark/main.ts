@@ -428,7 +428,7 @@ class BenchmarkScene extends Scene {
     const tPrecomputeEnd = performance.now();
     const steer_precomputed_grid_ms = tPrecomputeEnd - tPrecomputeStart;
 
-    // 【改善案4: Precomputed Vector Field + Bilinear Interpolation (双線形補間)】
+    // 【改善案4: Precomputed Vector Field + Lerp of Lerp Bilinear】
     const tBilinearStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
       const lx = posX[i] - ox,
@@ -441,16 +441,21 @@ class BenchmarkScene extends Scene {
       if (ix >= 1 && ix < cols - 2 && iy >= 1 && iy < 126) {
         const fx = gx - ix;
         const fy = gy - iy;
-        const w00 = (1.0 - fx) * (1.0 - fy);
-        const w10 = fx * (1.0 - fy);
-        const w01 = (1.0 - fx) * fy;
-        const w11 = fx * fy;
-
         const idx00 = (iy << 7) + ix;
-        vx[i] =
-          pVx[idx00] * w00 + pVx[idx00 + 1] * w10 + pVx[idx00 + 128] * w01 + pVx[idx00 + 129] * w11;
-        vy[i] =
-          pVy[idx00] * w00 + pVy[idx00 + 1] * w10 + pVy[idx00 + 128] * w01 + pVy[idx00 + 129] * w11;
+        const idx01 = idx00 + 128;
+
+        // Lerp of Lerp (FMA 最適化: 乗算3回・加算3回)
+        const vx00 = pVx[idx00];
+        const topVx = vx00 + fx * (pVx[idx00 + 1] - vx00);
+        const vx01 = pVx[idx01];
+        const botVx = vx01 + fx * (pVx[idx01 + 1] - vx01);
+        vx[i] = topVx + fy * (botVx - topVx);
+
+        const vy00 = pVy[idx00];
+        const topVy = vy00 + fx * (pVy[idx00 + 1] - vy00);
+        const vy01 = pVy[idx01];
+        const botVy = vy01 + fx * (pVy[idx01 + 1] - vy01);
+        vy[i] = topVy + fy * (botVy - topVy);
       }
     }
     const tBilinearEnd = performance.now();

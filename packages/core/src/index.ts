@@ -15,3 +15,4 @@ export * from './anim/AnimationManager';
 export * from './tilemap/Tilemap';
 export * from './particles/ParticleManager';
 export * from './physics/ArcadePhysics';
+export const ENGINE_VERSION = '1.1.0';

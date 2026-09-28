@@ -98,6 +98,7 @@ export class Scene {
     this.anim = new AnimationManager(this.arena);
     this.particles = new ParticleManager(maxInstances);
     this.physics = new ArcadePhysics(maxInstances);
+    this.physics.init(this);
     this.camera = new Camera();
   }
 
@@ -135,8 +136,8 @@ export class Scene {
       this._plugins[i].update?.(dt);
     }
 
-    const sw = this.engine.scale.width;
-    const sh = this.engine.scale.height;
+    const sw = this.engine?.scale?.width ?? 800;
+    const sh = this.engine?.scale?.height ?? 600;
     for (let i = 0; i < this._tilemaps.length; i++) {
       this._tilemaps[i].updateCulling(this.camera, sw, sh);
     }
@@ -229,6 +230,7 @@ export class Scene {
       this._tilemaps[i].destroy();
     }
     this._tilemaps.length = 0;
+    this.physics.clear();
     this.particles.destroy();
     this.arena.clear();
     this.tweens.clear();

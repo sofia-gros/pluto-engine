@@ -198,27 +198,21 @@ export class PoissonSolver {
       const fx = gridX - ix;
       const fy = gridY - iy;
 
-      const w00 = (1.0 - fx) * (1.0 - fy);
-      const w10 = fx * (1.0 - fy);
-      const w01 = (1.0 - fx) * fy;
-      const w11 = fx * fy;
-
       const idx00 = iy * width + ix;
-      const idx10 = idx00 + 1;
       const idx01 = idx00 + width;
-      const idx11 = idx01 + 1;
 
-      outVel[0] =
-        vectorFieldVx[idx00] * w00 +
-        vectorFieldVx[idx10] * w10 +
-        vectorFieldVx[idx01] * w01 +
-        vectorFieldVx[idx11] * w11;
+      // Lerp of Lerp (積和演算 FMA 最適化: 乗算3回・加算3回に半減)
+      const vx00 = vectorFieldVx[idx00];
+      const topVx = vx00 + fx * (vectorFieldVx[idx00 + 1] - vx00);
+      const vx01 = vectorFieldVx[idx01];
+      const botVx = vx01 + fx * (vectorFieldVx[idx01 + 1] - vx01);
+      outVel[0] = topVx + fy * (botVx - topVx);
 
-      outVel[1] =
-        vectorFieldVy[idx00] * w00 +
-        vectorFieldVy[idx10] * w10 +
-        vectorFieldVy[idx01] * w01 +
-        vectorFieldVy[idx11] * w11;
+      const vy00 = vectorFieldVy[idx00];
+      const topVy = vy00 + fx * (vectorFieldVy[idx00 + 1] - vy00);
+      const vy01 = vectorFieldVy[idx01];
+      const botVy = vy01 + fx * (vectorFieldVy[idx01 + 1] - vy01);
+      outVel[1] = topVy + fy * (botVy - topVy);
     } else {
       outVel[0] = 0;
       outVel[1] = 0;

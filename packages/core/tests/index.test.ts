@@ -5,7 +5,7 @@ import { ENGINE_VERSION } from '../src/index';
  * エンジンの基本情報テスト
  */
 test('ENGINE_VERSION should be defined', () => {
-  expect(ENGINE_VERSION).toBe('1.0.0-alpha');
+  expect(ENGINE_VERSION).toBe('1.1.0');
 });
 
 // モックなしで実際のDOM APIが呼べるかのテスト（Browser modeの確認）
