@@ -83,6 +83,7 @@ export default defineConfig({
             text: 'プラグイン (Plugins)',
             collapsed: false,
             items: [
+              { text: 'Arcade Physics (AABB 物理)', link: '/plugins/arcade-physics' },
               { text: 'XPBD 物理エンジン', link: '/plugins/xpbd' },
               { text: 'モートン順序空間分割', link: '/plugins/morton' },
               { text: 'AI & ビヘイビア', link: '/plugins/ai' },
@@ -116,7 +117,7 @@ export default defineConfig({
           { text: 'Guide', link: '/en/guide/intro' },
           { text: 'Tutorial', link: '/en/tutorial/01-setup' },
           { text: 'Concepts', link: '/en/concepts/engine-config' },
-          { text: 'Plugins', link: '/en/plugins/xpbd' },
+          { text: 'Plugins', link: '/en/plugins/arcade-physics' },
           { text: 'API', link: '/en/api/pluto-engine' },
         ],
         sidebar: [
@@ -191,6 +192,7 @@ export default defineConfig({
             text: 'Plugins',
             collapsed: false,
             items: [
+              { text: 'Arcade Physics (AABB Culling)', link: '/en/plugins/arcade-physics' },
               { text: 'XPBD Physics Engine', link: '/en/plugins/xpbd' },
               { text: 'Morton Spatial Partitioning', link: '/en/plugins/morton' },
               { text: 'AI & Behavior Systems', link: '/en/plugins/ai' },

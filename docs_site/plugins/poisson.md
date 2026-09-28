@@ -1,53 +1,89 @@
-# ポアソン群集流体 (Continuum Crowds)
+# ポアソン群集流体 (Continuum Crowds & Flow Field)
 
-`@pluto-engine/poisson` パッケージは、**流体力学ベースの群集シミュレーション (Continuum Crowds)** を実現する高度な物理プラグインです。
-数万体の敵（群集）が、まるで水やスライムのように互いを避け合いながらプレイヤーに向かって流れるような滑らかな動きを、**ゼロアロケーション (GCフリー)** で計算します。
+`@pluto-engine/poisson` パッケージは、**流体力学ベースの群集シミュレーション (Continuum Crowds)** と **高速ベクトル場事前計算 (Precomputed Flow Field)** を実現する物理プラグインです。
 
-「囲碁盤のように画面をマス目に分割し、そのマスの人口密度（容量）に応じて敵の流れを変える」というアルゴリズムを、ヤコビ反復法を用いたポアソン方程式ソルバ（Poisson UIC）で解決しています。
+数万〜30万体の敵（群集）が、互いに押し合い・渋滞を避けながらプレイヤーに向かって水流のように滑らかに押し寄せる動きを、**ゼロアロケーション (GCフリー)** で計算します。
 
-## インストールと登録
+---
+
+## ⚡ v1.1.0 でのブレイクスルー: 速度場事前計算 & 双線形補間
+
+従来の群集シミュレーションでは、30万体の敵それぞれが周囲4点の圧力を読み出して勾配計算（180万回のランダムメモリアクセスと平方根）を行っていました。
+
+PlutoEngine v1.1.0 では、**128x128（16,384セル）のグリッド上で統合速度場を 1 フレームに 1 回だけ一括計算 (`0.04 ms`)** し、エンティティ側は単一サンプリングまたは **Lerp of Lerp 双線形補間** を行うことで、**16.2ms ➔ 2.9ms（5.6倍 爆速化）** を達成しています。
+
+```mermaid
+flowchart LR
+    A["敵の位置をグリッドへ蓄積<br/>(Density Splatting)"] --> B["128x128 ガウス・ザイデル緩和<br/>(Poisson Pressure Solve: 0.19ms)"]
+    B --> C["16k セル速度場の一括事前計算<br/>(precomputeVectorField: 0.04ms)"]
+    C --> D["30万体の双線形サンプリング<br/>(sampleVelocityBilinear: 2.9ms〜8.0ms)"]
+```
+
+---
+
+## 🎮 インストールと初期化
 
 ```typescript
 import { PoissonPlugin } from '@pluto-engine/poisson';
 
 export class MyScene extends Scene {
   public init() {
-    // 画面をグリッドに分割 (幅, 高さ, セルサイズ)
-    this.registerPlugin(new PoissonPlugin(800, 600, 24));
+    // 幅, 高さ, セルサイズ (例: 128x128グリッド)
+    this.registerPlugin(new PoissonPlugin(128 * 20, 128 * 20, 20));
   }
 }
 ```
 
-## 使い方
+---
 
-毎フレーム、以下の3ステップで処理を行います。
+## 🚀 推奨される高速実装パターン
 
-1. **密度のスプラッティング (Splatting)**: 敵の現在位置をグリッドに書き込みます。
-2. **ポアソン方程式の解決 (Solve)**: 人口密度から圧力の勾配を計算します。
-3. **圧力勾配の適用 (Gradient)**: 敵が密度の高い場所（渋滞）を避けるベクトルを取得します。
+### 1. 毎フレームの更新フロー
 
 ```typescript
 // 1. グリッドのクリア
 this.poisson.clear();
 
-// 2. 全敵エンティティの密度をマス目に書き込む
-for (let i = 0; i < enemiesCount; i++) {
-  this.poisson.splatDensity(enemyX[i], enemyY[i], 1.0);
+// 2. 敵の現在位置から密度をスプラット蓄積
+const arena = this.arena;
+const count = arena.activeCount;
+for (let i = 0; i < count; i++) {
+  this.poisson.splatDensity(arena.posX[i], arena.posY[i], 1.0);
 }
 
-// 3. 目標密度(例: 2.0)を超えた場所から圧力を計算
-this.poisson.computeDivergence(2.0);
-this.poisson.solve(3); // 3回反復
+// 3. 圧力場の計算 (ガウス・ザイデル緩和 1〜2回)
+this.poisson.computeDivergence(2.5); // 許容密度
+this.poisson.solve(2);
 
-// 4. 計算結果（圧力勾配ベクトル）を敵の移動ベクトルに加算する
-const grad = new Float32Array(2);
-for (let i = 0; i < enemiesCount; i++) {
-  this.poisson.getPressureGradient(enemyX[i], enemyY[i], grad);
+// 4. 【最重要】16kグリッドセルで速度場を一括事前計算
+this.poisson.precomputeVectorField(baseDirX, baseDirY, 80 /* 移動速度 */);
+
+// 5. 30万体エンティティの高速サンプリング (Lerp of Lerp 双線形補間)
+const vel = new Float32Array(2);
+for (let i = 0; i < count; i++) {
+  // グリッド境界のカクつきのない滑らかな速度ベクトルを取得
+  this.poisson.sampleVelocityBilinear(arena.posX[i], arena.posY[i], vel);
   
-  // 渋滞している方向とは逆向きの力が grad に入る
-  enemyVelX[i] -= grad[0] * pushForce;
-  enemyVelY[i] -= grad[1] * pushForce;
+  arena.posX[i] += vel[0] * dt;
+  arena.posY[i] += vel[1] * dt;
 }
 ```
 
-PhaserやPixiの一般的な実装では、このような流体力学演算は重すぎてブラウザではフリーズしてしまいますが、PlutoEngineではすべての計算が `Float32Array` 上のフラットループで行われるため、10万体の敵がいても60FPSを維持できます。
+---
+
+## 📊 パフォーマンス特性 (300k エンティティ)
+
+| 処理ステップ | 時間 (300k) | 計算量 | 特徴 |
+| :--- | :---: | :---: | :--- |
+| **Poisson 圧力場緩和 (128x128)** | **0.19 ms** | \(O(\text{GridSize})\) | エンティティ数に依存せず常に定数時間 |
+| **速度場一括事前計算** | **0.04 ms** | 16,384 セル | 1フレームに1度だけ実行 |
+| **Bilinear サンプリング (Lerp of Lerp)** | **2.9 ms 〜 8.0 ms** | \(O(N)\) | 積和演算 FMA に最適化され、完全滑らか |
+
+---
+
+## 🔧 主な API メソッド
+
+- **`precomputeVectorField(baseDirX, baseDirY, speed, pressureWeight?)`**: 全グリッドの速度場を一括事前計算します。
+- **`sampleVelocityBilinear(x, y, outVel)`**: 4近傍の双線形補間（Lerp of Lerp）によりサブピクセル精度で滑らかな速度ベクトルを取得します。
+- **`getPressureGradient(x, y, outGradient)`**: 指定ワールド座標における圧力勾配ベクトルを取得します。
+- **`splatDensity(x, y, amount)`**: 指定座標のグリッドセルに密度を加算します。
