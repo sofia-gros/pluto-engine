@@ -1,12 +1,6 @@
-/**
- * @file Scene.ts
- * @description
- * 開発者が継承してゲームロジックを構築するためのベースクラス。
- */
-
-import { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { Sprite } from '../arena/Sprite';
 import { Text, type TextStyle } from '../arena/Text';
+import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import type { PlutoEngine } from '../core/PlutoEngine';
 import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';
@@ -19,6 +13,9 @@ import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
+// Note: InstanceBufferArena is imported from engine or arena directly, here I'll use the one from ../arena/InstanceBufferArena
+// But since we had InstanceBufferArena implicitly in the previous code, I'll import it.
+import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
 
 export interface SceneProps {
   id?: string;
@@ -31,7 +28,7 @@ export class Scene {
   public scene!: SceneManager;
   public engine!: PlutoEngine;
 
-  public arena!: InstanceBufferArena;
+  public arena!: ArenaClass;
   public input!: InputManager;
   public load!: LoaderManager;
   public tweens!: TweenManager;
@@ -58,15 +55,16 @@ export class Scene {
     sprite: (x = 0, y = 0, textureKey?: string, frameKey?: string | number): Sprite => {
       const id = this.arena.allocate();
       if (id === -1) {
-        throw new Error('アリーナの容量が上限に達しています。');
+        throw new Error('アリーナの容量に到達しました。');
       }
-      this.arena.posX[id] = x;
-      this.arena.posY[id] = y;
+      const idx = this.arena.idToIndex[id];
+      this.arena.posX[idx] = x;
+      this.arena.posY[idx] = y;
+      this.arena.dirtyPos = true;
 
       const sprite = new Sprite(id, this.arena);
 
       if (textureKey) {
-        // Simple integration with loader cache (assumes 0 layer index for now if no texture array manager yet)
         const asset = this.load.get(textureKey);
         if (asset && asset.type === 'spritesheet') {
           sprite.setTexture(asset, frameKey ?? 0);
@@ -91,9 +89,9 @@ export class Scene {
     } else {
       this.id = props.id || this.constructor.name;
       maxInstances = props.maxInstances ?? 100000;
-      Object.assign(this, props); // Bind extra props
+      Object.assign(this, props);
     }
-    this.arena = new InstanceBufferArena(maxInstances);
+    this.arena = new ArenaClass(maxInstances);
     this.input = new InputManager();
     this.load = new LoaderManager();
     this.tweens = new TweenManager(this.arena);
@@ -137,62 +135,59 @@ export class Scene {
       this._plugins[i].update?.(dt);
     }
 
-    // Tilemap Culling
     const sw = this.engine.scale.width;
     const sh = this.engine.scale.height;
     for (let i = 0; i < this._tilemaps.length; i++) {
       this._tilemaps[i].updateCulling(this.camera, sw, sh);
     }
 
-    // シーングラフ（親子階層）の更新
-    // キャッシュ効率のため、ループを分けるかまとめますが、ここでは単純に回します。
+    // Hierarchy update
     const arena = this.arena;
-    const count = arena.capacity; // IDはcapacityまで使われる可能性がある（再利用など考慮して全配列スキャン）
+    const count = arena.activeCount; // Dense array loop!
     for (let i = 0; i < count; i++) {
-      if (arena.active[i] === 0) continue;
       const pid = arena.parentId[i];
-      if (pid !== -1 && arena.active[pid] !== 0) {
-        // Simple position inheritance (no rotation inheritance in this basic version, or with rotation)
-        const pr = arena.rotation[pid];
-        const lx = arena.localX[i];
-        const ly = arena.localY[i];
+      if (pid !== -1) {
+        const pIdx = arena.idToIndex[pid];
+        if (pIdx !== -1) {
+          const pr = arena.rotation[pIdx];
+          const lx = arena.localX[i];
+          const ly = arena.localY[i];
 
-        if (pr !== 0.0) {
-          const cosR = Math.cos(pr);
-          const sinR = Math.sin(pr);
-          arena.posX[i] = arena.posX[pid] + (lx * cosR - ly * sinR);
-          arena.posY[i] = arena.posY[pid] + (lx * sinR + ly * cosR);
-        } else {
-          arena.posX[i] = arena.posX[pid] + lx;
-          arena.posY[i] = arena.posY[pid] + ly;
+          if (pr !== 0.0) {
+            const cosR = Math.cos(pr);
+            const sinR = Math.sin(pr);
+            arena.posX[i] = arena.posX[pIdx] + (lx * cosR - ly * sinR);
+            arena.posY[i] = arena.posY[pIdx] + (lx * sinR + ly * cosR);
+          } else {
+            arena.posX[i] = arena.posX[pIdx] + lx;
+            arena.posY[i] = arena.posY[pIdx] + ly;
+          }
+          arena.rotation[i] = arena.rotation[pIdx] + arena.localRotation[i];
+          arena.dirtyPos = true; // Mark dirty
         }
-        arena.rotation[i] = arena.rotation[pid] + arena.localRotation[i];
       }
     }
 
-    // ポインターイベントの処理
+    // Input processing
     const input = this.input;
     if (input.isPointerJustPressed()) {
       const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
       const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
 
-      // 手前に描画されるものから逆順に判定する (簡略化のためIDの大きい順=後に生成された順を前面と仮定)
       for (let i = count - 1; i >= 0; i--) {
-        if (arena.active[i] === 0 || arena.interactive[i] === 0) continue;
+        if (arena.interactive[i] === 0) continue;
 
         const hw = arena.hitWidth[i] * arena.scale[i];
         const hh = arena.hitHeight[i] * arena.scale[i];
         if (hw <= 0 || hh <= 0) continue;
 
-        // Originを中心と仮定
         const left = arena.posX[i] - hw / 2;
         const right = arena.posX[i] + hw / 2;
         const top = arena.posY[i] - hh / 2;
         const bottom = arena.posY[i] + hh / 2;
 
         if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-          input.emit(i, 'pointerdown');
-          // 一番上の要素のみクリック判定する場合は break;
+          input.emit(arena.indexToId[i], 'pointerdown');
           break;
         }
       }
@@ -201,7 +196,7 @@ export class Scene {
       const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
       const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
       for (let i = count - 1; i >= 0; i--) {
-        if (arena.active[i] === 0 || arena.interactive[i] === 0) continue;
+        if (arena.interactive[i] === 0) continue;
         const hw = arena.hitWidth[i] * arena.scale[i];
         const hh = arena.hitHeight[i] * arena.scale[i];
         if (hw <= 0 || hh <= 0) continue;
@@ -210,7 +205,7 @@ export class Scene {
         const top = arena.posY[i] - hh / 2;
         const bottom = arena.posY[i] + hh / 2;
         if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-          input.emit(i, 'pointerup');
+          input.emit(arena.indexToId[i], 'pointerup');
           break;
         }
       }

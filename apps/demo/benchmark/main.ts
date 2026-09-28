@@ -132,15 +132,12 @@ class BenchmarkScene extends Scene {
     this.flow.clearDensity();
 
     // Splat density
-    const capacity = this.arena.capacity;
-    const activeArr = this.arena.active;
+    const activeCount = this.arena.activeCount;
     const posX = this.arena.posX;
     const posY = this.arena.posY;
 
-    for (let i = 0; i < capacity; i++) {
-      if (activeArr[i]) {
-        this.flow.addDensity(posX[i], posY[i], 1);
-      }
+    for (let i = 0; i < activeCount; i++) {
+      this.flow.addDensity(posX[i], posY[i], 1);
     }
     
     const tGridPrepEnd = performance.now();
@@ -196,9 +193,7 @@ class BenchmarkScene extends Scene {
     const p = this.flow.pressure;
     const cols = this.flow.cols;
 
-    for (let i = 0; i < capacity; i++) {
-      if (!activeArr[i]) continue;
-
+    for (let i = 0; i < activeCount; i++) {
       const x = posX[i];
       const y = posY[i];
 
@@ -237,6 +232,8 @@ class BenchmarkScene extends Scene {
         posY[i] += (dy / len) * 80 * dt;
       }
     }
+    
+    this.arena.dirtyPos = true;
     
     const tSimEnd = performance.now();
     const simTime = (tSimEnd - tPoissonEnd).toFixed(2);

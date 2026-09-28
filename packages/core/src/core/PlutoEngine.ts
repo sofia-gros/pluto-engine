@@ -1,7 +1,7 @@
 /**
  * @file PlutoEngine.ts
  * @description
- * Phaser の `new Phaser.Game(config)` に相当するエンジンのエントリーポイント。
+ * Phaser の `new Phaser.Game(config)` に相当するエンジンのエントリポイント。
  */
 
 import { createGraphicsDevice } from '@pluto-engine/renderer';
@@ -32,14 +32,6 @@ export class PlutoEngine {
   private canvasElement: HTMLCanvasElement | null = null;
 
   private gpuBuffers: Record<string, BufferInfo> = {};
-  private packedPosX: Float32Array;
-  private packedPosY: Float32Array;
-  private packedScale: Float32Array;
-  private packedUvX: Float32Array;
-  private packedUvY: Float32Array;
-  private packedUvW: Float32Array;
-  private packedUvH: Float32Array;
-  private packedFrameIdx: Float32Array;
 
   constructor(config: EngineConfig) {
     this.config = Object.assign(
@@ -54,15 +46,6 @@ export class PlutoEngine {
       config,
     );
 
-    this.packedPosX = new Float32Array(this.config.maxInstances!);
-    this.packedPosY = new Float32Array(this.config.maxInstances!);
-    this.packedScale = new Float32Array(this.config.maxInstances!);
-    this.packedUvX = new Float32Array(this.config.maxInstances!);
-    this.packedUvY = new Float32Array(this.config.maxInstances!);
-    this.packedUvW = new Float32Array(this.config.maxInstances!);
-    this.packedUvH = new Float32Array(this.config.maxInstances!);
-    this.packedFrameIdx = new Float32Array(this.config.maxInstances!);
-
     this.scale = new ScaleManager({
       width: this.config.width,
       height: this.config.height,
@@ -74,7 +57,6 @@ export class PlutoEngine {
     this.time = new TimeManager();
     this.scene = new SceneManager(this);
 
-    // Phaserのように非同期で初期化を走らせる
     this.init();
   }
 
@@ -115,7 +97,6 @@ export class PlutoEngine {
       }
     }
 
-    // メインループ開始
     const loop = (now: number) => {
       this.step(now);
       requestAnimationFrame(loop);
@@ -161,42 +142,39 @@ export class PlutoEngine {
     if (!activeScene) return;
 
     const arena = activeScene.arena;
-    let idx = 0;
+    
+    // Dense Setのためそのまま利用可能
+    const renderCount = arena.activeCount;
 
     const tPackStart = performance.now();
-
-    // アリーナの生存エンティティをパック
-    for (let i = 0; i < arena.capacity; i++) {
-      if (arena.active[i]) {
-        this.packedPosX[idx] = arena.posX[i];
-        this.packedPosY[idx] = arena.posY[i];
-        this.packedScale[idx] = arena.scale[i];
-        this.packedUvX[idx] = arena.uvX[i];
-        this.packedUvY[idx] = arena.uvY[i];
-        this.packedUvW[idx] = arena.uvW[i];
-        this.packedUvH[idx] = arena.uvH[i];
-        this.packedFrameIdx[idx] = arena.frameIdx[i];
-        idx++;
-      }
-    }
-
-    const renderCount = idx;
-    
+    this.packTimeMs = 0; // Swap-Removeによりパッキング不要
     const tPackEnd = performance.now();
-    this.packTimeMs = tPackEnd - tPackStart;
 
     if (renderCount > 0) {
-      this.device.updateBuffer(this.gpuBuffers['posX'], this.packedPosX.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['posY'], this.packedPosY.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['scale'], this.packedScale.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['uvX'], this.packedUvX.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['uvY'], this.packedUvY.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['uvW'], this.packedUvW.subarray(0, renderCount));
-      this.device.updateBuffer(this.gpuBuffers['uvH'], this.packedUvH.subarray(0, renderCount));
-      this.device.updateBuffer(
-        this.gpuBuffers['frameIdx'],
-        this.packedFrameIdx.subarray(0, renderCount),
-      );
+      // Dirty Flag に基づく選択的転送
+      if (arena.dirtyPos) {
+        this.device.updateBuffer(this.gpuBuffers['posX'], arena.posX.subarray(0, renderCount));
+        this.device.updateBuffer(this.gpuBuffers['posY'], arena.posY.subarray(0, renderCount));
+        arena.dirtyPos = false;
+      }
+      
+      if (arena.dirtyScale) {
+        this.device.updateBuffer(this.gpuBuffers['scale'], arena.scale.subarray(0, renderCount));
+        arena.dirtyScale = false;
+      }
+
+      if (arena.dirtyUv) {
+        this.device.updateBuffer(this.gpuBuffers['uvX'], arena.uvX.subarray(0, renderCount));
+        this.device.updateBuffer(this.gpuBuffers['uvY'], arena.uvY.subarray(0, renderCount));
+        this.device.updateBuffer(this.gpuBuffers['uvW'], arena.uvW.subarray(0, renderCount));
+        this.device.updateBuffer(this.gpuBuffers['uvH'], arena.uvH.subarray(0, renderCount));
+        arena.dirtyUv = false;
+      }
+
+      if (arena.dirtyFrameIdx) {
+        this.device.updateBuffer(this.gpuBuffers['frameIdx'], arena.frameIdx.subarray(0, renderCount));
+        arena.dirtyFrameIdx = false;
+      }
     }
     const tUploadEnd = performance.now();
     this.uploadTimeMs = tUploadEnd - tPackEnd;

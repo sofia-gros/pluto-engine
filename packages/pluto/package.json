@@ -1,6 +1,6 @@
 {
   "name": "pluto-engine",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
   "main": "dist/pluto.global.js",
   "module": "dist/pluto.esm.js",

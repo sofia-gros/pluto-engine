@@ -1,57 +1,47 @@
-
 const { chromium } = require('playwright');
+const { spawn } = require('child_process');
 
 (async () => {
-  console.log('Launching browser...');
-  const browser = await chromium.launch({
-    headless: false,
-    args: [
-      '--disable-frame-rate-limit',
-      '--enable-webgl',
-      '--use-gl=angle',
-      '--use-angle=d3d11'
-    ]
-  });
-
-  const page = await browser.newPage();
+  // Start vite dev server
+  const server = spawn('bun', ['run', 'dev'], { cwd: 'apps/demo' });
   
-  page.on('console', async msg => {
-    const text = msg.text();
-    console.log('[BROWSER CONSOLE]', text);
-    if (text.includes('BENCHMARK FINISHED')) {
-      console.log('Benchmark completed. Collecting results...');
-      await page.waitForTimeout(1000);
-      
-      const results = await page.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll('#stats table tr')).slice(1);
-        return rows.map(r => {
-          const cells = r.querySelectorAll('td');
-          return {
-            entities: parseInt(cells[0].innerText, 10),
-            fps: parseInt(cells[1].innerText, 10)
-          };
-        });
-      });
-      
-      console.log('--- RAW BENCHMARK RESULTS ---');
-      console.log(JSON.stringify(results, null, 2));
-      
-      const fs = require('fs');
-      fs.writeFileSync('benchmark_results.json', JSON.stringify(results, null, 2));
-      
-      await browser.close();
-      process.exit(0);
+  // Wait for server to start
+  await new Promise(r => setTimeout(r, 3000));
+
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(300000); // 5 mins
+  
+  console.log("Navigating to benchmark...");
+  await page.goto('http://localhost:5173/benchmark/index.html');
+  
+  console.log("Running benchmark (waiting for 30fps drop)...");
+  
+  page.on('console', msg => {
+    if (msg.text().includes('chart') || msg.text().includes('fps')) {
+       console.log('PAGE LOG:', msg.text());
     }
   });
 
-  console.log('Navigating to benchmark...');
-  await page.goto('http://localhost:5176/benchmark/index.html');
+  await page.waitForFunction(() => {
+    const el = document.getElementById('chart-container');
+    return el && el.style.display === 'block';
+  }, { timeout: 300000 }); 
   
-  // Timeout after 60 seconds
-  setTimeout(async () => {
-    console.log('Benchmark timed out after 60 seconds.');
-    await browser.close();
-    process.exit(1);
-  }, 60000);
+  const data = await page.evaluate(() => {
+     const chart = Chart.getChart("resultChart");
+     if (!chart) return null;
+     return {
+       labels: chart.data.labels,
+       fps: chart.data.datasets[0].data,
+       sim: chart.data.datasets[1].data,
+       pack: chart.data.datasets[2].data,
+       upload: chart.data.datasets[3].data
+     };
+  });
+  console.log(JSON.stringify(data, null, 2));
+  
+  await browser.close();
+  server.kill();
+  process.exit(0);
 })();
-
