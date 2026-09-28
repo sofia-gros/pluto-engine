@@ -130,6 +130,7 @@ export class PlutoEngine {
   public renderTimeMs = 0;
   public uploadTimeMs = 0;
   public drawTimeMs = 0;
+  public packTimeMs = 0;
 
   private step(now: number) {
     const dt = this.time.step(now);
@@ -162,7 +163,7 @@ export class PlutoEngine {
     const arena = activeScene.arena;
     let idx = 0;
 
-    const tUploadStart = performance.now();
+    const tPackStart = performance.now();
 
     // アリーナの生存エンティティをパック
     for (let i = 0; i < arena.capacity; i++) {
@@ -180,6 +181,9 @@ export class PlutoEngine {
     }
 
     const renderCount = idx;
+    
+    const tPackEnd = performance.now();
+    this.packTimeMs = tPackEnd - tPackStart;
 
     if (renderCount > 0) {
       this.device.updateBuffer(this.gpuBuffers['posX'], this.packedPosX.subarray(0, renderCount));
@@ -195,7 +199,7 @@ export class PlutoEngine {
       );
     }
     const tUploadEnd = performance.now();
-    this.uploadTimeMs = tUploadEnd - tUploadStart;
+    this.uploadTimeMs = tUploadEnd - tPackEnd;
 
     this.device.clear(0.01, 0.02, 0.05, 1.0);
     this.device.bindShaders();

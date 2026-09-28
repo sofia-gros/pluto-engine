@@ -142,11 +142,14 @@ class BenchmarkScene extends Scene {
         this.flow.addDensity(posX[i], posY[i], 1);
       }
     }
+    
+    const tGridPrepEnd = performance.now();
+    const gridPrepTime = (tGridPrepEnd - tUpdateStart).toFixed(2);
 
     this.flow.solvePoissonUIC(1);
     
     const tPoissonEnd = performance.now();
-    const poissonTime = (tPoissonEnd - tUpdateStart).toFixed(2);
+    const poissonTime = (tPoissonEnd - tGridPrepEnd).toFixed(2);
 
     // Auto Player Avoidance Logic
     let minPressure = 999999;
@@ -238,14 +241,17 @@ class BenchmarkScene extends Scene {
     const tSimEnd = performance.now();
     const simTime = (tSimEnd - tPoissonEnd).toFixed(2);
     
+    const packTime = this.engine.packTimeMs.toFixed(2);
     const uploadTime = this.engine.uploadTimeMs.toFixed(2);
     const drawTime = this.engine.drawTimeMs.toFixed(2);
 
     this.statsDiv.innerHTML = `
       <p>FPS: ${fps}</p>
       <p>Entities: ${active}</p>
+      <p>GridPrep: ${gridPrepTime} ms</p>
       <p>Poisson: ${poissonTime} ms</p>
       <p>Simulation: ${simTime} ms</p>
+      <p>Packing: ${packTime} ms</p>
       <p>CPU->GPU: ${uploadTime} ms</p>
       <p>DrawCall: ${drawTime} ms</p>
     `;
@@ -261,8 +267,10 @@ class BenchmarkScene extends Scene {
         this.benchmarkResults.push({ 
           entities: active, 
           fps,
+          grid: parseFloat(gridPrepTime),
           poisson: parseFloat(poissonTime),
           sim: parseFloat(simTime),
+          pack: parseFloat(packTime),
           upload: parseFloat(uploadTime),
           draw: parseFloat(drawTime)
         });
@@ -291,8 +299,10 @@ class BenchmarkScene extends Scene {
       tableRows += `<tr>
         <td style="padding:0 10px;">${res.entities}</td>
         <td style="padding:0 10px;">${res.fps}</td>
+        <td style="padding:0 10px;">${res.grid}</td>
         <td style="padding:0 10px;">${res.poisson}</td>
         <td style="padding:0 10px;">${res.sim}</td>
+        <td style="padding:0 10px;">${res.pack}</td>
         <td style="padding:0 10px;">${res.upload}</td>
         <td style="padding:0 10px;">${res.draw}</td>
       </tr>`;
@@ -308,9 +318,11 @@ class BenchmarkScene extends Scene {
         <tr>
           <th style="padding:0 10px;">Entities</th>
           <th style="padding:0 10px;">FPS</th>
+          <th style="padding:0 10px;">Grid(ms)</th>
           <th style="padding:0 10px;">Poisson(ms)</th>
           <th style="padding:0 10px;">Sim(ms)</th>
-          <th style="padding:0 10px;">CPU->GPU(ms)</th>
+          <th style="padding:0 10px;">Pack(ms)</th>
+          <th style="padding:0 10px;">Upload(ms)</th>
           <th style="padding:0 10px;">DrawCall(ms)</th>
         </tr>
         ${tableRows}
