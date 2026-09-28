@@ -36,7 +36,7 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
 
     const hitIndices: number[] = [];
 
-    // Phaser-like API で overlap 登録
+    // Phaser-like API で overlap 登録 (単一 vs Arena)
     scene.physics.add.overlap(player, scene.arena, (source, entityIdx) => {
       expect(source).toBe(player);
       hitIndices.push(entityIdx);
@@ -49,6 +49,67 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
     expect(hitIndices.length).toBe(2);
     expect(hitIndices).toContain(nearIdx1);
     expect(hitIndices).toContain(nearIdx2);
+  });
+
+  it('配列 targets (bullets: Sprite[]) と SoA アリーナの overlap 判定が正しく動作すること', () => {
+    const scene = new Scene({ maxInstances: 500 });
+
+    // 敵を配置
+    const enemyId = scene.arena.allocate();
+    const enemyIdx = scene.arena.idToIndex[enemyId];
+    scene.arena.posX[enemyIdx] = 100;
+    scene.arena.posY[enemyIdx] = 100;
+    scene.arena.scale[enemyIdx] = 20;
+
+    // 弾丸配列 (Sprite / PhysicsBody の配列)
+    const bullets = [
+      { x: 100, y: 100, radius: 8, name: 'bullet1' }, // ヒット
+      { x: 500, y: 500, radius: 8, name: 'bullet2' }, // 遠い (スキップ)
+    ];
+
+    const hitPairs: Array<{ bullet: any; enemy: number }> = [];
+
+    // 配列 vs Arena
+    scene.physics.add.overlap(bullets, scene.arena, (bullet, eIdx) => {
+      hitPairs.push({ bullet, enemy: eIdx });
+    });
+
+    scene.physics.collide();
+
+    expect(hitPairs.length).toBe(1);
+    expect(hitPairs[0].bullet.name).toBe('bullet1');
+    expect(hitPairs[0].enemy).toBe(enemyIdx);
+  });
+
+  it('TypedArray バッファ (PhysicsBuffer) と SoA アリーナの overlap 判定が正しく動作すること', () => {
+    const scene = new Scene({ maxInstances: 500 });
+
+    const enemyId = scene.arena.allocate();
+    const enemyIdx = scene.arena.idToIndex[enemyId];
+    scene.arena.posX[enemyIdx] = 200;
+    scene.arena.posY[enemyIdx] = 200;
+    scene.arena.scale[enemyIdx] = 20;
+
+    // 弾丸の SoA TypedArray バッファ
+    const bulletBuffer = {
+      posX: new Float32Array([200, 800]),
+      posY: new Float32Array([200, 800]),
+      count: 2,
+      radius: 10,
+    };
+
+    const hits: Array<{ bulletIdx: number; enemyIdx: number }> = [];
+
+    // Buffer vs Arena
+    scene.physics.add.overlap(bulletBuffer, scene.arena, (bIdx, eIdx) => {
+      hits.push({ bulletIdx: bIdx, enemyIdx: eIdx });
+    });
+
+    scene.physics.collide();
+
+    expect(hits.length).toBe(1);
+    expect(hits[0].bulletIdx).toBe(0);
+    expect(hits[0].enemyIdx).toBe(enemyIdx);
   });
 
   it('collider 登録時に AABB 枝刈り + 押し出し解決が正しく行われること', () => {

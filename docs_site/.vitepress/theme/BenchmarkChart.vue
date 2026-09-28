@@ -261,7 +261,8 @@ const steeringSteps = [
     time300k: 16.23,
     speedup: '基準 (1.0x)',
     speedupClass: 'text-muted',
-    detail: 'Math.hypot の内部オーバーフロー保護コードと 30万回×6点 の Float32Array 読出が最大のボトルネックでした。',
+    detail:
+      'Math.hypot の内部オーバーフロー保護コードと 30万回×6点 の Float32Array 読出が最大のボトルネックでした。',
   },
   {
     badge: 'v1.1.0 最速',
@@ -271,7 +272,8 @@ const steeringSteps = [
     time300k: 2.9,
     speedup: '5.6x 爆速化',
     speedupClass: 'text-green',
-    detail: '30万回の勾配計算・平方根を排除し、16k要素の事前計算配列から直接サンプリング。16.2ms ➔ 2.9ms を達成。',
+    detail:
+      '30万回の勾配計算・平方根を排除し、16k要素の事前計算配列から直接サンプリング。16.2ms ➔ 2.9ms を達成。',
   },
   {
     badge: 'v1.1.0 推奨',
@@ -281,7 +283,8 @@ const steeringSteps = [
     time300k: 8.15,
     speedup: '2.0x 高速化 (高品質)',
     speedupClass: 'text-purple',
-    detail: 'セル境界のカクつきを完全排除した滑らかな流体移動を実現しながら、ベースラインの2倍の速度を維持。',
+    detail:
+      'セル境界のカクつきを完全排除した滑らかな流体移動を実現しながら、ベースラインの2倍の速度を維持。',
   },
 ];
 
