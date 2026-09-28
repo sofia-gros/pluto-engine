@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pluto-engine/audio": "workspace:*",
     "@pluto-engine/core": "workspace:*",
     "@pluto-engine/morton": "workspace:*",
     "@pluto-engine/poisson": "workspace:*",
