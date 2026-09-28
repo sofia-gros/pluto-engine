@@ -187,6 +187,7 @@ export class ContinuumFlowGrid {
   cols: number;
   rows: number;
   cellSize: number;
+  invCellSize: number;
   width: number;
   height: number;
   size: number;
@@ -194,6 +195,8 @@ export class ContinuumFlowGrid {
   dirY: Float32Array;
   density: Float32Array;
   pressure: Float32Array;
+  precomputedVx: Float32Array;
+  precomputedVy: Float32Array;
   originX = 0;
   originY = 0;
 
@@ -201,6 +204,7 @@ export class ContinuumFlowGrid {
     this.cols = cols;
     this.rows = rows;
     this.cellSize = cellSize;
+    this.invCellSize = 1.0 / cellSize;
     this.width = cols * cellSize;
     this.height = rows * cellSize;
     this.size = cols * rows;
@@ -208,6 +212,8 @@ export class ContinuumFlowGrid {
     this.dirY = new Float32Array(this.size);
     this.density = new Float32Array(this.size);
     this.pressure = new Float32Array(this.size);
+    this.precomputedVx = new Float32Array(this.size);
+    this.precomputedVy = new Float32Array(this.size);
   }
 
   updatePlayerCenter(px: number, py: number) {
@@ -222,10 +228,11 @@ export class ContinuumFlowGrid {
       for (let c = 0; c < this.cols; c++) {
         const cx = (c + 0.5) * this.cellSize;
         const dx = cx - halfW;
-        const dist = Math.hypot(dx, dy) + 0.001;
+        const d2 = dx * dx + dy * dy;
+        const invDist = 1.0 / (Math.sqrt(d2) + 0.001);
         const idx = rowIdx + c;
-        this.dirX[idx] = -dx / dist;
-        this.dirY[idx] = -dy / dist;
+        this.dirX[idx] = -dx * invDist;
+        this.dirY[idx] = -dy * invDist;
       }
     }
   }
@@ -242,6 +249,35 @@ export class ContinuumFlowGrid {
           const idx = row + c;
           const excess = Math.max(0, rho[idx] - 3.5);
           p[idx] = (p[idx - 1] + p[idx + 1] + p[idx - cols] + p[idx + cols] + excess * 1.5) * 0.25;
+        }
+      }
+    }
+  }
+
+  precomputeVelocityField() {
+    const cols = this.cols;
+    const rows = this.rows;
+    const p = this.pressure;
+    const dX = this.dirX;
+    const dY = this.dirY;
+    const pVx = this.precomputedVx;
+    const pVy = this.precomputedVy;
+    for (let r = 1; r < rows - 1; r++) {
+      const row = r * cols;
+      for (let c = 1; c < cols - 1; c++) {
+        const idx = row + c;
+        const gradPx = (p[idx + 1] - p[idx - 1]) * 0.5;
+        const gradPy = (p[idx + cols] - p[idx - cols]) * 0.5;
+        const sx = dX[idx] - gradPx * 0.7;
+        const sy = dY[idx] - gradPy * 0.7;
+        const d2 = sx * sx + sy * sy;
+        if (d2 > 0.0001) {
+          const invLen = 1.0 / Math.sqrt(d2);
+          pVx[idx] = sx * invLen;
+          pVy[idx] = sy * invLen;
+        } else {
+          pVx[idx] = 0;
+          pVy[idx] = 0;
         }
       }
     }
@@ -440,51 +476,62 @@ export class SwarmSystem {
     flow.density.fill(0);
     const cols = flow.cols;
     const rows = flow.rows;
-    const cs = flow.cellSize;
     const ox = flow.originX;
     const oy = flow.originY;
+    const invCs = flow.invCellSize;
+    const activeCount = this.scene.arena.activeCount;
 
-    for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.idToIndex[i] < 0) continue;
-      const gx = Math.floor((this.scene.arena.posX[i] - ox) / cs);
-      const gy = Math.floor((this.scene.arena.posY[i] - oy) / cs);
+    for (let i = 0; i < activeCount; i++) {
+      const gx = ((this.scene.arena.posX[i] - ox) * invCs) | 0;
+      const gy = ((this.scene.arena.posY[i] - oy) * invCs) | 0;
       if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
         flow.density[gy * cols + gx] += 1.0;
       }
     }
     flow.solvePoissonUIC();
+    flow.precomputeVelocityField();
 
     const pRadius = 12;
-
     this.scene.spatialHash.clear();
 
-    for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.idToIndex[i] < 0) continue;
+    const pVx = flow.precomputedVx;
+    const pVy = flow.precomputedVy;
+
+    for (let i = 0; i < activeCount; i++) {
       const ex = this.scene.arena.posX[i];
       const ey = this.scene.arena.posY[i];
-      const gx = Math.floor((ex - ox) / cs);
-      const gy = Math.floor((ey - oy) / cs);
+      const lx = ex - ox;
+      const ly = ey - oy;
+      const gx = lx * invCs;
+      const gy = ly * invCs;
+      const ix = gx | 0;
+      const iy = gy | 0;
       let steerX = 0,
         steerY = 0;
 
-      if (gx >= 1 && gx < cols - 1 && gy >= 1 && gy < rows - 1) {
-        const idx = gy * cols + gx;
-        const gradPx = (flow.pressure[idx + 1] - flow.pressure[idx - 1]) * 0.5;
-        const gradPy = (flow.pressure[idx + cols] - flow.pressure[idx - cols]) * 0.5;
-        steerX = flow.dirX[idx] - gradPx * 0.7;
-        steerY = flow.dirY[idx] - gradPy * 0.7;
+      if (ix >= 1 && ix < cols - 2 && iy >= 1 && iy < rows - 2) {
+        // 双線形補間 (Bilinear Interpolation)
+        const fx = gx - ix;
+        const fy = gy - iy;
+        const w00 = (1.0 - fx) * (1.0 - fy);
+        const w10 = fx * (1.0 - fy);
+        const w01 = (1.0 - fx) * fy;
+        const w11 = fx * fy;
+
+        const idx00 = iy * cols + ix;
+        const idx10 = idx00 + 1;
+        const idx01 = idx00 + cols;
+        const idx11 = idx01 + 1;
+
+        steerX = pVx[idx00] * w00 + pVx[idx10] * w10 + pVx[idx01] * w01 + pVx[idx11] * w11;
+        steerY = pVy[idx00] * w00 + pVy[idx10] * w10 + pVy[idx01] * w01 + pVy[idx11] * w11;
       } else {
-        const d = this.scene.math.Distance.Between(ex, ey, px, py) + 0.001;
         const dx = px - ex;
         const dy = py - ey;
-        steerX = dx / d;
-        steerY = dy / d;
-      }
-
-      const steerLen = Math.hypot(steerX, steerY);
-      if (steerLen > 0.001) {
-        steerX /= steerLen;
-        steerY /= steerLen;
+        const d2 = dx * dx + dy * dy;
+        const invD = 1.0 / (Math.sqrt(d2) + 0.001);
+        steerX = dx * invD;
+        steerY = dy * invD;
       }
 
       const targetSpd = this.spd[i];
@@ -499,16 +546,18 @@ export class SwarmSystem {
 
       const pdx = this.scene.arena.posX[i] - px;
       const pdy = this.scene.arena.posY[i] - py;
-      const pDist = Math.hypot(pdx, pdy);
+      const pDist2 = pdx * pdx + pdy * pdy;
       const reach = pRadius + this.scene.arena.scale[i] * 0.42;
 
-      if (pDist < reach) {
+      if (pDist2 < reach * reach) {
         player.takeDamage(this.atkPower[i] * dt, stats);
         // ダメージを受けた時に画面を少し揺らす
         this.scene.camera.shake(3, 0.1);
+        const pDist = Math.sqrt(pDist2);
         const pen = reach - pDist;
-        const nx = pdx / (pDist || 1);
-        const ny = pdy / (pDist || 1);
+        const invPdist = 1.0 / (pDist || 1);
+        const nx = pdx * invPdist;
+        const ny = pdy * invPdist;
         this.scene.arena.posX[i] += nx * pen * 0.4;
         this.scene.arena.posY[i] += ny * pen * 0.4;
       }
@@ -517,8 +566,7 @@ export class SwarmSystem {
     this.scene.spatialHash.build();
 
     const outArray = new Uint32Array(32);
-    for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.idToIndex[i] < 0) continue;
+    for (let i = 0; i < activeCount; i++) {
       const eRadius = this.scene.arena.scale[i] * 0.42;
       const count = this.scene.spatialHash.query(
         this.scene.arena.posX[i],
@@ -528,7 +576,7 @@ export class SwarmSystem {
       );
       for (let j = 0; j < count; j++) {
         const other = outArray[j];
-        if (other > i && this.scene.arena.idToIndex[other] >= 0) {
+        if (other > i && other < activeCount) {
           const oRadius = this.scene.arena.scale[other] * 0.42;
           const targetDist = eRadius + oRadius;
           const dx = this.scene.arena.posX[other] - this.scene.arena.posX[i];
@@ -537,8 +585,9 @@ export class SwarmSystem {
           if (d2 < targetDist * targetDist && d2 > 0.0001) {
             const dist = Math.sqrt(d2);
             const overlap = (targetDist - dist) * 0.45;
-            const nx = dx / dist;
-            const ny = dy / dist;
+            const invDist = 1.0 / dist;
+            const nx = dx * invDist;
+            const ny = dy * invDist;
             this.scene.arena.posX[i] -= nx * overlap * 0.5;
             this.scene.arena.posY[i] -= ny * overlap * 0.5;
             this.scene.arena.posX[other] += nx * overlap * 0.5;

@@ -4,8 +4,10 @@
   "workspaces": ["packages/*", "apps/*", "docs_site"],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
-    "build:all": "bun run --if-present --filter \"@pluto-engine/vite-plugin-wgsl\" build && bun run --if-present --filter \"@pluto-engine/*\" build && bun run --if-present --filter \"pluto-engine\" build",
+    "build:all": "bun scripts/build-all.mjs",
     "build": "bun run build:all",
+    "docs:dev": "bun run --cwd docs_site docs:dev",
+    "docs:build": "bun run --cwd docs_site docs:build",
     "test": "vitest run --browser.enabled=true --browser.name=chromium --browser.provider=playwright",
     "test:watch": "vitest --browser.enabled=true --browser.name=chromium --browser.provider=playwright",
     "lint": "biome check .",
@@ -19,5 +21,5 @@
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },
-  "version": "1.0.8"
+  "version": "1.0.9"
 }

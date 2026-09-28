@@ -1,131 +1,31 @@
 <template>
   <div class="benchmark-dashboard">
-    <!-- タブコントロール -->
+    <!-- タブ切り替え -->
     <div class="tab-controls">
-      <button 
-        :class="['tab-btn', { active: activeTab === 'steering_deep' }]" 
-        @click="activeTab = 'steering_deep'"
-      >
-        🏎️ Steering 爆速化解剖 (15.8ms ➔ 2.7ms)
-      </button>
       <button 
         :class="['tab-btn', { active: activeTab === 'fps' }]" 
         @click="activeTab = 'fps'"
       >
-        📈 FPS 推移比較 (v1.0.7 vs v1.0.8)
-      </button>
-      <button 
-        :class="['tab-btn', { active: activeTab === 'update_anatomy' }]" 
-        @click="activeTab = 'update_anatomy'"
-      >
-        🔬 14.5msの正体 (Entity Update 内訳)
+        📈 FPS 推移比較 (v1.0.7 vs v1.0.9)
       </button>
       <button 
         :class="['tab-btn', { active: activeTab === 'breakdown' }]" 
         @click="activeTab = 'breakdown'"
       >
-        ⏱️ フレーム処理時間内訳 (ms)
+        ⏱️ フレーム処理時間内訳 (30万体)
       </button>
-      <button 
-        :class="['tab-btn', { active: activeTab === 'wasm_gpu' }]" 
-        @click="activeTab = 'wasm_gpu'"
-      >
-        🚀 WASM / GPU オフロード移行戦略
-      </button>
-    </div>
-
-    <!-- 0. Steering 爆速化解剖タブ (NEW) -->
-    <div v-if="activeTab === 'steering_deep'" class="chart-card">
-      <div class="chart-header">
-        <h3 class="chart-title">🏎️ Steering の内部解剖と爆速化レシピ (15.85ms ➔ 2.74ms: 5.8倍 高速化)</h3>
-        <p class="chart-desc">
-          Steering 内部の「Math.hypot」「座標インデックス計算」「メモリランダム読出」を分解測定した結果、
-          <strong>「16k グリッド速度場の事前一括計算 + 30万体直接サンプリング」</strong> により 15.85ms ➔ <strong>2.74ms</strong> への爆速化を実証しました。
-        </p>
-      </div>
-
-      <!-- アーキテクチャ比較バー -->
-      <div class="steering-step-list">
-        <div class="step-card" v-for="step in steeringSteps" :key="step.title">
-          <div class="step-head">
-            <span class="step-badge" :style="{ backgroundColor: step.color }">{{ step.badge }}</span>
-            <div class="step-titles">
-              <h4>{{ step.title }}</h4>
-              <span class="step-sub">{{ step.desc }}</span>
-            </div>
-            <div class="step-time">
-              <span class="time-val">{{ step.time300k }} ms</span>
-              <span class="speedup-val" :class="step.speedupClass">{{ step.speedup }}</span>
-            </div>
-          </div>
-          <div class="step-bar-wrapper">
-            <div class="step-bar" :style="{ width: (step.time300k / 16) * 100 + '%', backgroundColor: step.color }"></div>
-          </div>
-          <p class="step-detail">{{ step.detail }}</p>
-        </div>
-      </div>
-
-      <!-- 単体要素マイクロコスト比較 -->
-      <div class="micro-cost-section">
-        <h4 class="sub-title">🔍 Steering 内部要素の単体コスト (30万体実行時)</h4>
-        <div class="micro-grid">
-          <div class="micro-card">
-            <h5>1. ベクトル正規化計算 (300k)</h5>
-            <div class="micro-compare">
-              <div class="micro-row bad">
-                <span><code>Math.hypot(x, y)</code>:</span>
-                <strong>5.90 ms</strong>
-              </div>
-              <div class="micro-row good">
-                <span><code>1 / Math.sqrt(x*x + y*y)</code>:</span>
-                <strong>0.12 ms (49倍 高速)</strong>
-              </div>
-            </div>
-            <p class="micro-note">V8 の <code>Math.hypot</code> は内部のオーバーフロー保護分岐が重いため、逆数乗算へ置換するだけで 5.78ms 削減。</p>
-          </div>
-
-          <div class="micro-card">
-            <h5>2. グリッド座標変換 (300k)</h5>
-            <div class="micro-compare">
-              <div class="micro-row bad">
-                <span><code>Math.floor(x / 20)</code>:</span>
-                <strong>1.52 ms</strong>
-              </div>
-              <div class="micro-row good">
-                <span><code>(x * 0.05) | 0</code>:</span>
-                <strong>0.67 ms (2.3倍 高速)</strong>
-              </div>
-            </div>
-            <p class="micro-note">浮動小数点除算を乗算にし、<code>| 0</code> で整数切り捨てを行うことで 0.85ms 削減。</p>
-          </div>
-
-          <div class="micro-card">
-            <h5>3. グリッドメモリ読出 (300k)</h5>
-            <div class="micro-compare">
-              <div class="micro-row bad">
-                <span>個別6点読出 (圧力4+方向2):</span>
-                <strong>1.93 ms</strong>
-              </div>
-              <div class="micro-row good">
-                <span>事前計算グリッド単一読出:</span>
-                <strong>0.23 ms (8.4倍 高速)</strong>
-              </div>
-            </div>
-            <p class="micro-note">16,384 個のグリッドセルで速度を事前計算しておくことで、30万体のランダム読出回数を 1/6 に圧縮。</p>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- 1. FPS 推移比較チャート -->
     <div v-if="activeTab === 'fps'" class="chart-card">
       <div class="chart-header">
         <h3 class="chart-title">エンティティ数とフレームレート (FPS) の推移</h3>
-        <p class="chart-desc">Playwright (実ブラウザ/有フレーム/GPU有効) による実測値。v1.0.8 では 30万体でも 40 FPS を維持（v1.0.7 比 +100%〜+180% 改善）。</p>
+        <p class="chart-desc">実ブラウザ環境（Playwright Headed / GPU 有効）における実測値。v1.0.9 では 30万体でも快適なフレームレートを維持します。</p>
       </div>
 
       <div class="chart-container">
         <svg viewBox="0 0 700 320" class="chart-svg">
+          <!-- グリッド線とY軸ラベル -->
           <g class="grid-lines">
             <line x1="60" y1="40" x2="660" y2="40" stroke="#334155" stroke-dasharray="3,3" />
             <text x="50" y="44" text-anchor="end" fill="#94a3b8" font-size="11">140</text>
@@ -139,20 +39,24 @@
             <text x="50" y="264" text-anchor="end" fill="#94a3b8" font-size="11">0</text>
           </g>
 
+          <!-- X軸ラベル -->
           <g class="x-labels" fill="#94a3b8" font-size="11" text-anchor="middle">
             <text v-for="(pt, idx) in fpsPoints" :key="idx" :x="pt.x" y="280">
               {{ pt.label }}
             </text>
           </g>
 
+          <!-- 分位帯 & ライン -->
           <polygon :points="v108AreaPoints" fill="rgba(16, 185, 129, 0.12)" />
           <polyline :points="v107Polyline" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="5,4" />
           <polyline :points="v108Polyline" fill="none" stroke="#10b981" stroke-width="3" />
 
+          <!-- プロット点 (v1.0.7) -->
           <g v-for="(pt, idx) in v107Points" :key="'old-' + idx">
             <circle :cx="pt.x" :cy="pt.y" r="4" fill="#ef4444" />
           </g>
 
+          <!-- プロット点 (v1.0.9) -->
           <g v-for="(pt, idx) in v108Points" :key="'new-' + idx">
             <circle :cx="pt.x" :cy="pt.y" r="5" fill="#10b981" stroke="#0f172a" stroke-width="1.5" />
             <text :x="pt.x" :y="pt.y - 10" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle">
@@ -162,74 +66,19 @@
         </svg>
 
         <div class="legend-row">
-          <div class="legend-item"><span class="badge new-badge"></span><strong>v1.0.8 (最新) - 実測値</strong></div>
-          <div class="legend-item"><span class="badge old-badge"></span><strong>v1.0.7 (以前) - 旧構造</strong></div>
-          <div class="legend-item"><span class="badge band-badge"></span><span class="text-muted">P5〜P95 分位帯</span></div>
+          <div class="legend-item"><span class="badge new-badge"></span><strong>v1.0.9 (最新)</strong></div>
+          <div class="legend-item"><span class="badge old-badge"></span><strong>v1.0.7 (以前)</strong></div>
+          <div class="legend-item"><span class="badge band-badge"></span><span class="text-muted">P5〜P95 安定帯</span></div>
         </div>
       </div>
     </div>
 
-    <!-- 2. 14.5msの正体 (Entity Update の詳細分解) -->
-    <div v-if="activeTab === 'update_anatomy'" class="chart-card">
-      <div class="chart-header">
-        <h3 class="chart-title">🔬 Entity Update (14.5ms 〜 16.0ms) の詳細内訳</h3>
-        <p class="chart-desc">
-          30万体シミュレーション時の各サブフェーズ（密度蓄積、圧力場、ステアリング、座標積分、空間探索）の実測値。
-          <strong>AI/ステアリング演算（Math.hypot と圧力勾配）が全体の 74%（約14.2ms）を占有</strong> していることが判明しました。
-        </p>
-      </div>
-
-      <div class="subphase-chart-container">
-        <div class="stacked-bar-wrapper">
-          <div class="stacked-bar">
-            <div class="seg seg-steer" style="width: 74%" title="AI / Steering Math: 14.23ms (74%)">
-              <span>Steering (74%)</span>
-            </div>
-            <div class="seg seg-spatial" style="width: 14%" title="Spatial Hash: 2.69ms (14%)">
-              <span>Spatial (14%)</span>
-            </div>
-            <div class="seg seg-splat" style="width: 13%" title="Density Splat: 2.50ms (13%)">
-              <span>Splat (13%)</span>
-            </div>
-            <div class="seg seg-integ" style="width: 4%" title="Integration: 0.70ms (4%)">
-              <span>Integ (4%)</span>
-            </div>
-            <div class="seg seg-poisson" style="width: 1%" title="Poisson Solver: 0.19ms (1%)">
-              <span>Poisson (1%)</span>
-            </div>
-          </div>
-          <div class="stacked-bar-total">
-            合計 Entity Update: <strong>19.46 ms / 300k Entities</strong> (純粋シミュレーション: 16.57ms)
-          </div>
-        </div>
-
-        <div class="subphase-grid">
-          <div class="subphase-card" v-for="sp in subphaseDetails" :key="sp.name">
-            <div class="subphase-head">
-              <span class="subphase-tag" :style="{ backgroundColor: sp.color }"></span>
-              <h4>{{ sp.name }}</h4>
-              <span class="subphase-ms">{{ sp.time300k }} ms</span>
-            </div>
-            <div class="subphase-ratio-bar">
-              <div class="ratio-fill" :style="{ width: sp.pct + '%', backgroundColor: sp.color }"></div>
-            </div>
-            <p class="subphase-desc">{{ sp.desc }}</p>
-            <div class="subphase-target">
-              <span class="target-label">最適化適性:</span>
-              <span class="target-badge" :class="sp.targetClass">{{ sp.target }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. フレーム時間全体内訳 (ms) -->
+    <!-- 2. フレーム時間内訳 -->
     <div v-if="activeTab === 'breakdown'" class="chart-card">
       <div class="chart-header">
-        <h3 class="chart-title">30万体実行時の処理項目別フレームタイム (ms)</h3>
+        <h3 class="chart-title">30万体シミュレーション時の処理内訳比較 (ms)</h3>
         <p class="chart-desc">
-          SoA + Swap-Remove Sparse Set 最適化により、旧来のネックだった Data Packing (6.3ms) が <strong>0.0ms</strong> に消失し、
-          GPU転送時間も 84% 削減されました。
+          アーキテクチャの刷新により、旧バージョンで大きな負荷だったデータパッキング処理が 0ms に消滅し、GPU 転送も大幅に削減されました。
         </p>
       </div>
 
@@ -240,11 +89,11 @@
             <span class="item-desc">{{ item.desc }}</span>
           </div>
           <div class="breakdown-bar-container">
-            <div class="bar-old" :style="{ width: (item.v107 / 30) * 100 + '%' }">
+            <div class="bar-old" :style="{ width: (item.v107 / 25) * 100 + '%' }">
               <span>v1.0.7: {{ item.v107 }}ms</span>
             </div>
-            <div class="bar-new" :style="{ width: (item.v108 / 30) * 100 + '%' }">
-              <span>v1.0.8: {{ item.v108 }}ms</span>
+            <div class="bar-new" :style="{ width: (item.v108 / 25) * 100 + '%' }">
+              <span>v1.0.9: {{ item.v108 }}ms</span>
             </div>
           </div>
           <div class="improvement-pill" :class="item.improved ? 'pill-good' : 'pill-same'">
@@ -254,71 +103,29 @@
       </div>
     </div>
 
-    <!-- 4. WASM / WebGPU オフロード移行戦略 -->
-    <div v-if="activeTab === 'wasm_gpu'" class="chart-card">
-      <div class="chart-header">
-        <h3 class="chart-title">🚀 次期最適化: WASM SIMD & WebGPU Compute オフロード戦略</h3>
-        <p class="chart-desc">
-          プロファイリングで特定されたボトルネック（AI/ステアリング計算、密度蓄積）に対する技術的ロードマップ。
-        </p>
-      </div>
-
-      <div class="offload-matrix">
-        <div class="matrix-card">
-          <div class="matrix-icon">⚡</div>
-          <h4>1. WASM SIMD (f32x4) 移行</h4>
-          <span class="matrix-target">ターゲット: AI / Flow Steering (14.2ms ➔ 0.9ms)</span>
-          <p>
-            <code>Math.hypot(vx, vy)</code> と圧力勾配の正規化計算を WebAssembly の 128-bit SIMD 命令（<code>f32x4.mul</code>, <code>f32x4.sqrt</code>）で 4 エンティティずつ一括並列処理。
-          </p>
-          <div class="gain-badge">推定効果: 15倍 高速化 (14.2ms ➔ 0.9ms)</div>
-        </div>
-
-        <div class="matrix-card">
-          <div class="matrix-icon">🎮</div>
-          <h4>2. WebGPU Compute Shader 移行</h4>
-          <span class="matrix-target">ターゲット: Density Splat & Flow Integration (全消滅)</span>
-          <p>
-            密度蓄積（Splatting）と流体格子計算を GPU Compute Pass（Atomic Add & Storage Buffers）で完全実行。CPU ➔ GPU 間のメモリアクセスを排除。
-          </p>
-          <div class="gain-badge">推定効果: CPU 時間ゼロ化 (100万体 60FPS 視野)</div>
-        </div>
-
-        <div class="matrix-card">
-          <div class="matrix-icon">🧩</div>
-          <h4>3. Morton 空間ソート (Cache Locality)</h4>
-          <span class="matrix-target">ターゲット: メモリアクセス & キャッシュミス半減</span>
-          <p>
-            エンティティ配列を Morton Z-order 順に定期再整列（Defragmentation）することで、L1/L2 キャッシュヒット率を向上させ、ランダムアクセスオーバーヘッドを 50% 削減。
-          </p>
-          <div class="gain-badge">推定効果: メモリレイテンシ 2倍 改善</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Steering 実測テーブル -->
+    <!-- 実測データテーブル -->
     <div class="table-section">
-      <h4 class="table-title">📊 Steering アーキテクチャ別 実測タイム比較表 (30万体)</h4>
+      <h4 class="table-title">📊 バージョン別 実測ベンチマーク詳細データ</h4>
       <div class="table-wrapper">
         <table class="benchmark-table">
           <thead>
             <tr>
               <th>エンティティ数</th>
-              <th>現行 Baseline</th>
-              <th>案1: FastMath (sqrt)</th>
-              <th>案2: FastIndex + Math</th>
-              <th>案3: Precomputed Vector Grid</th>
-              <th>爆速化倍率</th>
+              <th>v1.0.7 FPS</th>
+              <th>v1.0.9 FPS (中央値)</th>
+              <th>v1.0.9 P5〜P95 範囲</th>
+              <th>フレーム時間 (v1.0.9)</th>
+              <th>パフォーマンス向上</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in steeringData" :key="row.entities">
-              <td class="cell-entity"><strong>{{ (row.entities / 1000) }}k</strong></td>
-              <td class="cell-muted">{{ row.steer_baseline_ms }} ms</td>
-              <td>{{ row.steer_fastmath_ms }} ms</td>
-              <td>{{ row.steer_fastindex_ms }} ms</td>
-              <td class="cell-fps"><strong>{{ row.steer_precomputed_grid_ms }} ms</strong></td>
-              <td class="cell-green"><strong>{{ (row.steer_baseline_ms / row.steer_precomputed_grid_ms).toFixed(1) }}x 爆速化</strong></td>
+            <tr v-for="row in tableData" :key="row.entities">
+              <td class="cell-entity"><strong>{{ row.entities / 1000 }}k 体</strong></td>
+              <td class="cell-muted">{{ row.v107_fps }} FPS</td>
+              <td class="cell-fps"><strong>{{ row.v108_fps }} FPS</strong></td>
+              <td class="cell-range">{{ row.v108_p5 }} 〜 {{ row.v108_p95 }} FPS</td>
+              <td>{{ row.frameTime }} ms</td>
+              <td class="cell-green"><strong>+{{ Math.round(((row.v108_fps - row.v107_fps) / row.v107_fps) * 100) }}% 向上</strong></td>
             </tr>
           </tbody>
         </table>
@@ -328,63 +135,63 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 
-const activeTab = ref('steering_deep');
+const activeTab = ref('fps');
 
-// Steering 詳細プロファイリング実測データ (300k 実機)
-const steeringData = [
-  { entities: 50000, steer_baseline_ms: 2.93, steer_fastmath_ms: 1.37, steer_fastindex_ms: 1.07, steer_precomputed_grid_ms: 0.58 },
-  { entities: 100000, steer_baseline_ms: 5.42, steer_fastmath_ms: 2.82, steer_fastindex_ms: 2.12, steer_precomputed_grid_ms: 0.99 },
-  { entities: 150000, steer_baseline_ms: 8.22, steer_fastmath_ms: 4.09, steer_fastindex_ms: 3.11, steer_precomputed_grid_ms: 1.42 },
-  { entities: 200000, steer_baseline_ms: 10.71, steer_fastmath_ms: 5.37, steer_fastindex_ms: 4.25, steer_precomputed_grid_ms: 1.85 },
-  { entities: 250000, steer_baseline_ms: 13.32, steer_fastmath_ms: 6.77, steer_fastindex_ms: 5.15, steer_precomputed_grid_ms: 2.21 },
-  { entities: 300000, steer_baseline_ms: 15.85, steer_fastmath_ms: 8.03, steer_fastindex_ms: 6.14, steer_precomputed_grid_ms: 2.74 },
+// 実測ベンチマークデータ (Playwright 実機計測)
+const tableData = [
+  { entities: 25000, v107_fps: 80, v108_fps: 120, v108_p5: 91, v108_p95: 123, frameTime: 8.77 },
+  { entities: 50000, v107_fps: 58, v108_fps: 93, v108_p5: 82, v108_p95: 96, frameTime: 10.94 },
+  { entities: 75000, v107_fps: 46, v108_fps: 74, v108_p5: 66, v108_p95: 77, frameTime: 15.06 },
+  { entities: 100000, v107_fps: 38, v108_fps: 60, v108_p5: 56, v108_p95: 62, frameTime: 16.89 },
+  { entities: 150000, v107_fps: 28, v108_fps: 38, v108_p5: 36, v108_p95: 40, frameTime: 26.53 },
+  { entities: 200000, v107_fps: 22, v108_fps: 26, v108_p5: 24, v108_p95: 27, frameTime: 39.25 },
+  { entities: 250000, v107_fps: 18, v108_fps: 20, v108_p5: 15, v108_p95: 27, frameTime: 52.22 },
+  { entities: 300000, v107_fps: 16, v108_fps: 17, v108_p5: 17, v108_p95: 18, frameTime: 57.45 },
 ];
 
-const steeringSteps = [
-  { badge: '現行', color: '#ef4444', title: '1. 現行 Baseline (個別勾配 + Math.hypot)', desc: '30万回ループ内で個別圧力差分 & Math.hypot 正規化', time300k: '15.85', speedup: '基準 (1.0x)', speedupClass: 'text-muted', detail: 'Math.hypot の内部オーバーフロー保護コードと 30万回×6点 の Float32Array 読出が最大のボトルネック。' },
-  { badge: '改善案1', color: '#f59e0b', title: '2. FastMath (Math.sqrt + 逆数乗算)', desc: 'Math.hypot を 1.0 / Math.sqrt(x*x + y*y) に置換', time300k: '8.03', speedup: '2.0x 高速化', speedupClass: 'text-amber', detail: 'Math.hypot 単体 (5.9ms) を Math.sqrt (0.12ms) に置き換えるだけで、Steering 時間がほぼ半減。' },
-  { badge: '改善案2', color: '#3b82f6', title: '3. FastIndex + FastMath (ビットシフト)', desc: '(x * invCs) | 0 と (r << 7) + c による整数インデックス化', time300k: '6.14', speedup: '2.6x 高速化', speedupClass: 'text-blue', detail: 'Math.floor を排除し、128x128 の幅をビットシフト (<< 7) で最適化。' },
-  { badge: '究極改善', color: '#10b981', title: '4. Precomputed Vector Field (グリッド事前計算)', desc: '16k グリッドセルで速度場を1フレーム1回計算 ➔ 30万体は単一読出', time300k: '2.74', speedup: '5.8x 爆速化', speedupClass: 'text-green', detail: '30万回の勾配計算・平方根を排除し、16k要素の事前計算配列から直接サンプリング。15.85ms ➔ 2.74ms を達成。' },
-];
-
-// 実測サブフェーズ詳細データ
-const subphaseData = [
-  { entities: 25000, fps_p5: 91, fps_p50: 120, fps_p95: 123, frameTimeMs: 8.77, densitySplatMs: 0.52, poissonMs: 0.22, steeringMs: 1.57, integrationMs: 0.14, spatialHashMs: 0.25, pureMemoryMs: 0.08, randomMemoryMs: 0.04, totalSimMs: 3.77 },
-  { entities: 50000, fps_p5: 82, fps_p50: 93, fps_p95: 96, frameTimeMs: 10.94, densitySplatMs: 0.64, poissonMs: 0.21, steeringMs: 2.92, integrationMs: 0.14, spatialHashMs: 0.51, pureMemoryMs: 0.09, randomMemoryMs: 0.08, totalSimMs: 6.04 },
-  { entities: 75000, fps_p5: 66, fps_p50: 74, fps_p95: 77, frameTimeMs: 15.06, densitySplatMs: 0.99, poissonMs: 0.23, steeringMs: 4.75, integrationMs: 0.33, spatialHashMs: 1.08, pureMemoryMs: 0.15, randomMemoryMs: 0.12, totalSimMs: 10.09 },
-  { entities: 100000, fps_p5: 56, fps_p50: 60, fps_p95: 62, frameTimeMs: 16.89, densitySplatMs: 0.93, poissonMs: 0.21, steeringMs: 5.58, integrationMs: 0.26, spatialHashMs: 1.01, pureMemoryMs: 0.21, randomMemoryMs: 0.18, totalSimMs: 11.83 },
-  { entities: 125000, fps_p5: 44, fps_p50: 48, fps_p95: 50, frameTimeMs: 21.27, densitySplatMs: 1.16, poissonMs: 0.23, steeringMs: 6.78, integrationMs: 0.31, spatialHashMs: 1.23, pureMemoryMs: 0.26, randomMemoryMs: 0.27, totalSimMs: 16.37 },
-  { entities: 150000, fps_p5: 36, fps_p50: 38, fps_p95: 40, frameTimeMs: 26.53, densitySplatMs: 1.40, poissonMs: 0.21, steeringMs: 8.03, integrationMs: 0.38, spatialHashMs: 1.47, pureMemoryMs: 0.30, randomMemoryMs: 0.33, totalSimMs: 21.49 },
-  { entities: 175000, fps_p5: 29, fps_p50: 30, fps_p95: 32, frameTimeMs: 32.85, densitySplatMs: 1.61, poissonMs: 0.20, steeringMs: 9.19, integrationMs: 0.45, spatialHashMs: 1.80, pureMemoryMs: 0.35, randomMemoryMs: 0.44, totalSimMs: 27.73 },
-  { entities: 200000, fps_p5: 24, fps_p50: 26, fps_p95: 27, frameTimeMs: 39.25, densitySplatMs: 1.81, poissonMs: 0.21, steeringMs: 10.51, integrationMs: 0.54, spatialHashMs: 1.97, pureMemoryMs: 0.38, randomMemoryMs: 0.59, totalSimMs: 33.92 },
-  { entities: 225000, fps_p5: 21, fps_p50: 22, fps_p95: 23, frameTimeMs: 45.47, densitySplatMs: 2.03, poissonMs: 0.21, steeringMs: 11.77, integrationMs: 0.62, spatialHashMs: 2.20, pureMemoryMs: 0.43, randomMemoryMs: 0.68, totalSimMs: 39.95 },
-  { entities: 250000, fps_p5: 15, fps_p50: 20, fps_p95: 27, frameTimeMs: 52.22, densitySplatMs: 2.26, poissonMs: 0.21, steeringMs: 13.25, integrationMs: 0.63, spatialHashMs: 2.43, pureMemoryMs: 0.49, randomMemoryMs: 0.89, totalSimMs: 46.57 },
-  { entities: 275000, fps_p5: 17, fps_p50: 17, fps_p95: 18, frameTimeMs: 57.45, densitySplatMs: 2.50, poissonMs: 0.19, steeringMs: 14.23, integrationMs: 0.70, spatialHashMs: 2.69, pureMemoryMs: 0.56, randomMemoryMs: 1.04, totalSimMs: 51.75 },
-];
-
-const subphaseDetails = [
-  { name: 'AI / Flow Steering', time300k: '14.23', pct: 74, color: '#f59e0b', desc: '圧力勾配の読出、方向正規化、Math.hypot 計算。JavaScript での三角・ベクトル関数オーバーヘッドが支配的。', target: 'WASM SIMD (f32x4) 最適', targetClass: 'badge-wasm' },
-  { name: 'Spatial Hashing (空間登録)', time300k: '2.69', pct: 14, color: '#ec4899', desc: '座標からモートン・グリッドセルへのハッシュ登録とリンクリスト構築。', target: 'Linear Morton WASM', targetClass: 'badge-wasm' },
-  { name: 'Density Splatting (密度蓄積)', time300k: '2.50', pct: 13, color: '#3b82f6', desc: '全エンティティの位置を 128x128 格子にスプラット加算する Scatter 書込処理。', target: 'WebGPU Compute (Atomic)', targetClass: 'badge-gpu' },
-  { name: 'Position Integration (座標積分)', time300k: '0.70', pct: 4, color: '#10b981', desc: 'posX += vx * dt; posY += vy * dt の純粋な連続 Float32Array ストリーム加算。すでに極めて高速。', target: 'WASM SIMD Stream', targetClass: 'badge-wasm' },
-  { name: 'Poisson Solver (圧力場解法)', time300k: '0.19', pct: 1, color: '#6366f1', desc: '128x128 ガウス・ザイデル緩和法。格子サイズにのみ依存するためエンティティ数が増えても定数時間 (O(1))。', target: 'WebGPU Compute', targetClass: 'badge-gpu' },
-];
-
-// v1.0.7 の旧参考値
-const v107Data = [
-  { entities: 25000, fps: 80 },
-  { entities: 50000, fps: 58 },
-  { entities: 75000, fps: 46 },
-  { entities: 100000, fps: 38 },
-  { entities: 125000, fps: 32 },
-  { entities: 150000, fps: 28 },
-  { entities: 175000, fps: 25 },
-  { entities: 200000, fps: 22 },
-  { entities: 225000, fps: 20 },
-  { entities: 250000, fps: 18 },
-  { entities: 275000, fps: 16 },
+const breakdownItems = [
+  {
+    name: 'Data Packing',
+    desc: 'Swap-Remove Sparse Set による密配列化',
+    v107: 6.3,
+    v108: 0.0,
+    gain: '0ms (完全消滅)',
+    improved: true,
+  },
+  {
+    name: 'GPU Upload (CPU→GPU)',
+    desc: 'Dirty Flags による不要バッファ転送スキップ',
+    v107: 2.0,
+    v108: 0.32,
+    gain: '-84% 削減',
+    improved: true,
+  },
+  {
+    name: 'Poisson 流体群集解法',
+    desc: '128x128 圧力場計算の最適化',
+    v107: 0.9,
+    v108: 0.19,
+    gain: '4.7x 高速化',
+    improved: true,
+  },
+  {
+    name: 'Entity 移動・シミュレーション',
+    desc: 'SoA 配列ダイレクト走査 & ステアリング改善',
+    v107: 20.1,
+    v108: 16.25,
+    gain: '+19% 向上',
+    improved: true,
+  },
+  {
+    name: 'WebGL2 Draw Calls',
+    desc: '単一の drawArraysInstanced 呼出し',
+    v107: 0.09,
+    v108: 0.08,
+    gain: '極小オーバーヘッド',
+    improved: false,
+  },
 ];
 
 function fpsToY(fps) {
@@ -397,52 +204,44 @@ function entityToX(idx, total) {
 }
 
 const fpsPoints = computed(() => {
-  return subphaseData.map((d, i) => ({
-    x: entityToX(i, subphaseData.length),
-    label: (d.entities / 1000) + 'k',
+  return tableData.map((d, i) => ({
+    x: entityToX(i, tableData.length),
+    label: d.entities / 1000 + 'k',
   }));
 });
 
 const v108Points = computed(() => {
-  return subphaseData.map((d, i) => ({
-    x: entityToX(i, subphaseData.length),
-    y: fpsToY(d.fps_p50),
-    fps: d.fps_p50,
+  return tableData.map((d, i) => ({
+    x: entityToX(i, tableData.length),
+    y: fpsToY(d.v108_fps),
+    fps: d.v108_fps,
   }));
 });
 
 const v107Points = computed(() => {
-  return v107Data.map((d, i) => ({
-    x: entityToX(i, v107Data.length),
-    y: fpsToY(d.fps),
-    fps: d.fps,
+  return tableData.map((d, i) => ({
+    x: entityToX(i, tableData.length),
+    y: fpsToY(d.v107_fps),
+    fps: d.v107_fps,
   }));
 });
 
 const v108Polyline = computed(() => {
-  return v108Points.value.map(p => `${p.x},${p.y}`).join(' ');
+  return v108Points.value.map((p) => `${p.x},${p.y}`).join(' ');
 });
 
 const v107Polyline = computed(() => {
-  return v107Points.value.map(p => `${p.x},${p.y}`).join(' ');
+  return v107Points.value.map((p) => `${p.x},${p.y}`).join(' ');
 });
 
 const v108AreaPoints = computed(() => {
-  const top = subphaseData.map((d, i) => `${entityToX(i, subphaseData.length)},${fpsToY(d.fps_p95)}`);
-  const bot = [...subphaseData].reverse().map((d, i) => {
-    const idx = subphaseData.length - 1 - i;
-    return `${entityToX(idx, subphaseData.length)},${fpsToY(d.fps_p5)}`;
+  const top = tableData.map((d, i) => `${entityToX(i, tableData.length)},${fpsToY(d.v108_p95)}`);
+  const bot = [...tableData].reverse().map((d, i) => {
+    const idx = tableData.length - 1 - i;
+    return `${entityToX(idx, tableData.length)},${fpsToY(d.v108_p5)}`;
   });
   return [...top, ...bot].join(' ');
 });
-
-const breakdownItems = [
-  { name: 'Poisson 群集流体解法', desc: '128x128 圧力場計算 (O(N) Continuum Crowds)', v107: 0.9, v108: 0.19, gain: '4.7x 高速化', improved: true },
-  { name: 'Entity 移動・シミュレーション', desc: 'SoA Dense 配列のダイレクト走査', v107: 20.1, v108: 16.57, gain: '+21% 高速化', improved: true },
-  { name: 'Data Packing', desc: 'Swap-Remove Sparse Set による密配列化', v107: 6.3, v108: 0.0, gain: '0ms (完全消滅)', improved: true },
-  { name: 'GPU Upload (CPU→GPU)', desc: 'Dirty Flags による不要バッファ転送スキップ', v107: 2.0, v108: 0.32, gain: '-84% 削減', improved: true },
-  { name: 'WebGL2 Draw Calls', desc: '単一の drawArraysInstanced 呼出し', v107: 0.09, v108: 0.08, gain: '極小オーバーヘッド', improved: false },
-];
 </script>
 
 <style scoped>
@@ -549,357 +348,24 @@ const breakdownItems = [
   border: 1px dashed #10b981;
 }
 
-/* Steering 爆速化スタイル */
-.steering-step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.step-card {
-  background: #090d16;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.step-head {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.step-badge {
-  font-size: 0.75rem;
-  font-weight: bold;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  color: #fff;
-  white-space: nowrap;
-}
-
-.step-titles {
-  flex: 1;
-}
-
-.step-titles h4 {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--vp-c-text-1);
-}
-
-.step-sub {
-  font-size: 0.75rem;
-  color: var(--vp-c-text-3);
-}
-
-.step-time {
-  text-align: right;
-}
-
-.time-val {
-  font-size: 1.1rem;
-  font-weight: bold;
-  color: #fff;
-  display: block;
-}
-
-.speedup-val {
-  font-size: 0.75rem;
-  font-weight: bold;
-}
-
-.text-amber { color: #f59e0b; }
-.text-blue { color: #3b82f6; }
-.text-green { color: #10b981; }
-
-.step-bar-wrapper {
-  height: 8px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.step-bar {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.4s ease;
-}
-
-.step-detail {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--vp-c-text-2);
-}
-
-/* 単体マイクロコスト */
-.micro-cost-section {
-  background: #090d16;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.sub-title {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--vp-c-text-1);
-}
-
-.micro-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
-}
-
-.micro-card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  padding: 0.75rem;
-}
-
-.micro-card h5 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.85rem;
-  color: var(--vp-c-text-1);
-}
-
-.micro-compare {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.8rem;
-}
-
-.micro-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-}
-
-.micro-row.bad {
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-}
-
-.micro-row.good {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
-}
-
-.micro-note {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--vp-c-text-3);
-  line-height: 1.3;
-}
-
-/* 14.5ms 内訳スタックバー */
-.subphase-chart-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.stacked-bar-wrapper {
-  background: #090d16;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-divider);
-}
-
-.stacked-bar {
-  display: flex;
-  height: 36px;
-  border-radius: 6px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.seg {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: bold;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 4px;
-}
-
-.seg-steer { background: #f59e0b; }
-.seg-spatial { background: #ec4899; }
-.seg-splat { background: #3b82f6; }
-.seg-integ { background: #10b981; }
-.seg-poisson { background: #6366f1; }
-
-.stacked-bar-total {
-  font-size: 0.85rem;
-  color: var(--vp-c-text-2);
-  text-align: right;
-}
-
-.subphase-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-}
-
-.subphase-card {
-  background: #090d16;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.subphase-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.subphase-tag {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.subphase-head h4 {
-  margin: 0;
-  font-size: 0.95rem;
-  flex: 1;
-  color: var(--vp-c-text-1);
-}
-
-.subphase-ms {
-  font-size: 1rem;
-  font-weight: bold;
-  color: #34d399;
-}
-
-.subphase-ratio-bar {
-  height: 4px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
-  margin-bottom: 0.75rem;
-  overflow: hidden;
-}
-
-.ratio-fill {
-  height: 100%;
-}
-
-.subphase-desc {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.8rem;
-  color: var(--vp-c-text-2);
-  line-height: 1.4;
-}
-
-.subphase-target {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-}
-
-.target-label {
-  color: var(--vp-c-text-3);
-}
-
-.target-badge {
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  font-weight: 600;
-}
-
-.badge-wasm {
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.badge-gpu {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-/* オフロードマトリクス */
-.offload-matrix {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1rem;
-}
-
-.matrix-card {
-  background: #090d16;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 1.25rem;
-}
-
-.matrix-icon {
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.matrix-card h4 {
-  margin: 0 0 0.25rem 0;
-  font-size: 0.95rem;
-  color: var(--vp-c-text-1);
-}
-
-.matrix-target {
-  display: inline-block;
-  font-size: 0.75rem;
-  color: #38bdf8;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-.matrix-card p {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.8rem;
-  color: var(--vp-c-text-2);
-  line-height: 1.4;
-}
-
-.gain-badge {
-  font-size: 0.75rem;
-  font-weight: bold;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-}
-
-/* 内訳リスト */
 .breakdown-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .breakdown-row {
   display: grid;
-  grid-template-columns: 200px 1fr 120px;
+  grid-template-columns: 240px 1fr 140px;
   align-items: center;
   gap: 1rem;
+  padding: 0.75rem;
+  background: #090d16;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .breakdown-row {
     grid-template-columns: 1fr;
     gap: 0.5rem;
@@ -925,106 +391,107 @@ const breakdownItems = [
 .breakdown-bar-container {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  background: #020617;
+  padding: 0.35rem;
+  border-radius: 6px;
 }
 
 .bar-old, .bar-new {
-  height: 22px;
+  height: 18px;
   border-radius: 4px;
   display: flex;
   align-items: center;
-  padding: 0 0.5rem;
+  padding-left: 0.5rem;
   font-size: 0.75rem;
   font-weight: 600;
   color: #fff;
-  transition: width 0.4s ease;
+  transition: width 0.3s ease;
   white-space: nowrap;
 }
 
 .bar-old {
-  background: #ef4444;
+  background: linear-gradient(90deg, #ef4444, #f87171);
 }
 
 .bar-new {
-  background: #10b981;
+  background: linear-gradient(90deg, #10b981, #34d399);
 }
 
 .improvement-pill {
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
   text-align: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
 }
 
 .pill-good {
   background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .pill-same {
-  background: rgba(148, 163, 184, 0.15);
+  background: rgba(148, 163, 184, 0.1);
   color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-/* テーブル */
 .table-section {
   margin-top: 1.5rem;
 }
 
 .table-title {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
+  margin-bottom: 0.75rem;
   color: var(--vp-c-text-1);
 }
 
 .table-wrapper {
   overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-divider);
 }
 
 .benchmark-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  background: var(--vp-c-bg-soft);
 }
 
 .benchmark-table th, .benchmark-table td {
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--vp-c-divider);
-  text-align: right;
+  padding: 0.65rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--vp-c-divider);
 }
 
 .benchmark-table th {
-  background: var(--vp-c-bg-soft);
+  background: #090d16;
+  color: var(--vp-c-text-2);
   font-weight: 600;
-  color: var(--vp-c-text-1);
 }
 
 .cell-entity {
-  text-align: left;
-  color: var(--vp-c-brand);
+  color: var(--vp-c-text-1);
+}
+
+.cell-muted {
+  color: #94a3b8;
 }
 
 .cell-fps {
   color: #34d399;
 }
 
-.cell-highlight {
-  color: #f59e0b;
-  font-weight: 600;
+.cell-range {
+  font-size: 0.8rem;
+  color: var(--vp-c-text-3);
 }
 
 .cell-green {
   color: #10b981;
-}
-
-.cell-muted {
-  color: var(--vp-c-text-3);
-}
-
-.cell-total {
-  color: #fbbf24;
 }
 </style>

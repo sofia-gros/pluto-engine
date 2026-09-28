@@ -33,21 +33,22 @@ Chart.register(
  */
 export interface SteeringDissectionEntry {
   entities: number;
-  
+
   // 1. 各処理要素の単体コスト (ms)
-  t_coord_mapping_floor: number;      // Math.floor(lx / cs) 座標変換
-  t_coord_mapping_fast: number;       // (lx * invCs) | 0 高速ビットシフト座標変換
-  t_memory_lookups_raw: number;       // 6箇所の Float32Array ランダム読出 (pressure 4点 + dirX/Y 2点)
-  t_math_hypot: number;               // Math.hypot(svx, svy) による正規化
-  t_math_sqrt_inv: number;            // 1.0 / Math.sqrt(d2) 乗算正規化
-  t_velocity_writes: number;          // vx[i], vy[i] への Float32Array 書込
-  
+  t_coord_mapping_floor: number; // Math.floor(lx / cs) 座標変換
+  t_coord_mapping_fast: number; // (lx * invCs) | 0 高速ビットシフト座標変換
+  t_memory_lookups_raw: number; // 6箇所の Float32Array ランダム読出 (pressure 4点 + dirX/Y 2点)
+  t_math_hypot: number; // Math.hypot(svx, svy) による正規化
+  t_math_sqrt_inv: number; // 1.0 / Math.sqrt(d2) 乗算正規化
+  t_velocity_writes: number; // vx[i], vy[i] への Float32Array 書込
+
   // 2. アーキテクチャ別 Steering 全体時間の比較 (ms)
-  steer_baseline_ms: number;          // 【現行】30万回個別勾配計算 + Math.hypot (14.2ms)
-  steer_fastmath_ms: number;          // 【改善案1】Math.sqrt & 逆数乗算化
-  steer_fastindex_ms: number;         // 【改善案2】Fast Indexing + Fast Math
-  steer_precomputed_grid_ms: number;  // 【改善案3・究極】16kグリッド一括事前計算 + 単一サンプリング
-  
+  steer_baseline_ms: number; // 【現行】30万回個別勾配計算 + Math.hypot (15.8ms)
+  steer_fastmath_ms: number; // 【改善案1】Math.sqrt & 逆数乗算化 (8.0ms)
+  steer_fastindex_ms: number; // 【改善案2】Fast Indexing + Fast Math (6.1ms)
+  steer_precomputed_grid_ms: number; // 【改善案3】16kグリッド事前計算 (2.7ms)
+  steer_bilinear_grid_ms: number; // 【改善案4・本命】16kグリッド + 双線形補間 (3.2ms)
+
   sampleCount: number;
 }
 
@@ -63,11 +64,11 @@ class BenchmarkFlowGrid {
   dirY: Float32Array;
   density: Float32Array;
   pressure: Float32Array;
-  
+
   // 事前計算済み統合ステアリングベクトルグリッド (128x128 = 16,384 要素)
   precomputedVx: Float32Array;
   precomputedVy: Float32Array;
-  
+
   originX = 0;
   originY = 0;
 
@@ -289,7 +290,13 @@ class BenchmarkScene extends Scene {
     for (let i = 0; i < activeCount; i++) {
       const idx = indices[i];
       if (idx > 128 && idx < 16384 - 128) {
-        dummySum += dX[idx] + dY[idx] + pressure[idx + 1] + pressure[idx - 1] + pressure[idx + 128] + pressure[idx - 128];
+        dummySum +=
+          dX[idx] +
+          dY[idx] +
+          pressure[idx + 1] +
+          pressure[idx - 1] +
+          pressure[idx + 128] +
+          pressure[idx - 128];
       }
     }
     const tMemLookupEnd = performance.now();
@@ -333,13 +340,16 @@ class BenchmarkScene extends Scene {
     // 【現行 Baseline】30万回個別勾配計算 + Math.hypot
     const tBaseStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
-      const x = posX[i], y = posY[i];
-      const lx = x - ox, ly = y - oy;
+      const x = posX[i],
+        y = posY[i];
+      const lx = x - ox,
+        ly = y - oy;
       if (lx >= 0 && lx < fw && ly >= 0 && ly < fh) {
         const c = Math.floor(lx / cs);
         const r = Math.floor(ly / cs);
         const idx = r * cols + c;
-        let svx = dX[idx], svy = dY[idx];
+        let svx = dX[idx],
+          svy = dY[idx];
         if (r > 0 && r < this.flow.rows - 1 && c > 0 && c < cols - 1) {
           svx -= (pressure[idx + 1] - pressure[idx - 1]) * 0.1;
           svy -= (pressure[idx + cols] - pressure[idx - cols]) * 0.1;
@@ -355,13 +365,16 @@ class BenchmarkScene extends Scene {
     // 【改善案1: FastMath】Math.sqrt & 逆数乗算
     const tFmStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
-      const x = posX[i], y = posY[i];
-      const lx = x - ox, ly = y - oy;
+      const x = posX[i],
+        y = posY[i];
+      const lx = x - ox,
+        ly = y - oy;
       if (lx >= 0 && lx < fw && ly >= 0 && ly < fh) {
         const c = Math.floor(lx / cs);
         const r = Math.floor(ly / cs);
         const idx = r * cols + c;
-        let svx = dX[idx], svy = dY[idx];
+        let svx = dX[idx],
+          svy = dY[idx];
         if (r > 0 && r < this.flow.rows - 1 && c > 0 && c < cols - 1) {
           svx -= (pressure[idx + 1] - pressure[idx - 1]) * 0.1;
           svy -= (pressure[idx + cols] - pressure[idx - cols]) * 0.1;
@@ -377,7 +390,8 @@ class BenchmarkScene extends Scene {
     // 【改善案2: FastIndex + FastMath】
     const tFiStart = performance.now();
     for (let i = 0; i < activeCount; i++) {
-      const lx = posX[i] - ox, ly = posY[i] - oy;
+      const lx = posX[i] - ox,
+        ly = posY[i] - oy;
       if (lx >= 0 && lx < fw && ly >= 0 && ly < fh) {
         const c = (lx * invCs) | 0;
         const r = (ly * invCs) | 0;
@@ -394,14 +408,15 @@ class BenchmarkScene extends Scene {
     const tFiEnd = performance.now();
     const steer_fastindex_ms = tFiEnd - tFiStart;
 
-    // 【改善案3・究極: Precomputed Vector Field】16kグリッド事前計算 + 30万体直接サンプリング
+    // 【改善案3: Precomputed Vector Field (最近傍)】
     const tPrecomputeStart = performance.now();
     this.flow.precomputeVelocityField(80);
     const pVx = this.flow.precomputedVx;
     const pVy = this.flow.precomputedVy;
 
     for (let i = 0; i < activeCount; i++) {
-      const lx = posX[i] - ox, ly = posY[i] - oy;
+      const lx = posX[i] - ox,
+        ly = posY[i] - oy;
       if (lx >= 0 && lx < fw && ly >= 0 && ly < fh) {
         const c = (lx * invCs) | 0;
         const r = (ly * invCs) | 0;
@@ -413,7 +428,36 @@ class BenchmarkScene extends Scene {
     const tPrecomputeEnd = performance.now();
     const steer_precomputed_grid_ms = tPrecomputeEnd - tPrecomputeStart;
 
-    // 実際の座標更新 (改善案3を使用)
+    // 【改善案4: Precomputed Vector Field + Bilinear Interpolation (双線形補間)】
+    const tBilinearStart = performance.now();
+    for (let i = 0; i < activeCount; i++) {
+      const lx = posX[i] - ox,
+        ly = posY[i] - oy;
+      const gx = lx * invCs;
+      const gy = ly * invCs;
+      const ix = gx | 0;
+      const iy = gy | 0;
+
+      if (ix >= 1 && ix < cols - 2 && iy >= 1 && iy < 126) {
+        const fx = gx - ix;
+        const fy = gy - iy;
+        const w00 = (1.0 - fx) * (1.0 - fy);
+        const w10 = fx * (1.0 - fy);
+        const w01 = (1.0 - fx) * fy;
+        const w11 = fx * fy;
+
+        const idx00 = (iy << 7) + ix;
+        vx[i] =
+          pVx[idx00] * w00 + pVx[idx00 + 1] * w10 + pVx[idx00 + 128] * w01 + pVx[idx00 + 129] * w11;
+        vy[i] =
+          pVy[idx00] * w00 + pVy[idx00 + 1] * w10 + pVy[idx00 + 128] * w01 + pVy[idx00 + 129] * w11;
+      }
+    }
+    const tBilinearEnd = performance.now();
+    const steer_bilinear_grid_ms =
+      tPrecomputeEnd - tPrecomputeStart + (tBilinearEnd - tBilinearStart);
+
+    // 実際の座標更新 (改善案4: 双線形補間を使用)
     for (let i = 0; i < activeCount; i++) {
       posX[i] += vx[i] * dt;
       posY[i] += vy[i] * dt;
@@ -426,12 +470,9 @@ class BenchmarkScene extends Scene {
       <p>FPS: ${fps} | Entities: ${activeCount}</p>
       <p style="color:#ff6b6b">1. 現行 Baseline: ${steer_baseline_ms.toFixed(2)} ms</p>
       <p style="color:#feca57">2. FastMath (sqrt): ${steer_fastmath_ms.toFixed(2)} ms</p>
-      <p style="color:#48dbfb">3. FastIndex+Math: ${steer_fastindex_ms.toFixed(2)} ms</p>
-      <p style="color:#1dd1a1; font-weight:bold">4. Precomputed Grid: ${steer_precomputed_grid_ms.toFixed(2)} ms (爆速)</p>
-      <hr>
-      <p>Floor: ${t_coord_mapping_floor.toFixed(2)}ms | FastIndex: ${t_coord_mapping_fast.toFixed(2)}ms</p>
-      <p>6x MemRead: ${t_memory_lookups_raw.toFixed(2)}ms | Writes: ${t_velocity_writes.toFixed(2)}ms</p>
-      <p>Hypot: ${t_math_hypot.toFixed(2)}ms | Sqrt+Inv: ${t_math_sqrt_inv.toFixed(2)}ms</p>
+      <p style="color:#48dbfb">3. FastIndex: ${steer_fastindex_ms.toFixed(2)} ms</p>
+      <p style="color:#1dd1a1">4. Precomputed Nearest: ${steer_precomputed_grid_ms.toFixed(2)} ms</p>
+      <p style="color:#54a0ff; font-weight:bold">5. Precomputed Bilinear: ${steer_bilinear_grid_ms.toFixed(2)} ms (滑らか&爆速)</p>
     `;
 
     this.framesSinceSpawn++;
@@ -449,6 +490,7 @@ class BenchmarkScene extends Scene {
         steer_fastmath_ms,
         steer_fastindex_ms,
         steer_precomputed_grid_ms,
+        steer_bilinear_grid_ms,
         sampleCount: 1,
       });
 
@@ -471,7 +513,9 @@ class BenchmarkScene extends Scene {
     const s = this.currentBurstSamples;
     const entry: SteeringDissectionEntry = {
       entities: Math.round(this._avg(s.map((x) => x.entities))),
-      t_coord_mapping_floor: parseFloat(this._avg(s.map((x) => x.t_coord_mapping_floor)).toFixed(2)),
+      t_coord_mapping_floor: parseFloat(
+        this._avg(s.map((x) => x.t_coord_mapping_floor)).toFixed(2),
+      ),
       t_coord_mapping_fast: parseFloat(this._avg(s.map((x) => x.t_coord_mapping_fast)).toFixed(2)),
       t_memory_lookups_raw: parseFloat(this._avg(s.map((x) => x.t_memory_lookups_raw)).toFixed(2)),
       t_math_hypot: parseFloat(this._avg(s.map((x) => x.t_math_hypot)).toFixed(2)),
@@ -480,7 +524,12 @@ class BenchmarkScene extends Scene {
       steer_baseline_ms: parseFloat(this._avg(s.map((x) => x.steer_baseline_ms)).toFixed(2)),
       steer_fastmath_ms: parseFloat(this._avg(s.map((x) => x.steer_fastmath_ms)).toFixed(2)),
       steer_fastindex_ms: parseFloat(this._avg(s.map((x) => x.steer_fastindex_ms)).toFixed(2)),
-      steer_precomputed_grid_ms: parseFloat(this._avg(s.map((x) => x.steer_precomputed_grid_ms)).toFixed(2)),
+      steer_precomputed_grid_ms: parseFloat(
+        this._avg(s.map((x) => x.steer_precomputed_grid_ms)).toFixed(2),
+      ),
+      steer_bilinear_grid_ms: parseFloat(
+        this._avg(s.map((x) => x.steer_bilinear_grid_ms)).toFixed(2),
+      ),
       sampleCount: s.length,
     };
     this.benchmarkResults.push(entry);
@@ -511,14 +560,19 @@ class BenchmarkScene extends Scene {
               backgroundColor: '#f59e0b',
             },
             {
-              label: '3. FastIndex + FastMath',
+              label: '3. FastIndex',
               data: this.benchmarkResults.map((r) => r.steer_fastindex_ms),
               backgroundColor: '#3b82f6',
             },
             {
-              label: '4. Precomputed Vector Grid',
+              label: '4. Precomputed Nearest',
               data: this.benchmarkResults.map((r) => r.steer_precomputed_grid_ms),
               backgroundColor: '#10b981',
+            },
+            {
+              label: '5. Precomputed Bilinear (本命)',
+              data: this.benchmarkResults.map((r) => r.steer_bilinear_grid_ms),
+              backgroundColor: '#54a0ff',
             },
           ],
         },
@@ -526,11 +580,18 @@ class BenchmarkScene extends Scene {
           responsive: true,
           maintainAspectRatio: false,
           scales: {
-            y: { title: { display: true, text: 'Steering Time (ms)', color: '#fff' }, grid: { color: '#333' } },
+            y: {
+              title: { display: true, text: 'Steering Time (ms)', color: '#fff' },
+              grid: { color: '#333' },
+            },
             x: { grid: { color: '#333' } },
           },
           plugins: {
-            title: { display: true, text: 'Steering Performance: Baseline vs Optimizations', color: '#fff' },
+            title: {
+              display: true,
+              text: 'Steering Performance: Baseline vs Optimizations',
+              color: '#fff',
+            },
             legend: { labels: { color: '#fff' } },
           },
         },
