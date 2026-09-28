@@ -35,6 +35,7 @@ export default defineConfig({
               { text: 'インストールとセットアップ', link: '/guide/setup' },
               { text: 'Hello World', link: '/guide/hello-world' },
               { text: 'アーキテクチャ概要', link: '/guide/architecture' },
+              { text: 'ベンチマーク (Performance)', link: '/performance' },
             ],
           },
           {
@@ -133,6 +134,7 @@ export default defineConfig({
               { text: 'Installation & Setup', link: '/en/guide/setup' },
               { text: 'Hello World', link: '/en/guide/hello-world' },
               { text: 'Architecture Overview', link: '/en/guide/architecture' },
+              { text: 'Performance Benchmarks', link: '/en/performance' },
             ],
           },
           {

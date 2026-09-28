@@ -126,9 +126,13 @@ export class PlutoEngine {
   private accumulator = 0;
   private readonly fixedDt = 1 / 60;
 
+  public updateTimeMs = 0;
+  public renderTimeMs = 0;
+
   private step(now: number) {
     const dt = this.time.step(now);
 
+    const t0 = performance.now();
     this.accumulator += dt;
     while (this.accumulator >= this.fixedDt) {
       if (this.scene.activeScene) {
@@ -140,8 +144,11 @@ export class PlutoEngine {
     if (this.scene.activeScene) {
       this.scene.activeScene.sysUpdate(dt);
     }
+    const t1 = performance.now();
+    this.updateTimeMs = t1 - t0;
 
     this.render();
+    this.renderTimeMs = performance.now() - t1;
   }
 
   private render() {

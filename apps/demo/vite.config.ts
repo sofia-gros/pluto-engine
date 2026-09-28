@@ -11,6 +11,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'swarm-survivors/index.html'),
+        benchmark: resolve(__dirname, 'benchmark/index.html'),
       },
     },
   },
