@@ -94,7 +94,9 @@ server.listen(5188, async () => {
       }, scale);
 
       results.push(metrics);
-      console.log(`✅ [${scale} Entities] FPS: ${metrics.avgFps}, Frame Time: ${metrics.avgFrameTimeMs}ms (${metrics.sampleFrames} frames sampled)`);
+      console.log(
+        `✅ [${scale} Entities] FPS: ${metrics.avgFps}, Frame Time: ${metrics.avgFrameTimeMs}ms (${metrics.sampleFrames} frames sampled)`,
+      );
     }
 
     await browser.close();

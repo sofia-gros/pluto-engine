@@ -77,12 +77,24 @@ export class RPGWorld {
 
         if (y < 46 && x < 46) {
           // 町エリア
-          if (x === 0 || y === 0 || (x === 45 && !(y >= 20 && y <= 24)) || (y === 45 && !(x >= 20 && x <= 24))) {
+          if (
+            x === 0 ||
+            y === 0 ||
+            (x === 45 && !(y >= 20 && y <= 24)) ||
+            (y === 45 && !(x >= 20 && x <= 24))
+          ) {
             this.tiles[idx] = TileType.WALL;
             this.solidMap[idx] = 1;
-          } else if ((x >= 14 && x <= 30 && y >= 14 && y <= 30) || (x >= 20 && x <= 24) || (y >= 20 && y <= 24)) {
+          } else if (
+            (x >= 14 && x <= 30 && y >= 14 && y <= 30) ||
+            (x >= 20 && x <= 24) ||
+            (y >= 20 && y <= 24)
+          ) {
             this.tiles[idx] = TileType.COBBLESTONE;
-          } else if ((x >= 6 && x <= 12 && y >= 6 && y <= 12) || (x >= 32 && x <= 38 && y >= 6 && y <= 12)) {
+          } else if (
+            (x >= 6 && x <= 12 && y >= 6 && y <= 12) ||
+            (x >= 32 && x <= 38 && y >= 6 && y <= 12)
+          ) {
             // 家屋の床
             this.tiles[idx] = TileType.WOOD_FLOOR;
           } else {
@@ -90,10 +102,16 @@ export class RPGWorld {
           }
         } else if (y >= 50) {
           // ダンジョンエリア
-          if (x === 0 || x === W - 1 || y === H - 1 || y === 50 && !(x >= 20 && x <= 24)) {
+          if (x === 0 || x === W - 1 || y === H - 1 || (y === 50 && !(x >= 20 && x <= 24))) {
             this.tiles[idx] = TileType.DUNGEON_WALL;
             this.solidMap[idx] = 1;
-          } else if ((x >= 35 && x <= 55 && y >= 65 && y <= 80) && (x === 35 || x === 55 || y === 65 || y === 80)) {
+          } else if (
+            x >= 35 &&
+            x <= 55 &&
+            y >= 65 &&
+            y <= 80 &&
+            (x === 35 || x === 55 || y === 65 || y === 80)
+          ) {
             // ボス部屋の壁
             if (!(x === 45 && y === 65)) {
               this.tiles[idx] = TileType.DUNGEON_WALL;
@@ -101,7 +119,10 @@ export class RPGWorld {
             } else {
               this.tiles[idx] = TileType.DUNGEON_FLOOR;
             }
-          } else if ((x >= 70 && x <= 80 && y >= 55 && y <= 65) || (x >= 10 && x <= 18 && y >= 75 && y <= 82)) {
+          } else if (
+            (x >= 70 && x <= 80 && y >= 55 && y <= 65) ||
+            (x >= 10 && x <= 18 && y >= 75 && y <= 82)
+          ) {
             this.tiles[idx] = TileType.LAVA;
             this.solidMap[idx] = 1;
           } else {
@@ -184,7 +205,14 @@ export class RPGWorld {
     }
   }
 
-  private addProp(x: number, y: number, width: number, height: number, type: any, solid: boolean): void {
+  private addProp(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    type: any,
+    solid: boolean,
+  ): void {
     this.props.push({ x, y, width, height, type, solid });
   }
 
@@ -290,7 +318,12 @@ export class RPGWorld {
    * 座標 (x, y) が通行不能（Solid）かどうかを O(1) で判定
    */
   public isBlocked(x: number, y: number, radius = 12): boolean {
-    if (x < radius || x >= this.worldWidth - radius || y < radius || y >= this.worldHeight - radius) {
+    if (
+      x < radius ||
+      x >= this.worldWidth - radius ||
+      y < radius ||
+      y >= this.worldHeight - radius
+    ) {
       return true;
     }
 

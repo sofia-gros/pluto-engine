@@ -4,6 +4,7 @@ import { Text, type TextStyle } from '../arena/Text';
 import type { PlutoEngine } from '../core/PlutoEngine';
 import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';
+import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
 import { TweenManager } from '../tween/TweenManager';
 import { AnimationManager } from '../anim/AnimationManager';
@@ -13,8 +14,6 @@ import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
-// Note: InstanceBufferArena is imported from engine or arena directly, here I'll use the one from ../arena/InstanceBufferArena
-// But since we had InstanceBufferArena implicitly in the previous code, I'll import it.
 import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
 
 export interface SceneProps {
@@ -31,6 +30,7 @@ export class Scene {
   public arena!: ArenaClass;
   public input!: InputManager;
   public load!: LoaderManager;
+  public textures!: TextureManager;
   public tweens!: TweenManager;
   public anim!: AnimationManager;
   public particles!: ParticleManager;
@@ -65,9 +65,9 @@ export class Scene {
       const sprite = new Sprite(id, this.arena);
 
       if (textureKey) {
-        const asset = this.load.get(textureKey);
-        if (asset && asset.type === 'spritesheet') {
-          sprite.setTexture(asset, frameKey ?? 0);
+        const tex = this.textures.get(textureKey) || this.load.get(textureKey);
+        if (tex) {
+          sprite.setTexture(tex, frameKey ?? 0);
         }
       }
       return sprite;
@@ -93,7 +93,8 @@ export class Scene {
     }
     this.arena = new ArenaClass(maxInstances);
     this.input = new InputManager();
-    this.load = new LoaderManager();
+    this.textures = new TextureManager();
+    this.load = new LoaderManager(this.textures);
     this.tweens = new TweenManager(this.arena);
     this.anim = new AnimationManager(this.arena);
     this.particles = new ParticleManager(maxInstances);
@@ -102,6 +103,7 @@ export class Scene {
     this.camera = new Camera();
   }
 
+  public preload(): void {}
   public init(): void {}
   public create(): void {}
   public update(dt: number): void {
@@ -110,11 +112,23 @@ export class Scene {
   public fixedUpdate(fixedDt: number): void {
     void fixedDt;
   }
+  public shutdown(): void {}
+
+  public sysShutdown(): void {
+    this.shutdown();
+    for (let i = 0; i < this._plugins.length; i++) {
+      this._plugins[i].destroy?.();
+    }
+  }
 
   public sysInit(engine: PlutoEngine): void {
     this.engine = engine;
+    if (engine.device) {
+      this.textures.setDevice(engine.device);
+    }
     this.particles.init(this);
     this.physics.init(this);
+    this.preload();
     this.init();
   }
 
@@ -141,76 +155,6 @@ export class Scene {
     for (let i = 0; i < this._tilemaps.length; i++) {
       this._tilemaps[i].updateCulling(this.camera, sw, sh);
     }
-
-    // Hierarchy update
-    const arena = this.arena;
-    const count = arena.activeCount; // Dense array loop!
-    for (let i = 0; i < count; i++) {
-      const pid = arena.parentId[i];
-      if (pid !== -1) {
-        const pIdx = arena.idToIndex[pid];
-        if (pIdx !== -1) {
-          const pr = arena.rotation[pIdx];
-          const lx = arena.localX[i];
-          const ly = arena.localY[i];
-
-          if (pr !== 0.0) {
-            const cosR = Math.cos(pr);
-            const sinR = Math.sin(pr);
-            arena.posX[i] = arena.posX[pIdx] + (lx * cosR - ly * sinR);
-            arena.posY[i] = arena.posY[pIdx] + (lx * sinR + ly * cosR);
-          } else {
-            arena.posX[i] = arena.posX[pIdx] + lx;
-            arena.posY[i] = arena.posY[pIdx] + ly;
-          }
-          arena.rotation[i] = arena.rotation[pIdx] + arena.localRotation[i];
-          arena.dirtyPos = true; // Mark dirty
-        }
-      }
-    }
-
-    // Input processing
-    const input = this.input;
-    if (input.isPointerJustPressed()) {
-      const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
-      const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
-
-      for (let i = count - 1; i >= 0; i--) {
-        if (arena.interactive[i] === 0) continue;
-
-        const hw = arena.hitWidth[i] * arena.scale[i];
-        const hh = arena.hitHeight[i] * arena.scale[i];
-        if (hw <= 0 || hh <= 0) continue;
-
-        const left = arena.posX[i] - hw / 2;
-        const right = arena.posX[i] + hw / 2;
-        const top = arena.posY[i] - hh / 2;
-        const bottom = arena.posY[i] + hh / 2;
-
-        if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-          input.emit(arena.indexToId[i], 'pointerdown');
-          break;
-        }
-      }
-    }
-    if (input.isPointerJustReleased()) {
-      const worldX = this.scale.transformX(input.pointerX) + this.camera.x;
-      const worldY = this.scale.transformY(input.pointerY) + this.camera.y;
-      for (let i = count - 1; i >= 0; i--) {
-        if (arena.interactive[i] === 0) continue;
-        const hw = arena.hitWidth[i] * arena.scale[i];
-        const hh = arena.hitHeight[i] * arena.scale[i];
-        if (hw <= 0 || hh <= 0) continue;
-        const left = arena.posX[i] - hw / 2;
-        const right = arena.posX[i] + hw / 2;
-        const top = arena.posY[i] - hh / 2;
-        const bottom = arena.posY[i] + hh / 2;
-        if (worldX >= left && worldX <= right && worldY >= top && worldY <= bottom) {
-          input.emit(arena.indexToId[i], 'pointerup');
-          break;
-        }
-      }
-    }
   }
 
   public sysFixedUpdate(fixedDt: number): void {
@@ -220,29 +164,8 @@ export class Scene {
     }
   }
 
-  public sysShutdown(): void {
-    this.input.detach(window);
-    for (let i = 0; i < this._plugins.length; i++) {
-      this._plugins[i].destroy?.();
-    }
-    this._plugins.length = 0;
-    for (let i = 0; i < this._tilemaps.length; i++) {
-      this._tilemaps[i].destroy();
-    }
-    this._tilemaps.length = 0;
-    this.physics.clear();
-    this.particles.destroy();
-    this.arena.clear();
-    this.tweens.clear();
-    this.anim.clear();
-    this.load.clear();
-  }
-
-  public registerPlugin(plugin: Plugin): this {
-    if (plugin.init) {
-      plugin.init(this);
-    }
+  public registerPlugin(plugin: Plugin): void {
     this._plugins.push(plugin);
-    return this;
+    plugin.init?.(this);
   }
 }

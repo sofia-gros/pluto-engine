@@ -74,63 +74,33 @@ class RPGScene extends Scene {
   private spawnTownNPCs(): void {
     // 長老セドリック (広場の北)
     this.npcs.push(
-      new TownNPC(
-        this,
-        'elder',
-        '長老 セドリック',
-        'elder',
-        22 * 32 + 16,
-        18 * 32 + 16,
-        [
-          'おお、若き勇者よ！南の洞窟に魔物の気配が満ちておる。まずはスライムを退治して腕を磨くのじゃ！',
-          '街道の東にある川を越えると、獰猛なゴブリンどもが群れておる。準備を怠るでないぞ。',
-          '最南端の暗黒遺跡には、かつて王国を滅ぼしかけた大魔竜が眠っておるという…気をつけるのじゃ。',
-        ],
-      ),
+      new TownNPC(this, 'elder', '長老 セドリック', 'elder', 22 * 32 + 16, 18 * 32 + 16, [
+        'おお、若き勇者よ！南の洞窟に魔物の気配が満ちておる。まずはスライムを退治して腕を磨くのじゃ！',
+        '街道の東にある川を越えると、獰猛なゴブリンどもが群れておる。準備を怠るでないぞ。',
+        '最南端の暗黒遺跡には、かつて王国を滅ぼしかけた大魔竜が眠っておるという…気をつけるのじゃ。',
+      ]),
     );
 
     // 商人ボリス (露店)
     this.npcs.push(
-      new TownNPC(
-        this,
-        'merchant',
-        '商人 ボリス',
-        'merchant',
-        16 * 32 + 16,
-        21 * 32 + 16,
-        ['いらっしゃい！良質な鋼鉄の剣や回復薬を取り揃えてるぜ。金さえあれば何でも売ってやるよ！'],
-      ),
+      new TownNPC(this, 'merchant', '商人 ボリス', 'merchant', 16 * 32 + 16, 21 * 32 + 16, [
+        'いらっしゃい！良質な鋼鉄の剣や回復薬を取り揃えてるぜ。金さえあれば何でも売ってやるよ！',
+      ]),
     );
 
     // 衛兵長ローランド (町の門)
     this.npcs.push(
-      new TownNPC(
-        this,
-        'guard',
-        '衛兵長 ローランド',
-        'guard',
-        44 * 32 + 16,
-        22 * 32 + 16,
-        [
-          'ここから先は危険地帯だ。[LMB]で剣を振り、[RMB]で炎の魔法を放てるぞ。健闘を祈る！',
-          '敵に囲まれたら[Shift]の疾風ダッシュで切り抜けるんだ！',
-        ],
-      ),
+      new TownNPC(this, 'guard', '衛兵長 ローランド', 'guard', 44 * 32 + 16, 22 * 32 + 16, [
+        'ここから先は危険地帯だ。[LMB]で剣を振り、[RMB]で炎の魔法を放てるぞ。健闘を祈る！',
+        '敵に囲まれたら[Shift]の疾風ダッシュで切り抜けるんだ！',
+      ]),
     );
 
     // 巫女ライラ (噴水前)
     this.npcs.push(
-      new TownNPC(
-        this,
-        'priestess',
-        '巫女 ライラ',
-        'priestess',
-        24 * 32 + 16,
-        24 * 32 + 16,
-        [
-          '旅のお方、お怪我はありませんか？聖なる泉の力で、あなたの傷と魔力を全快させましょう！',
-        ],
-      ),
+      new TownNPC(this, 'priestess', '巫女 ライラ', 'priestess', 24 * 32 + 16, 24 * 32 + 16, [
+        '旅のお方、お怪我はありませんか？聖なる泉の力で、あなたの傷と魔力を全快させましょう！',
+      ]),
     );
   }
 
@@ -207,10 +177,14 @@ class RPGScene extends Scene {
     });
 
     window.addEventListener('keyup', (e) => {
-      if ((e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') && this.inputDir.y < 0) this.inputDir.y = 0;
-      if ((e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') && this.inputDir.y > 0) this.inputDir.y = 0;
-      if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && this.inputDir.x < 0) this.inputDir.x = 0;
-      if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && this.inputDir.x > 0) this.inputDir.x = 0;
+      if ((e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') && this.inputDir.y < 0)
+        this.inputDir.y = 0;
+      if ((e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') && this.inputDir.y > 0)
+        this.inputDir.y = 0;
+      if ((e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') && this.inputDir.x < 0)
+        this.inputDir.x = 0;
+      if ((e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') && this.inputDir.x > 0)
+        this.inputDir.x = 0;
     });
 
     // マウス操作
@@ -275,7 +249,15 @@ class RPGScene extends Scene {
     if (!fireball) return;
 
     this.projectiles.push(
-      new RPGProjectile(this, fireball.x, fireball.y, fireball.vx, fireball.vy, fireball.damage, false),
+      new RPGProjectile(
+        this,
+        fireball.x,
+        fireball.y,
+        fireball.vx,
+        fireball.vy,
+        fireball.damage,
+        false,
+      ),
     );
     this.ui.updateHUD();
   }
@@ -296,7 +278,11 @@ class RPGScene extends Scene {
       if (Math.abs(dx) > maxR || Math.abs(dy) > maxR) continue;
 
       if (dx * dx + dy * dy < maxR * maxR) {
-        const dead = m.takeDamage(dash.damage, (dx / (Math.hypot(dx, dy) || 1)) * 40, (dy / (Math.hypot(dx, dy) || 1)) * 40);
+        const dead = m.takeDamage(
+          dash.damage,
+          (dx / (Math.hypot(dx, dy) || 1)) * 40,
+          (dy / (Math.hypot(dx, dy) || 1)) * 40,
+        );
         this.spawnFloatingText(m.x, m.y, `-${dash.damage}`, '#38bdf8');
         if (dead) this.handleMonsterDeath(m);
       }
@@ -362,7 +348,12 @@ class RPGScene extends Scene {
             this.player.gold += q.rewardGold;
             this.player.gainExp(q.rewardExp);
             rpgAudio.playQuestComplete();
-            this.spawnFloatingText(this.player.x, this.player.y - 40, `🏆 クエスト完了: ${q.title}!`, '#facc15');
+            this.spawnFloatingText(
+              this.player.x,
+              this.player.y - 40,
+              `🏆 クエスト完了: ${q.title}!`,
+              '#facc15',
+            );
           }
         }
       }
@@ -412,7 +403,15 @@ class RPGScene extends Scene {
       const act = m.update(dt, this.player.x, this.player.y, this.world);
       if (act?.shoot) {
         this.projectiles.push(
-          new RPGProjectile(this, act.shoot.x, act.shoot.y, act.shoot.vx, act.shoot.vy, act.shoot.damage, true),
+          new RPGProjectile(
+            this,
+            act.shoot.x,
+            act.shoot.y,
+            act.shoot.vx,
+            act.shoot.vy,
+            act.shoot.damage,
+            true,
+          ),
         );
       }
 
@@ -489,19 +488,39 @@ class RPGScene extends Scene {
         if (loot.type === 'coin') {
           this.player.gold += loot.value;
           rpgAudio.playCoin();
-          this.spawnFloatingText(this.player.x, this.player.y - 10, `+${loot.value} Gold`, '#facc15');
+          this.spawnFloatingText(
+            this.player.x,
+            this.player.y - 10,
+            `+${loot.value} Gold`,
+            '#facc15',
+          );
         } else if (loot.type === 'gem') {
           this.player.gems += loot.value;
           rpgAudio.playCoin();
-          this.spawnFloatingText(this.player.x, this.player.y - 10, `+${loot.value} Gems!`, '#38bdf8');
+          this.spawnFloatingText(
+            this.player.x,
+            this.player.y - 10,
+            `+${loot.value} Gems!`,
+            '#38bdf8',
+          );
         } else if (loot.type === 'potion_hp') {
           this.player.hpPotions += loot.value;
           rpgAudio.playPotion();
-          this.spawnFloatingText(this.player.x, this.player.y - 10, `+${loot.value} HP Potion`, '#ef4444');
+          this.spawnFloatingText(
+            this.player.x,
+            this.player.y - 10,
+            `+${loot.value} HP Potion`,
+            '#ef4444',
+          );
         } else if (loot.type === 'potion_mp') {
           this.player.mpPotions += loot.value;
           rpgAudio.playPotion();
-          this.spawnFloatingText(this.player.x, this.player.y - 10, `+${loot.value} MP Potion`, '#3b82f6');
+          this.spawnFloatingText(
+            this.player.x,
+            this.player.y - 10,
+            `+${loot.value} MP Potion`,
+            '#3b82f6',
+          );
         }
 
         loot.destroy();
@@ -525,7 +544,8 @@ class RPGScene extends Scene {
     if (t1 - this.lastFpsUpdate > 300) {
       this.lastFpsUpdate = t1;
       this.currentFps = 1 / Math.max(0.0001, dt);
-      const avgFt = this.frameTimes.reduce((a, b) => a + b, 0) / Math.max(1, this.frameTimes.length);
+      const avgFt =
+        this.frameTimes.reduce((a, b) => a + b, 0) / Math.max(1, this.frameTimes.length);
       this.currentFrameTime = avgFt;
 
       const fpsElem = document.getElementById('bench-fps');
@@ -534,7 +554,8 @@ class RPGScene extends Scene {
 
       if (fpsElem) fpsElem.textContent = this.currentFps.toFixed(1);
       if (ftElem) ftElem.textContent = `${this.currentFrameTime.toFixed(2)}ms`;
-      if (entElem) entElem.textContent = `${this.monsters.length + this.npcs.length + this.projectiles.length}`;
+      if (entElem)
+        entElem.textContent = `${this.monsters.length + this.npcs.length + this.projectiles.length}`;
     }
   }
 }

@@ -29,16 +29,65 @@ export interface ArmorData {
 }
 
 export const WEAPONS: Record<string, WeaponData> = {
-  bronze_sword: { id: 'bronze_sword', name: '銅の剣', atk: 10, price: 0, color: 0xcd7f32, description: '冒険者ギルド支給の標準的な剣。' },
-  iron_blade: { id: 'iron_blade', name: '鋼鉄のブロードソード', atk: 25, price: 150, color: 0x94a3b8, description: '鋭い刃を持つ良質な鋼鉄の剣。' },
-  flame_katana: { id: 'flame_katana', name: '炎熱の刀', atk: 45, price: 400, color: 0xf97316, description: '赤熱した刀身が敵を焼き尽くす。' },
-  excalibur: { id: 'excalibur', name: '聖剣エクスカリバー', atk: 90, price: 1000, color: 0x38bdf8, description: '伝説の光を放つ至高の神剣。' },
+  bronze_sword: {
+    id: 'bronze_sword',
+    name: '銅の剣',
+    atk: 10,
+    price: 0,
+    color: 0xcd7f32,
+    description: '冒険者ギルド支給の標準的な剣。',
+  },
+  iron_blade: {
+    id: 'iron_blade',
+    name: '鋼鉄のブロードソード',
+    atk: 25,
+    price: 150,
+    color: 0x94a3b8,
+    description: '鋭い刃を持つ良質な鋼鉄の剣。',
+  },
+  flame_katana: {
+    id: 'flame_katana',
+    name: '炎熱の刀',
+    atk: 45,
+    price: 400,
+    color: 0xf97316,
+    description: '赤熱した刀身が敵を焼き尽くす。',
+  },
+  excalibur: {
+    id: 'excalibur',
+    name: '聖剣エクスカリバー',
+    atk: 90,
+    price: 1000,
+    color: 0x38bdf8,
+    description: '伝説の光を放つ至高の神剣。',
+  },
 };
 
 export const ARMORS: Record<string, ArmorData> = {
-  leather_tunic: { id: 'leather_tunic', name: '革の服', def: 2, price: 0, color: 0x92400e, description: '動きやすい軽量な革の鎧。' },
-  iron_plate: { id: 'iron_plate', name: '鋼鉄のプレートメイル', def: 8, price: 180, color: 0x64748b, description: '強固な鉄板で鍛造された重装鎧。' },
-  dragon_scale: { id: 'dragon_scale', name: '竜鱗の戦甲', def: 20, price: 650, color: 0xef4444, description: '火竜の強靭な鱗で作られた伝説の鎧。' },
+  leather_tunic: {
+    id: 'leather_tunic',
+    name: '革の服',
+    def: 2,
+    price: 0,
+    color: 0x92400e,
+    description: '動きやすい軽量な革の鎧。',
+  },
+  iron_plate: {
+    id: 'iron_plate',
+    name: '鋼鉄のプレートメイル',
+    def: 8,
+    price: 180,
+    color: 0x64748b,
+    description: '強固な鉄板で鍛造された重装鎧。',
+  },
+  dragon_scale: {
+    id: 'dragon_scale',
+    name: '竜鱗の戦甲',
+    def: 20,
+    price: 650,
+    color: 0xef4444,
+    description: '火竜の強靭な鱗で作られた伝説の鎧。',
+  },
 };
 
 export interface Quest {
@@ -226,7 +275,10 @@ export class Player {
   /**
    * 魔法ファイアボール発射
    */
-  public castFireball(targetX: number, targetY: number): { x: number; y: number; vx: number; vy: number; damage: number } | null {
+  public castFireball(
+    targetX: number,
+    targetY: number,
+  ): { x: number; y: number; vx: number; vy: number; damage: number } | null {
     if (this.mp < 12) return null;
     this.mp -= 12;
 
@@ -334,7 +386,15 @@ export class TownNPC {
   public moveTarget = { x: 0, y: 0 };
   public dialogs: string[];
 
-  constructor(scene: Scene, id: string, name: string, type: NPCType, x: number, y: number, dialogs: string[]) {
+  constructor(
+    scene: Scene,
+    id: string,
+    name: string,
+    type: NPCType,
+    x: number,
+    y: number,
+    dialogs: string[],
+  ) {
     this.id = id;
     this.name = name;
     this.type = type;
@@ -491,7 +551,12 @@ export class Monster {
     }
   }
 
-  public update(dt: number, playerX: number, playerY: number, world: RPGWorld): { shoot?: { x: number; y: number; vx: number; vy: number; damage: number } } | null {
+  public update(
+    dt: number,
+    playerX: number,
+    playerY: number,
+    world: RPGWorld,
+  ): { shoot?: { x: number; y: number; vx: number; vy: number; damage: number } } | null {
     if (this.hp <= 0) return null;
 
     const dx = playerX - this.x;
@@ -592,7 +657,15 @@ export class RPGProjectile {
   public lifetime = 2.5;
   public isEnemy = false;
 
-  constructor(scene: Scene, x: number, y: number, vx: number, vy: number, damage: number, isEnemy = false) {
+  constructor(
+    scene: Scene,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    damage: number,
+    isEnemy = false,
+  ) {
     this.x = x;
     this.y = y;
     this.vx = vx;
@@ -635,7 +708,13 @@ export class RPGLoot {
   public value: number;
   public radius = 12;
 
-  constructor(scene: Scene, x: number, y: number, type: 'coin' | 'gem' | 'potion_hp' | 'potion_mp', value = 1) {
+  constructor(
+    scene: Scene,
+    x: number,
+    y: number,
+    type: 'coin' | 'gem' | 'potion_hp' | 'potion_mp',
+    value = 1,
+  ) {
     this.x = x;
     this.y = y;
     this.type = type;

@@ -1,4 +1,11 @@
-import type { BufferInfo, GraphicsDevice, PipelineInfo } from './GraphicsDevice';
+import type {
+  BufferInfo,
+  GraphicsDevice,
+  PipelineInfo,
+  TextureAsset,
+  TextureFrame,
+  TextureUploadOptions,
+} from './GraphicsDevice';
 
 /**
  * WebGL2 スプライト描画用の頂点シェーダー（GLSL ES 3.0）
@@ -23,17 +30,17 @@ layout(location = 12) in vec4 tint;
 
 uniform mat4 projectionMatrix;
 
-out vec2 v_uv;
-out float v_layerDepth;
-out vec4 v_tint;
+out vec2 vUV;
+out float vLayer;
+out vec4 vTint;
 
 void main() {
     vec2 scaledPos = vec2(vertexPos.x * scale * facing, vertexPos.y * scale);
     vec2 worldPos = scaledPos + vec2(posX, posY);
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
-    v_uv = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
-    v_layerDepth = frameIdx;
-    v_tint = tint;
+    vUV = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
+    vLayer = frameIdx;
+    vTint = tint;
 }
 `;
 
@@ -43,20 +50,18 @@ void main() {
  */
 const SPRITE_FRAG_GLSL = `#version 300 es
 precision highp float;
-precision highp sampler2DArray;
-precision highp int;
 
-uniform sampler2DArray textureArray;
+uniform highp sampler2DArray textureArray;
 
-in vec2 v_uv;
-in float v_layerDepth;
-in vec4 v_tint;
+in vec2 vUV;
+in float vLayer;
+in vec4 vTint;
 
 out vec4 fragColor;
 
 void main() {
-    vec4 texColor = texture(textureArray, vec3(v_uv, float(int(v_layerDepth))));
-    fragColor = texColor * v_tint;
+    vec4 texColor = texture(textureArray, vec3(vUV, vLayer));
+    fragColor = texColor * vTint;
 }
 `;
 
@@ -66,36 +71,159 @@ export class WebGL2Device implements GraphicsDevice {
 
   private spritePipeline: PipelineInfo | null = null;
   private quadBuffer: WebGLBuffer | null = null;
-  private defaultTexture: WebGLTexture | null = null;
+  private textureArray: WebGLTexture | null = null;
+
+  public readonly textureWidth = 2048;
+  public readonly textureHeight = 2048;
+  public readonly maxLayers = 64;
+  private currentLayerCount = 1; // Layer 0 は白色単色ピクセル
+
+  private textures: Map<string, TextureAsset> = new Map();
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
-    const gl = canvas.getContext('webgl2');
+    const gl = (canvas.getContext('webgl2') ||
+      canvas.getContext('experimental-webgl2')) as WebGL2RenderingContext | null;
     if (!gl) {
       throw new Error('WebGL2 is not supported');
     }
     this.gl = gl;
-    // Basic setup
+
+    // ブレンド設定 (透過PNG対応)
     this.gl.enable(this.gl.BLEND);
     this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
 
-    this.defaultTexture = this.gl.createTexture();
-    this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.defaultTexture);
+    // Texture2DArray の初期化 (Layer 0 に白ピクセルを格納)
+    this.initTextureArray();
+  }
+
+  private initTextureArray(): void {
+    if (!this.gl) return;
+    this.textureArray = this.gl.createTexture();
+    this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
+
+    // テクスチャパラメータ (ピクセルアート向けニアレスト隣接)
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+
+    // 2048x2048 x 64レイヤー の 3D テクスチャ領域を GPU 側に事前確保
     this.gl.texImage3D(
       this.gl.TEXTURE_2D_ARRAY,
       0,
       this.gl.RGBA,
-      1,
-      1,
-      1,
+      this.textureWidth,
+      this.textureHeight,
+      this.maxLayers,
       0,
       this.gl.RGBA,
       this.gl.UNSIGNED_BYTE,
-      new Uint8Array([255, 255, 255, 255]),
+      null,
     );
+
+    // Layer 0: 単色・未テクスチャ用 1x1 白ピクセルを書き込み
+    const whitePixel = new Uint8Array([255, 255, 255, 255]);
+    this.gl.texSubImage3D(
+      this.gl.TEXTURE_2D_ARRAY,
+      0,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      whitePixel,
+    );
+
+    // レイヤー0アセットをデフォルト白テクスチャとして登録
+    this.textures.set('__default_white__', {
+      key: '__default_white__',
+      layerIndex: 0,
+      width: 1,
+      height: 1,
+      frames: [{ uvX: 0, uvY: 0, uvW: 1.0 / this.textureWidth, uvH: 1.0 / this.textureHeight }],
+    });
+  }
+
+  /**
+   * 画像・Canvasを GPU の Texture2DArray に転送し、スプライト用の TextureAsset を生成します。
+   */
+  uploadTexture(
+    key: string,
+    source: HTMLImageElement | HTMLCanvasElement | ImageBitmap | ImageData,
+    options?: TextureUploadOptions,
+  ): TextureAsset {
+    if (!this.gl || !this.textureArray) {
+      throw new Error('Device or texture array not initialized');
+    }
+
+    if (this.textures.has(key)) {
+      return this.textures.get(key)!;
+    }
+
+    if (this.currentLayerCount >= this.maxLayers) {
+      console.warn(`TextureArray layer limit reached (${this.maxLayers}). Reusing existing layer.`);
+      return this.textures.get('__default_white__')!;
+    }
+
+    const layerIndex = this.currentLayerCount++;
+    const width = source.width;
+    const height = source.height;
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
+
+    // GPU への直接サブ画像転送 (TexSubImage3D)
+    this.gl.texSubImage3D(
+      this.gl.TEXTURE_2D_ARRAY,
+      0,
+      0,
+      0,
+      layerIndex,
+      width,
+      height,
+      1,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      source as any,
+    );
+
+    // フレーム UV 座標の計算
+    const frames: TextureFrame[] = [];
+    const frameWidth = options?.frameWidth || width;
+    const frameHeight = options?.frameHeight || height;
+
+    const cols = Math.max(1, Math.floor(width / frameWidth));
+    const rows = Math.max(1, Math.floor(height / frameHeight));
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        frames.push({
+          uvX: (c * frameWidth) / this.textureWidth,
+          uvY: (r * frameHeight) / this.textureHeight,
+          uvW: frameWidth / this.textureWidth,
+          uvH: frameHeight / this.textureHeight,
+        });
+      }
+    }
+
+    const asset: TextureAsset = {
+      key,
+      layerIndex,
+      width,
+      height,
+      frameWidth,
+      frameHeight,
+      frames,
+    };
+
+    this.textures.set(key, asset);
+    return asset;
+  }
+
+  getTexture(key: string): TextureAsset | undefined {
+    return this.textures.get(key);
   }
 
   initPipelines(): void {
@@ -105,7 +233,7 @@ export class WebGL2Device implements GraphicsDevice {
 
   private createQuadBuffer(): void {
     if (!this.gl) return;
-    // Simple quad for sprites: 4 vertices (x, y, u, v)
+    // スプライト用 Quad (4頂点 Triangle Strip)
     const quadData = new Float32Array([
       -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, 1.0, 0.0, -0.5, 0.5, 0.0, 1.0, 0.5, 0.5, 1.0, 1.0,
     ]);
@@ -125,7 +253,7 @@ export class WebGL2Device implements GraphicsDevice {
     return { buffer, size };
   }
 
-  updateBuffer(bufferInfo: BufferInfo, data: Float32Array): void {
+  updateBuffer(bufferInfo: BufferInfo, data: Float32Array | Uint32Array | Uint8Array): void {
     if (!this.gl) throw new Error('Device not initialized');
     const buffer = bufferInfo.buffer as WebGLBuffer;
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
@@ -143,9 +271,9 @@ export class WebGL2Device implements GraphicsDevice {
   bindShaders(): void {
     if (this.spritePipeline && this.gl) {
       this.bindPipeline(this.spritePipeline);
-      // Bind texture array
+      // Texture2DArray をバインド
       this.gl.activeTexture(this.gl.TEXTURE0);
-      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.defaultTexture);
+      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
       const program = this.spritePipeline.id as WebGLProgram;
       const loc = this.gl.getUniformLocation(program, 'textureArray');
       if (loc !== null) {
@@ -197,7 +325,11 @@ export class WebGL2Device implements GraphicsDevice {
     setDef1f(11, 'frameIdx', 0.0);
 
     if (buffers['tint']) {
-      bindInstancedAttr(12, 'tint', 4);
+      const b = buffers['tint'];
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
+      this.gl.enableVertexAttribArray(12);
+      this.gl.vertexAttribPointer(12, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
+      this.gl.vertexAttribDivisor(12, 1);
     } else {
       this.gl.disableVertexAttribArray(12);
       this.gl.vertexAttrib4f(12, 1.0, 1.0, 1.0, 1.0);
@@ -257,16 +389,20 @@ export class WebGL2Device implements GraphicsDevice {
 
   drawInstanced(activeCount: number): void {
     if (!this.gl) return;
-    // Draw Triangle Strip for Quad (4 vertices)
     this.gl.drawArraysInstanced(this.gl.TRIANGLE_STRIP, 0, 4, activeCount);
   }
 
   destroy(): void {
     if (this.gl) {
+      const ext = this.gl.getExtension('WEBGL_lose_context');
+      if (ext) {
+        ext.loseContext();
+      }
       this.gl = null;
       this.currentPipeline = null;
       this.spritePipeline = null;
       this.quadBuffer = null;
+      this.textureArray = null;
     }
   }
 }

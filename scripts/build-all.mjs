@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const packages = [
   'vite-plugin-wgsl',
+  'renderer',
   'core',
   'audio',
   'ai',
@@ -12,7 +13,6 @@ const packages = [
   'sdf-collider',
   'verlet-ik',
   'xpbd',
-  'renderer',
   'pluto',
 ];
 
@@ -22,8 +22,9 @@ for (const pkg of packages) {
   const dir = join(process.cwd(), 'packages', pkg);
   if (existsSync(dir)) {
     console.log(`📦 Building @pluto-engine/${pkg}...`);
-    const res = spawnSync('bun', ['run', 'build'], {
+    const res = spawnSync('npm', ['run', 'build'], {
       cwd: dir,
+      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' },
       stdio: 'inherit',
       shell: true,
     });

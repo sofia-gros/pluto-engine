@@ -5,7 +5,15 @@
  */
 
 import { rpgAudio } from './audio';
-import { ARMORS, type ArmorData, type Player, type Quest, type TownNPC, WEAPONS, type WeaponData } from './entities';
+import {
+  ARMORS,
+  type ArmorData,
+  type Player,
+  type Quest,
+  type TownNPC,
+  WEAPONS,
+  type WeaponData,
+} from './entities';
 
 export class RPGUIManager {
   private player: Player;

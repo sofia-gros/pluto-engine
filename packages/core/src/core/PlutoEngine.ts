@@ -2,6 +2,7 @@
  * @file PlutoEngine.ts
  * @description
  * Phaser の `new Phaser.Game(config)` に相当するエンジンのエントリポイント。
+ * レンダリングループ、時間管理、スケール、シーン遷移、および GPU への SoA バッファストリーミングを統括します。
  */
 
 import { createGraphicsDevice } from '@pluto-engine/renderer';
@@ -57,10 +58,14 @@ export class PlutoEngine {
     this.time = new TimeManager();
     this.scene = new SceneManager(this);
 
-    this.init();
+    this.ready = this.init();
   }
 
-  private async init() {
+  public readonly ready: Promise<void>;
+  private isDestroyed = false;
+  private animFrameId: number | null = null;
+
+  private async init(): Promise<void> {
     let canvas: HTMLCanvasElement;
     if (typeof this.config.canvas === 'string') {
       canvas = document.getElementById(this.config.canvas) as HTMLCanvasElement;
@@ -80,11 +85,13 @@ export class PlutoEngine {
     this.gpuBuffers['posX'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['posY'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['scale'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['facing'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['uvX'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['uvY'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['uvW'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['uvH'] = this.device.createBuffer(maxInstances * 4);
     this.gpuBuffers['frameIdx'] = this.device.createBuffer(maxInstances * 4);
+    this.gpuBuffers['tint'] = this.device.createBuffer(maxInstances * 4);
 
     for (let i = 0; i < this.config.scene.length; i++) {
       const SceneClass = this.config.scene[i];
@@ -98,10 +105,11 @@ export class PlutoEngine {
     }
 
     const loop = (now: number) => {
+      if (this.isDestroyed) return;
       this.step(now);
-      requestAnimationFrame(loop);
+      this.animFrameId = requestAnimationFrame(loop);
     };
-    requestAnimationFrame(loop);
+    this.animFrameId = requestAnimationFrame(loop);
   }
 
   private accumulator = 0;
@@ -159,6 +167,7 @@ export class PlutoEngine {
 
       if (arena.dirtyScale) {
         this.device.updateBuffer(this.gpuBuffers['scale'], arena.scale.subarray(0, renderCount));
+        this.device.updateBuffer(this.gpuBuffers['facing'], arena.facing.subarray(0, renderCount));
         arena.dirtyScale = false;
       }
 
@@ -176,6 +185,14 @@ export class PlutoEngine {
           arena.frameIdx.subarray(0, renderCount),
         );
         arena.dirtyFrameIdx = false;
+      }
+
+      if (arena.dirtyTint) {
+        this.device.updateBuffer(
+          this.gpuBuffers['tint'],
+          new Uint8Array(arena.tint.buffer, arena.tint.byteOffset, renderCount * 4),
+        );
+        arena.dirtyTint = false;
       }
     }
     const tUploadEnd = performance.now();
@@ -222,5 +239,22 @@ export class PlutoEngine {
       this.device.drawInstanced(renderCount);
     }
     this.drawTimeMs = performance.now() - tUploadEnd;
+  }
+
+  /**
+   * エンジンインスタンスとレンダラー、アニメーションループを破棄・解放します。
+   */
+  public destroy(): void {
+    this.isDestroyed = true;
+    if (this.animFrameId !== null) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
+    if (this.scene.activeScene) {
+      this.scene.activeScene.sysShutdown();
+    }
+    if (this.device) {
+      this.device.destroy();
+    }
   }
 }

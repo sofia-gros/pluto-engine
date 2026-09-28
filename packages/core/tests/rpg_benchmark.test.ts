@@ -21,7 +21,10 @@ describe('2D Classic RPG Benchmark (Non-Fluid / Phaser-like Architecture)', () =
 
     // プレイヤーとモンスターの AABB 衝突・走査速度を各スケールで実測
     const scales = [100, 1000, 5000, 20000];
-    const benchmarkResults: Record<number, { frameTimeMs: number; physicsMs: number; totalMonsterHp: number }> = {};
+    const benchmarkResults: Record<
+      number,
+      { frameTimeMs: number; physicsMs: number; totalMonsterHp: number }
+    > = {};
 
     for (const scale of scales) {
       scene.arena.clear();
@@ -101,6 +104,9 @@ describe('2D Classic RPG Benchmark (Non-Fluid / Phaser-like Architecture)', () =
       expect(avgFt).toBeLessThan(16.0);
     }
 
-    console.log('\n📊 [PlutoEngine 2D RPG Benchmark Results]\n', JSON.stringify(benchmarkResults, null, 2));
+    console.log(
+      '\n📊 [PlutoEngine 2D RPG Benchmark Results]\n',
+      JSON.stringify(benchmarkResults, null, 2),
+    );
   });
 });

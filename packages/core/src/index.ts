@@ -10,6 +10,7 @@ export * from './scale/ScaleManager';
 export * from './math/Math';
 export * from './input/InputManager';
 export * from './loader/LoaderManager';
+export * from './loader/TextureManager';
 export * from './tween/TweenManager';
 export * from './anim/AnimationManager';
 export * from './tilemap/Tilemap';

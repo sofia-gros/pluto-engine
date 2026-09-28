@@ -1,9 +1,12 @@
 /**
  * @file LoaderManager.ts
  * @description
- * アセット（画像、JSON、CSV、YAML等）を非同期で読み込み、キャッシュするマネージャー。
- * PhaserのLoaderのように、this.load.image(...) でキューに積み、後でまとめてロードする仕組みを提供します。
+ * アセット（画像、スプライトシート、JSON、CSV、YAML等）を非同期で読み込み、キャッシュするマネージャー。
+ * PhaserのLoaderのように、this.load.image(...) でキューに積み、ロード完了時に GPU テクスチャへ自動転送します。
  */
+
+import type { TextureAsset } from '@pluto-engine/renderer';
+import type { TextureManager } from './TextureManager';
 
 type AssetType = 'image' | 'spritesheet' | 'json' | 'csv' | 'yaml';
 
@@ -23,6 +26,18 @@ export class LoaderManager {
   private _queue: LoadItem[] = [];
   private _cache: Map<string, any> = new Map();
   private _isLoading = false;
+  private _textureManager: TextureManager | null = null;
+
+  constructor(textureManager?: TextureManager) {
+    this._textureManager = textureManager || null;
+  }
+
+  /**
+   * TextureManager を設定します。
+   */
+  public setTextureManager(textureManager: TextureManager): void {
+    this._textureManager = textureManager;
+  }
 
   /**
    * 画像アセットをキューに追加します。
@@ -69,7 +84,7 @@ export class LoaderManager {
   }
 
   /**
-   * キューに積まれたすべてのアセットを非同期でロードします。
+   * キューに積まれたすべてのアセットを非同期でロードし、GPUテクスチャへ転送します。
    */
   public async start(): Promise<void> {
     if (this._isLoading || this._queue.length === 0) return;
@@ -98,7 +113,17 @@ export class LoaderManager {
             image.onload = resolve;
             image.onerror = reject;
           });
-          this._cache.set(item.key, image);
+
+          let texAsset: TextureAsset | undefined;
+          if (this._textureManager) {
+            texAsset = this._textureManager.addImage(item.key, image);
+          }
+
+          this._cache.set(item.key, {
+            type: 'image',
+            image,
+            textureAsset: texAsset,
+          });
           break;
         }
         case 'spritesheet': {
@@ -111,25 +136,16 @@ export class LoaderManager {
           });
 
           const config = item.config!;
-          const frames = [];
-          const cols = Math.floor(image.width / config.frameWidth);
-          const rows = Math.floor(image.height / config.frameHeight);
-
-          for (let y = 0; y < rows; y++) {
-            for (let x = 0; x < cols; x++) {
-              frames.push({
-                uvX: (x * config.frameWidth) / image.width,
-                uvY: (y * config.frameHeight) / image.height,
-                uvW: config.frameWidth / image.width,
-                uvH: config.frameHeight / image.height,
-              });
-            }
+          let texAsset: TextureAsset | undefined;
+          if (this._textureManager) {
+            texAsset = this._textureManager.addSpritesheet(item.key, image, config);
           }
 
           this._cache.set(item.key, {
             type: 'spritesheet',
             image,
-            frames,
+            config,
+            textureAsset: texAsset,
           });
           break;
         }
@@ -140,7 +156,6 @@ export class LoaderManager {
         }
         case 'csv':
         case 'yaml': {
-          // CSVとYAMLは文字列として読み込み、パーサーは別途用意する前提
           const text = await response.text();
           this._cache.set(item.key, text);
           break;

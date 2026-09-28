@@ -1,7 +1,14 @@
-import type { BufferInfo, GraphicsDevice, PipelineInfo } from './GraphicsDevice';
+import type {
+  BufferInfo,
+  GraphicsDevice,
+  PipelineInfo,
+  TextureAsset,
+  TextureUploadOptions,
+} from './GraphicsDevice';
 
 export class WebGPUDevice implements GraphicsDevice {
   private device: GPUDevice | null = null;
+  private textures: Map<string, TextureAsset> = new Map();
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     if (!navigator.gpu) {
@@ -36,7 +43,7 @@ export class WebGPUDevice implements GraphicsDevice {
     return { buffer, size };
   }
 
-  updateBuffer(bufferInfo: BufferInfo, data: Float32Array): void {
+  updateBuffer(bufferInfo: BufferInfo, data: Float32Array | Uint32Array | Uint8Array): void {
     if (!this.device) {
       throw new Error('Device not initialized');
     }
@@ -47,6 +54,28 @@ export class WebGPUDevice implements GraphicsDevice {
       data.byteOffset,
       data.byteLength,
     );
+  }
+
+  uploadTexture(
+    key: string,
+    source: HTMLImageElement | HTMLCanvasElement | ImageBitmap | ImageData,
+    options?: TextureUploadOptions,
+  ): TextureAsset {
+    const asset: TextureAsset = {
+      key,
+      layerIndex: 0,
+      width: source.width,
+      height: source.height,
+      frameWidth: options?.frameWidth || source.width,
+      frameHeight: options?.frameHeight || source.height,
+      frames: [{ uvX: 0, uvY: 0, uvW: 1, uvH: 1 }],
+    };
+    this.textures.set(key, asset);
+    return asset;
+  }
+
+  getTexture(key: string): TextureAsset | undefined {
+    return this.textures.get(key);
   }
 
   clear(_r: number, _g: number, _b: number, _a: number): void {}
