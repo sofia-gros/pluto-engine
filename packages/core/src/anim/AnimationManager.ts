@@ -169,7 +169,7 @@ export class AnimationManager {
       if (this.active[i] === 0) continue;
 
       const eId = this.entityId[i];
-      if (eId < 0 || this._arena.active[eId] === 0) {
+      if (eId < 0 || this._arena.idToIndex[eId] < 0) {
         // エンティティが死んでいればアニメーションも終了
         this.free(i);
         continue;

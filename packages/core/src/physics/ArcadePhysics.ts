@@ -44,9 +44,9 @@ export class ArcadePhysics implements Plugin {
     const count = arena.capacity;
 
     for (let i = 0; i < count; i++) {
-      if (arena.active[i] === 0 || arena.hitWidth[i] === 0) continue;
+      if (arena.idToIndex[i] < 0 || arena.hitWidth[i] === 0) continue;
       for (let j = i + 1; j < count; j++) {
-        if (arena.active[j] === 0 || arena.hitWidth[j] === 0) continue;
+        if (arena.idToIndex[j] < 0 || arena.hitWidth[j] === 0) continue;
 
         const hwI = (arena.hitWidth[i] * arena.scale[i]) / 2;
         const hhI = (arena.hitHeight[i] * arena.scale[i]) / 2;

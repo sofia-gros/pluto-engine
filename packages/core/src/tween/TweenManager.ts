@@ -108,7 +108,7 @@ export class TweenManager {
       }
 
       const eId = this.entityId[i];
-      if (eId >= 0 && this._arena.active[eId]) {
+      if (eId >= 0 && this.active[i]) {
         const val = this.startVal[i] + (this.endVal[i] - this.startVal[i]) * t;
 
         switch (this.propType[i]) {

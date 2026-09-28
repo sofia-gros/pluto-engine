@@ -399,7 +399,7 @@ export class SwarmSystem {
       const dmg = this.pdmg[i];
 
       for (let e = 0; e < this.scene.arena.capacity; e++) {
-        if (this.scene.arena.active[e] === 0) continue;
+        if (this.scene.arena.idToIndex[e] < 0) continue;
         const dx = this.scene.arena.posX[e] - projX;
         const dy = this.scene.arena.posY[e] - projY;
         const hitRadius = this.scene.arena.scale[e] * 0.5 + 6;
@@ -445,7 +445,7 @@ export class SwarmSystem {
     const oy = flow.originY;
 
     for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.active[i] === 0) continue;
+      if (this.scene.arena.idToIndex[i] < 0) continue;
       const gx = Math.floor((this.scene.arena.posX[i] - ox) / cs);
       const gy = Math.floor((this.scene.arena.posY[i] - oy) / cs);
       if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
@@ -459,7 +459,7 @@ export class SwarmSystem {
     this.scene.spatialHash.clear();
 
     for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.active[i] === 0) continue;
+      if (this.scene.arena.idToIndex[i] < 0) continue;
       const ex = this.scene.arena.posX[i];
       const ey = this.scene.arena.posY[i];
       const gx = Math.floor((ex - ox) / cs);
@@ -518,7 +518,7 @@ export class SwarmSystem {
 
     const outArray = new Uint32Array(32);
     for (let i = 0; i < this.scene.arena.capacity; i++) {
-      if (this.scene.arena.active[i] === 0) continue;
+      if (this.scene.arena.idToIndex[i] < 0) continue;
       const eRadius = this.scene.arena.scale[i] * 0.42;
       const count = this.scene.spatialHash.query(
         this.scene.arena.posX[i],
@@ -528,7 +528,7 @@ export class SwarmSystem {
       );
       for (let j = 0; j < count; j++) {
         const other = outArray[j];
-        if (other > i && this.scene.arena.active[other]) {
+        if (other > i && this.scene.arena.idToIndex[other] >= 0) {
           const oRadius = this.scene.arena.scale[other] * 0.42;
           const targetDist = eRadius + oRadius;
           const dx = this.scene.arena.posX[other] - this.scene.arena.posX[i];
@@ -593,7 +593,7 @@ export class SwarmSystem {
   ) {
     const r2 = radius * radius;
     for (let i = 0; i < scene.arena.capacity; i++) {
-      if (scene.arena.active[i] === 0) continue;
+      if (scene.arena.idToIndex[i] < 0) continue;
       const dx = scene.arena.posX[i] - x;
       const dy = scene.arena.posY[i] - y;
       const d2 = dx * dx + dy * dy;
@@ -618,7 +618,7 @@ export class SwarmSystem {
     let nearestIdx = -1;
     let minDist2 = maxDist * maxDist;
     for (let i = 0; i < scene.arena.capacity; i++) {
-      if (scene.arena.active[i] === 0) continue;
+      if (scene.arena.idToIndex[i] < 0) continue;
       const dx = scene.arena.posX[i] - x;
       const dy = scene.arena.posY[i] - y;
       const d2 = dx * dx + dy * dy;
