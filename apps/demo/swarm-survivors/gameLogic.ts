@@ -38,7 +38,8 @@ export class Player {
   lightningTimer = 0;
 
   constructor(scene: Scene, x: number, y: number) {
-    this.sprite = scene.add.sprite(x, y, 28);
+    this.sprite = scene.add.sprite(x, y, 'player');
+    this.sprite.scale = 28;
     this.skills.set('magic_wand', 1);
   }
 
@@ -318,7 +319,8 @@ export class SwarmSystem {
     atk = 22,
     scale = 20,
   ) {
-    const sprite = this.scene.add.sprite(x, y, scale);
+    const sprite = this.scene.add.sprite(x, y, 'enemy');
+    sprite.scale = scale;
     const id = sprite.id;
     if (id === -1) return;
 
@@ -342,7 +344,9 @@ export class SwarmSystem {
     this.dy[i] = y;
     this.dtype[i] = type;
     this.dval[i] = val;
-    this.dsprite[i] = this.scene.add.sprite(x, y, 14);
+    const sprite = this.scene.add.sprite(x, y, 'drop');
+    sprite.scale = 14;
+    this.dsprite[i] = sprite;
   }
 
   spawnProjectile(x: number, y: number, vx: number, vy: number, dmg: number, pierce = 1) {
@@ -355,7 +359,9 @@ export class SwarmSystem {
     this.pdmg[i] = dmg;
     this.plife[i] = 1.5;
     this.ppierce[i] = pierce;
-    this.psprite[i] = this.scene.add.sprite(x, y, 12);
+    const sprite = this.scene.add.sprite(x, y, 'projectile');
+    sprite.scale = 12;
+    this.psprite[i] = sprite;
   }
 
   kill(id: number, coinRateBonus = 0, scene?: Scene) {

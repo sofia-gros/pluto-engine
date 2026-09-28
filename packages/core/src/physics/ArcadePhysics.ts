@@ -1,4 +1,3 @@
-
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import type { Plugin } from '../scene/Plugin';
 import type { Scene } from '../scene/Scene';
@@ -33,7 +32,7 @@ export class ArcadePhysics implements Plugin {
 
     for (let i = 0; i < count; i++) {
       if (arena.active[i] === 0) continue;
-      
+
       arena.posX[i] += this.velX[i] * dt;
       arena.posY[i] += this.velY[i] * dt;
     }
@@ -49,14 +48,14 @@ export class ArcadePhysics implements Plugin {
       for (let j = i + 1; j < count; j++) {
         if (arena.active[j] === 0 || arena.hitWidth[j] === 0) continue;
 
-        const hwI = arena.hitWidth[i] * arena.scale[i] / 2;
-        const hhI = arena.hitHeight[i] * arena.scale[i] / 2;
-        const hwJ = arena.hitWidth[j] * arena.scale[j] / 2;
-        const hhJ = arena.hitHeight[j] * arena.scale[j] / 2;
+        const hwI = (arena.hitWidth[i] * arena.scale[i]) / 2;
+        const hhI = (arena.hitHeight[i] * arena.scale[i]) / 2;
+        const hwJ = (arena.hitWidth[j] * arena.scale[j]) / 2;
+        const hhJ = (arena.hitHeight[j] * arena.scale[j]) / 2;
 
         const dx = arena.posX[j] - arena.posX[i];
         const dy = arena.posY[j] - arena.posY[i];
-        
+
         const sumHW = hwI + hwJ;
         const sumHH = hhI + hhJ;
 
@@ -70,7 +69,7 @@ export class ArcadePhysics implements Plugin {
             const sign = Math.sign(dx) || 1;
             arena.posX[i] -= (overlapX / 2) * sign;
             arena.posX[j] += (overlapX / 2) * sign;
-            
+
             const b = (this.bounce[i] + this.bounce[j]) / 2;
             const temp = this.velX[i];
             this.velX[i] = this.velX[j] * b;
@@ -80,7 +79,7 @@ export class ArcadePhysics implements Plugin {
             const sign = Math.sign(dy) || 1;
             arena.posY[i] -= (overlapY / 2) * sign;
             arena.posY[j] += (overlapY / 2) * sign;
-            
+
             const b = (this.bounce[i] + this.bounce[j]) / 2;
             const temp = this.velY[i];
             this.velY[i] = this.velY[j] * b;
@@ -95,4 +94,3 @@ export class ArcadePhysics implements Plugin {
     // arrays are managed by GC
   }
 }
-

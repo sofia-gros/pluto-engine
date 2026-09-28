@@ -44,7 +44,7 @@ jobs:
       - name: Copy Demo to Docs
         run: |
           mkdir -p docs_site/.vitepress/dist/demos
-          cp -R apps/demo/dist/swarm-survivors docs_site/.vitepress/dist/demos/
+          cp -R apps/demo/dist/* docs_site/.vitepress/dist/demos/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

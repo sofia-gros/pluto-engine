@@ -21,7 +21,7 @@ class GameScene extends Scene {
   private inputDir = { x: 0, y: 0 };
 
   constructor() {
-    super(50000);
+    super({ maxInstances: 50000 });
     this.registerPlugin(new MortonPlugin(64));
   }
 
