@@ -47,8 +47,9 @@ jobs:
 
       - name: Strip workspace protocol for publishing
         run: |
-          # Replace "workspace:*" with the actual version (e.g. "0.1.0") so npm publish doesn't reject it
-          find packages -name "package.json" -exec sed -i 's/"workspace:\*"/"0.1.0"/g' {} +
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Setting package dependency versions to ^$VERSION..."
+          find packages -name "package.json" -exec sed -i "s/\"workspace:\*\"/\"^$VERSION\"/g" {} +
 
       - name: Publish to NPM
         run: |
