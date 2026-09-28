@@ -38,6 +38,7 @@ export class Scene {
   public camera: Camera;
 
   private _plugins: Plugin[] = [];
+  private _tilemaps: Tilemap[] = [];
 
   public math = mathHelpers;
 
@@ -72,8 +73,10 @@ export class Scene {
     text: (x = 0, y = 0, text = '', style: TextStyle = {}): Text => {
       return new Text(x, y, text, style, this.arena);
     },
-    tilemap: (mapData: number[][], tileSize = 32): Tilemap => {
-      return new Tilemap(this.arena, mapData, tileSize);
+    tilemap: (mapData: any, tileSize = 32): Tilemap => {
+      const tm = new Tilemap(this.arena, mapData, tileSize);
+      this._tilemaps.push(tm);
+      return tm;
     },
   };
 
@@ -121,6 +124,13 @@ export class Scene {
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {
       this._plugins[i].update?.(dt);
+    }
+
+    // Tilemap Culling
+    const sw = this.engine.scale.width;
+    const sh = this.engine.scale.height;
+    for (let i = 0; i < this._tilemaps.length; i++) {
+      this._tilemaps[i].updateCulling(this.camera, sw, sh);
     }
 
     // シーングラフ（親子階層）の更新
@@ -209,8 +219,13 @@ export class Scene {
       this._plugins[i].destroy?.();
     }
     this._plugins.length = 0;
+    for (let i = 0; i < this._tilemaps.length; i++) {
+      this._tilemaps[i].destroy();
+    }
+    this._tilemaps.length = 0;
     this.arena.clear();
     this.tweens.clear();
+    this.anim.clear();
     this.load.clear();
   }
 
