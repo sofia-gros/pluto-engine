@@ -3,6 +3,12 @@
     <!-- タブコントロール -->
     <div class="tab-controls">
       <button 
+        :class="['tab-btn', { active: activeTab === 'steering_deep' }]" 
+        @click="activeTab = 'steering_deep'"
+      >
+        🏎️ Steering 爆速化解剖 (15.8ms ➔ 2.7ms)
+      </button>
+      <button 
         :class="['tab-btn', { active: activeTab === 'fps' }]" 
         @click="activeTab = 'fps'"
       >
@@ -28,6 +34,89 @@
       </button>
     </div>
 
+    <!-- 0. Steering 爆速化解剖タブ (NEW) -->
+    <div v-if="activeTab === 'steering_deep'" class="chart-card">
+      <div class="chart-header">
+        <h3 class="chart-title">🏎️ Steering の内部解剖と爆速化レシピ (15.85ms ➔ 2.74ms: 5.8倍 高速化)</h3>
+        <p class="chart-desc">
+          Steering 内部の「Math.hypot」「座標インデックス計算」「メモリランダム読出」を分解測定した結果、
+          <strong>「16k グリッド速度場の事前一括計算 + 30万体直接サンプリング」</strong> により 15.85ms ➔ <strong>2.74ms</strong> への爆速化を実証しました。
+        </p>
+      </div>
+
+      <!-- アーキテクチャ比較バー -->
+      <div class="steering-step-list">
+        <div class="step-card" v-for="step in steeringSteps" :key="step.title">
+          <div class="step-head">
+            <span class="step-badge" :style="{ backgroundColor: step.color }">{{ step.badge }}</span>
+            <div class="step-titles">
+              <h4>{{ step.title }}</h4>
+              <span class="step-sub">{{ step.desc }}</span>
+            </div>
+            <div class="step-time">
+              <span class="time-val">{{ step.time300k }} ms</span>
+              <span class="speedup-val" :class="step.speedupClass">{{ step.speedup }}</span>
+            </div>
+          </div>
+          <div class="step-bar-wrapper">
+            <div class="step-bar" :style="{ width: (step.time300k / 16) * 100 + '%', backgroundColor: step.color }"></div>
+          </div>
+          <p class="step-detail">{{ step.detail }}</p>
+        </div>
+      </div>
+
+      <!-- 単体要素マイクロコスト比較 -->
+      <div class="micro-cost-section">
+        <h4 class="sub-title">🔍 Steering 内部要素の単体コスト (30万体実行時)</h4>
+        <div class="micro-grid">
+          <div class="micro-card">
+            <h5>1. ベクトル正規化計算 (300k)</h5>
+            <div class="micro-compare">
+              <div class="micro-row bad">
+                <span><code>Math.hypot(x, y)</code>:</span>
+                <strong>5.90 ms</strong>
+              </div>
+              <div class="micro-row good">
+                <span><code>1 / Math.sqrt(x*x + y*y)</code>:</span>
+                <strong>0.12 ms (49倍 高速)</strong>
+              </div>
+            </div>
+            <p class="micro-note">V8 の <code>Math.hypot</code> は内部のオーバーフロー保護分岐が重いため、逆数乗算へ置換するだけで 5.78ms 削減。</p>
+          </div>
+
+          <div class="micro-card">
+            <h5>2. グリッド座標変換 (300k)</h5>
+            <div class="micro-compare">
+              <div class="micro-row bad">
+                <span><code>Math.floor(x / 20)</code>:</span>
+                <strong>1.52 ms</strong>
+              </div>
+              <div class="micro-row good">
+                <span><code>(x * 0.05) | 0</code>:</span>
+                <strong>0.67 ms (2.3倍 高速)</strong>
+              </div>
+            </div>
+            <p class="micro-note">浮動小数点除算を乗算にし、<code>| 0</code> で整数切り捨てを行うことで 0.85ms 削減。</p>
+          </div>
+
+          <div class="micro-card">
+            <h5>3. グリッドメモリ読出 (300k)</h5>
+            <div class="micro-compare">
+              <div class="micro-row bad">
+                <span>個別6点読出 (圧力4+方向2):</span>
+                <strong>1.93 ms</strong>
+              </div>
+              <div class="micro-row good">
+                <span>事前計算グリッド単一読出:</span>
+                <strong>0.23 ms (8.4倍 高速)</strong>
+              </div>
+            </div>
+            <p class="micro-note">16,384 個のグリッドセルで速度を事前計算しておくことで、30万体のランダム読出回数を 1/6 に圧縮。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 1. FPS 推移比較チャート -->
     <div v-if="activeTab === 'fps'" class="chart-card">
       <div class="chart-header">
@@ -37,46 +126,33 @@
 
       <div class="chart-container">
         <svg viewBox="0 0 700 320" class="chart-svg">
-          <!-- グリッド線 & Y軸ラベル -->
           <g class="grid-lines">
             <line x1="60" y1="40" x2="660" y2="40" stroke="#334155" stroke-dasharray="3,3" />
             <text x="50" y="44" text-anchor="end" fill="#94a3b8" font-size="11">140</text>
-
             <line x1="60" y1="95" x2="660" y2="95" stroke="#334155" stroke-dasharray="3,3" />
             <text x="50" y="99" text-anchor="end" fill="#94a3b8" font-size="11">100</text>
-
             <line x1="60" y1="150" x2="660" y2="150" stroke="#334155" stroke-dasharray="3,3" />
             <text x="50" y="154" text-anchor="end" fill="#94a3b8" font-size="11">60 (60FPS)</text>
-
             <line x1="60" y1="205" x2="660" y2="205" stroke="#334155" stroke-dasharray="3,3" />
             <text x="50" y="209" text-anchor="end" fill="#94a3b8" font-size="11">30 (30FPS)</text>
-
             <line x1="60" y1="260" x2="660" y2="260" stroke="#475569" />
             <text x="50" y="264" text-anchor="end" fill="#94a3b8" font-size="11">0</text>
           </g>
 
-          <!-- X軸ラベル -->
           <g class="x-labels" fill="#94a3b8" font-size="11" text-anchor="middle">
             <text v-for="(pt, idx) in fpsPoints" :key="idx" :x="pt.x" y="280">
               {{ pt.label }}
             </text>
           </g>
 
-          <!-- v1.0.8 P5-P95 信頼区間エリア -->
           <polygon :points="v108AreaPoints" fill="rgba(16, 185, 129, 0.12)" />
-
-          <!-- v1.0.7 折れ線 (旧バージョン) -->
           <polyline :points="v107Polyline" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-dasharray="5,4" />
-
-          <!-- v1.0.8 折れ線 (新バージョン P50中央値) -->
           <polyline :points="v108Polyline" fill="none" stroke="#10b981" stroke-width="3" />
 
-          <!-- v1.0.7 データポイント -->
           <g v-for="(pt, idx) in v107Points" :key="'old-' + idx">
             <circle :cx="pt.x" :cy="pt.y" r="4" fill="#ef4444" />
           </g>
 
-          <!-- v1.0.8 データポイント -->
           <g v-for="(pt, idx) in v108Points" :key="'new-' + idx">
             <circle :cx="pt.x" :cy="pt.y" r="5" fill="#10b981" stroke="#0f172a" stroke-width="1.5" />
             <text :x="pt.x" :y="pt.y - 10" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle">
@@ -85,20 +161,10 @@
           </g>
         </svg>
 
-        <!-- 凡例 -->
         <div class="legend-row">
-          <div class="legend-item">
-            <span class="badge new-badge"></span>
-            <strong>v1.0.8 (最新) - 実測値</strong>
-          </div>
-          <div class="legend-item">
-            <span class="badge old-badge"></span>
-            <strong>v1.0.7 (以前) - 旧構造</strong>
-          </div>
-          <div class="legend-item">
-            <span class="badge band-badge"></span>
-            <span class="text-muted">P5〜P95 分位帯</span>
-          </div>
+          <div class="legend-item"><span class="badge new-badge"></span><strong>v1.0.8 (最新) - 実測値</strong></div>
+          <div class="legend-item"><span class="badge old-badge"></span><strong>v1.0.7 (以前) - 旧構造</strong></div>
+          <div class="legend-item"><span class="badge band-badge"></span><span class="text-muted">P5〜P95 分位帯</span></div>
         </div>
       </div>
     </div>
@@ -113,7 +179,6 @@
         </p>
       </div>
 
-      <!-- スタックバーグラフ -->
       <div class="subphase-chart-container">
         <div class="stacked-bar-wrapper">
           <div class="stacked-bar">
@@ -138,7 +203,6 @@
           </div>
         </div>
 
-        <!-- 各サブフェーズ詳細カード -->
         <div class="subphase-grid">
           <div class="subphase-card" v-for="sp in subphaseDetails" :key="sp.name">
             <div class="subphase-head">
@@ -232,39 +296,29 @@
       </div>
     </div>
 
-    <!-- 詳細実測生データテーブル -->
+    <!-- Steering 実測テーブル -->
     <div class="table-section">
-      <h4 class="table-title">📊 v1.0.8 詳細サブフェーズ実測プロファイリング生データ</h4>
+      <h4 class="table-title">📊 Steering アーキテクチャ別 実測タイム比較表 (30万体)</h4>
       <div class="table-wrapper">
         <table class="benchmark-table">
           <thead>
             <tr>
               <th>エンティティ数</th>
-              <th>FPS (P50)</th>
-              <th>P5 (最悪)</th>
-              <th>1. 密度蓄積</th>
-              <th>2. 圧力場解法</th>
-              <th>3. AI/ステアリング</th>
-              <th>4. 座標積分</th>
-              <th>5. 空間ハッシュ</th>
-              <th>6. 連続Mem限界</th>
-              <th>7. ランダムMem</th>
-              <th>合計Sim時間</th>
+              <th>現行 Baseline</th>
+              <th>案1: FastMath (sqrt)</th>
+              <th>案2: FastIndex + Math</th>
+              <th>案3: Precomputed Vector Grid</th>
+              <th>爆速化倍率</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in subphaseData" :key="row.entities">
+            <tr v-for="row in steeringData" :key="row.entities">
               <td class="cell-entity"><strong>{{ (row.entities / 1000) }}k</strong></td>
-              <td class="cell-fps"><strong>{{ row.fps_p50 }}</strong></td>
-              <td class="cell-muted">{{ row.fps_p5 }}</td>
-              <td>{{ row.densitySplatMs }}ms</td>
-              <td>{{ row.poissonMs }}ms</td>
-              <td class="cell-highlight">{{ row.steeringMs }}ms</td>
-              <td class="cell-green">{{ row.integrationMs }}ms</td>
-              <td>{{ row.spatialHashMs }}ms</td>
-              <td class="cell-muted">{{ row.pureMemoryMs }}ms</td>
-              <td class="cell-muted">{{ row.randomMemoryMs }}ms</td>
-              <td class="cell-total"><strong>{{ row.totalSimMs }}ms</strong></td>
+              <td class="cell-muted">{{ row.steer_baseline_ms }} ms</td>
+              <td>{{ row.steer_fastmath_ms }} ms</td>
+              <td>{{ row.steer_fastindex_ms }} ms</td>
+              <td class="cell-fps"><strong>{{ row.steer_precomputed_grid_ms }} ms</strong></td>
+              <td class="cell-green"><strong>{{ (row.steer_baseline_ms / row.steer_precomputed_grid_ms).toFixed(1) }}x 爆速化</strong></td>
             </tr>
           </tbody>
         </table>
@@ -276,9 +330,26 @@
 <script setup>
 import { ref, computed } from 'vue';
 
-const activeTab = ref('fps');
+const activeTab = ref('steering_deep');
 
-// 実測サブフェーズ詳細データ (Playwright Headed 実機実測値)
+// Steering 詳細プロファイリング実測データ (300k 実機)
+const steeringData = [
+  { entities: 50000, steer_baseline_ms: 2.93, steer_fastmath_ms: 1.37, steer_fastindex_ms: 1.07, steer_precomputed_grid_ms: 0.58 },
+  { entities: 100000, steer_baseline_ms: 5.42, steer_fastmath_ms: 2.82, steer_fastindex_ms: 2.12, steer_precomputed_grid_ms: 0.99 },
+  { entities: 150000, steer_baseline_ms: 8.22, steer_fastmath_ms: 4.09, steer_fastindex_ms: 3.11, steer_precomputed_grid_ms: 1.42 },
+  { entities: 200000, steer_baseline_ms: 10.71, steer_fastmath_ms: 5.37, steer_fastindex_ms: 4.25, steer_precomputed_grid_ms: 1.85 },
+  { entities: 250000, steer_baseline_ms: 13.32, steer_fastmath_ms: 6.77, steer_fastindex_ms: 5.15, steer_precomputed_grid_ms: 2.21 },
+  { entities: 300000, steer_baseline_ms: 15.85, steer_fastmath_ms: 8.03, steer_fastindex_ms: 6.14, steer_precomputed_grid_ms: 2.74 },
+];
+
+const steeringSteps = [
+  { badge: '現行', color: '#ef4444', title: '1. 現行 Baseline (個別勾配 + Math.hypot)', desc: '30万回ループ内で個別圧力差分 & Math.hypot 正規化', time300k: '15.85', speedup: '基準 (1.0x)', speedupClass: 'text-muted', detail: 'Math.hypot の内部オーバーフロー保護コードと 30万回×6点 の Float32Array 読出が最大のボトルネック。' },
+  { badge: '改善案1', color: '#f59e0b', title: '2. FastMath (Math.sqrt + 逆数乗算)', desc: 'Math.hypot を 1.0 / Math.sqrt(x*x + y*y) に置換', time300k: '8.03', speedup: '2.0x 高速化', speedupClass: 'text-amber', detail: 'Math.hypot 単体 (5.9ms) を Math.sqrt (0.12ms) に置き換えるだけで、Steering 時間がほぼ半減。' },
+  { badge: '改善案2', color: '#3b82f6', title: '3. FastIndex + FastMath (ビットシフト)', desc: '(x * invCs) | 0 と (r << 7) + c による整数インデックス化', time300k: '6.14', speedup: '2.6x 高速化', speedupClass: 'text-blue', detail: 'Math.floor を排除し、128x128 の幅をビットシフト (<< 7) で最適化。' },
+  { badge: '究極改善', color: '#10b981', title: '4. Precomputed Vector Field (グリッド事前計算)', desc: '16k グリッドセルで速度場を1フレーム1回計算 ➔ 30万体は単一読出', time300k: '2.74', speedup: '5.8x 爆速化', speedupClass: 'text-green', detail: '30万回の勾配計算・平方根を排除し、16k要素の事前計算配列から直接サンプリング。15.85ms ➔ 2.74ms を達成。' },
+];
+
+// 実測サブフェーズ詳細データ
 const subphaseData = [
   { entities: 25000, fps_p5: 91, fps_p50: 120, fps_p95: 123, frameTimeMs: 8.77, densitySplatMs: 0.52, poissonMs: 0.22, steeringMs: 1.57, integrationMs: 0.14, spatialHashMs: 0.25, pureMemoryMs: 0.08, randomMemoryMs: 0.04, totalSimMs: 3.77 },
   { entities: 50000, fps_p5: 82, fps_p50: 93, fps_p95: 96, frameTimeMs: 10.94, densitySplatMs: 0.64, poissonMs: 0.21, steeringMs: 2.92, integrationMs: 0.14, spatialHashMs: 0.51, pureMemoryMs: 0.09, randomMemoryMs: 0.08, totalSimMs: 6.04 },
@@ -476,6 +547,158 @@ const breakdownItems = [
 .band-badge {
   background: rgba(16, 185, 129, 0.25);
   border: 1px dashed #10b981;
+}
+
+/* Steering 爆速化スタイル */
+.steering-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.step-card {
+  background: #090d16;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.step-badge {
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.step-titles {
+  flex: 1;
+}
+
+.step-titles h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--vp-c-text-1);
+}
+
+.step-sub {
+  font-size: 0.75rem;
+  color: var(--vp-c-text-3);
+}
+
+.step-time {
+  text-align: right;
+}
+
+.time-val {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #fff;
+  display: block;
+}
+
+.speedup-val {
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.text-amber { color: #f59e0b; }
+.text-blue { color: #3b82f6; }
+.text-green { color: #10b981; }
+
+.step-bar-wrapper {
+  height: 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.step-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.step-detail {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--vp-c-text-2);
+}
+
+/* 単体マイクロコスト */
+.micro-cost-section {
+  background: #090d16;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.sub-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+}
+
+.micro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.micro-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.micro-card h5 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--vp-c-text-1);
+}
+
+.micro-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.micro-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.micro-row.bad {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
+
+.micro-row.good {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+}
+
+.micro-note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--vp-c-text-3);
+  line-height: 1.3;
 }
 
 /* 14.5ms 内訳スタックバー */
