@@ -146,9 +146,9 @@ export class PlutoEngine {
     // Dense Setのためそのまま利用可能
     const renderCount = arena.activeCount;
 
-    const tPackStart = performance.now();
-    this.packTimeMs = 0; // Swap-Removeによりパッキング不要
-    const tPackEnd = performance.now();
+    
+    
+    const tPackEnd = performance.now(); this.packTimeMs = 0;
 
     if (renderCount > 0) {
       // Dirty Flag に基づく選択的転送

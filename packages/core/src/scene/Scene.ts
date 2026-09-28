@@ -1,6 +1,6 @@
 import { Sprite } from '../arena/Sprite';
 import { Text, type TextStyle } from '../arena/Text';
-import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
+
 import type { PlutoEngine } from '../core/PlutoEngine';
 import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';

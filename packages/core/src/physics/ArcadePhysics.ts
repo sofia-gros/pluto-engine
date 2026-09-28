@@ -31,7 +31,7 @@ export class ArcadePhysics implements Plugin {
     const count = arena.capacity;
 
     for (let i = 0; i < count; i++) {
-      if (arena.active[i] === 0) continue;
+      
 
       arena.posX[i] += this.velX[i] * dt;
       arena.posY[i] += this.velY[i] * dt;

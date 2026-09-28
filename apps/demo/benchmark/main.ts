@@ -278,7 +278,7 @@ class BenchmarkScene extends Scene {
         }
       }
 
-      if (active < this.maxEnemyCount) {
+      if (active < 300000) {
         this.spawnEnemies(5000);
       } else {
         this.finishBenchmark();
