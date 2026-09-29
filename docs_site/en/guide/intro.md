@@ -1,8 +1,8 @@
 # Introduction to PlutoEngine
 
-Welcome to the world of **PlutoEngine**! 🪐
+Welcome to **PlutoEngine**.
 
-PlutoEngine is a next-generation, Data-Oriented (SoA) 2D WebGL/WebGPU game engine built with a singular obsession: **smoothly simulating and rendering over 100,000 active entities at stable 60 FPS / 144 FPS in web browsers**.
+PlutoEngine is a Data-Oriented (SoA) 2D WebGL/WebGPU game engine built around one central goal: **smoothly simulating and rendering over 100,000 active entities at stable 60–144 FPS in a web browser**.
 
 ```
        +-------------------------------------------------------+
@@ -21,17 +21,17 @@ PlutoEngine is a next-generation, Data-Oriented (SoA) 2D WebGL/WebGPU game engin
 
 ## Why PlutoEngine?
 
-In modern web game development, genres like **Swarm Survivors (horde survival), Bullet Hell SHMUPs, and massive particle-driven simulations** have long been the Achilles' heel of JavaScript game engines.
+In modern web game development, genres like **swarm survival, bullet-hell shooters, and large particle simulations** have always been difficult to run smoothly in the browser. The fundamental reason is how JavaScript engines manage memory.
 
 ### The "Garbage Collection Wall" in Traditional Engines
 
-Renowned engines such as PixiJS and Phaser rely on traditional Object-Oriented Programming (OOP) and deep scene graphs. While intuitive and flexible, this design hits severe performance bottlenecks when scaling to tens of thousands of entities:
+Many established engines such as PixiJS and Phaser are built on an Object-Oriented Programming (OOP) model with a scene graph. This is a well-understood design that offers a clear API and rich feature sets, but it carries specific performance tradeoffs when scaling to tens of thousands of entities:
 
-1. **Garbage Collection (GC) Spikes**: Creating and discarding hundreds of small objects every frame (`Vector2`, particle handles, event payloads) floods the V8 heap, causing noticeable micro-stutters and frame drops.
-2. **CPU Cache Misses**: Individual entity objects are scattered randomly across the heap. The CPU cannot take advantage of contiguous L1/L2 cache prefetching, stalling execution while waiting on RAM.
-3. **Draw Call Explosion**: Changing pipeline state and dispatching draw calls for individual nodes saturates CPU-to-GPU command buffers.
+1. **Garbage Collection (GC) Spikes**: Creating and discarding many small objects every frame (`Vector2`, particle handles, event payloads) puts pressure on the V8 heap, which can cause micro-stutters and frame drops during GC pauses.
+2. **CPU Cache Misses**: Individual entity objects are scattered across the heap at arbitrary addresses. The CPU cannot efficiently prefetch them into L1/L2 cache, so it stalls waiting on RAM reads.
+3. **Draw Call Overhead**: Changing pipeline state and issuing draw calls per scene node adds up quickly at high entity counts.
 
-PlutoEngine tears down this wall by completely redesigning the engine from memory layout upward.
+PlutoEngine addresses these tradeoffs by redesigning the engine from the memory layout up, using flat TypedArrays instead of object graphs.
 
 ---
 
@@ -64,10 +64,10 @@ class InstanceBufferArena {
 }
 ```
 
-Updating entity positions iterates sequentially through a single flat `Float32Array`. Every cache line loaded by the CPU is packed with useful data, unlocking blazing SIMD-like execution speeds.
+Updating entity positions iterates sequentially through a single flat `Float32Array`. Every cache line loaded by the CPU is packed with useful data, which enables SIMD-like execution speeds under V8's JIT compiler.
 
 ### 3. Flyweight Handle Pattern
-To keep the developer experience friendly and intuitive, classes like `Sprite` are implemented as ultralight flyweight handles:
+To keep the developer experience intuitive, classes like `Sprite` are implemented as lightweight flyweight handles:
 
 ```typescript
 // sprite is a lightweight handle wrapping only an integer ID
@@ -109,11 +109,10 @@ PlutoEngine supports any project workflow:
 | **Runtime GC Pressure** | **0 bytes (Zero-Alloc)** | Frequent per frame | Minor per frame |
 | **Physics Engine** | **Ultra-light XPBD** | Arcade / Matter.js | External plugin |
 | **Spatial Partitioning** | **Morton Spatial Hash** | None (Custom) | None |
-| **Developer Experience** | **Intuitive Phaser-like API** | Mature & rich | Rendering-focused |
+| **Developer Experience** | **Familiar Phaser-like API** | Mature & rich | Rendering-focused |
 
 ---
 
 ## Next Steps
 
-Ready to unleash unstoppable performance in your browser games?
-Head to [Installation & Setup](./setup) to get your environment ready, or jump straight into running code in [Hello World](./hello-world)!
+Head to [Installation & Setup](./setup) to get your environment ready, or jump straight into running code in [Hello World](./hello-world).

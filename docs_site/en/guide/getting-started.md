@@ -1,13 +1,13 @@
 # Quick Start Guide
 
-Welcome to PlutoEngine! This guide covers everything you need to know to get a high-performance 2D game running in under 5 minutes.
+This guide covers the minimum steps needed to get a PlutoEngine game running in your browser.
 
 ---
 
 ## 3 Steps to Launch Your First Game
 
 ```
-[ Step 1: Install ]         --->  [ Step 2: Define Scene ]    --->  [ Step 3: Launch Engine ]
+[ Step 1: Install ]         -->  [ Step 2: Define Scene ]    -->  [ Step 3: Launch Engine ]
  bun add pluto-engine              Extend Scene class                new PlutoEngine(config)
 ```
 
@@ -87,10 +87,10 @@ bun run dev
 
 ## Guide Roadmap
 
-Explore our comprehensive guides to learn more:
+Explore the guides to learn more:
 
-- 🪐 **[Introduction to PlutoEngine](./intro)**: Core philosophy, GC elimination, and SoA design.
-- ⚙️ **[Installation & Setup](./setup)**: Details on TS imports, standalone ESM, and CDN tags.
-- 🚀 **[Hello World](./hello-world)**: Full walk-through with keyboard controls and boundaries.
-- 🏗️ **[Architecture Overview](./architecture)**: Under-the-hood look at memory arenas and rendering.
-- 🎮 **[Tutorial: Making a Swarm Survivor](/en/tutorial/01-setup)**: The complete 10-part tutorial building a 10,000+ monster survival game from scratch!
+- **[Introduction to PlutoEngine](./intro)**: Core philosophy, GC elimination, and SoA design.
+- **[Installation & Setup](./setup)**: Details on TS imports, standalone ESM, and CDN tags.
+- **[Hello World](./hello-world)**: Full walk-through with keyboard controls and boundaries.
+- **[Architecture Overview](./architecture)**: Under-the-hood look at memory arenas and rendering.
+- **[Tutorial: Making a Swarm Survivor](/en/tutorial/01-setup)**: The complete 10-part tutorial building a 10,000+ monster survival game from scratch.

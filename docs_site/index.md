@@ -25,8 +25,8 @@ features:
     details: CPUキャッシュラインを最大化する TypedArray (SoA) と Loop Fission により、V8/JITコンパイラの自動 SIMD ベクトル化を促進。
   - title: ポアソン群集流体 (Continuum Crowds)
     details: 速度場事前計算と Lerp of Lerp 双線形補間により、滑らかで自然な数万体の誘導・ステアリングを最小負荷で実現。
-  - title: WebGPU / WebGL2 ハイブリッド
-    details: WGSLパイプラインを採用し、WebGL2への自動フォールバックとハードウェアインスタンシングをサポート。
+  - title: WebGL2 ハードウェアインスタンシング (WebGPU 対応予定)
+    details: WebGL2 による GPU Texture2DArray とハードウェアインスタンシングを主軸とし、WebGPU への移行パスも整備中。
   - title: 高速物理 & 空間分割内蔵
     details: XPBD位置ベース動力学ソルバとモートン順序空間ハッシュにより、大群の衝突判定をO(1)で解決。
 ---

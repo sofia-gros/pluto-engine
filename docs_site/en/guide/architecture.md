@@ -1,6 +1,6 @@
 # Architecture Overview
 
-The extreme performance of PlutoEngine is no accident. It is the result of a meticulously engineered **Data-Oriented Architecture** designed around CPU cache mechanics, browser JavaScript engine dynamics (V8 JIT / Garbage Collection), and GPU pipeline throughput.
+The performance characteristics of PlutoEngine come from a **Data-Oriented Architecture** designed around CPU cache mechanics, browser JavaScript engine dynamics (V8 JIT / Garbage Collection), and GPU pipeline throughput.
 
 ```mermaid
 flowchart TD
@@ -143,7 +143,7 @@ The game loop decouples deterministic physics simulation from display refresh ra
   accumulator += dt     accumulator < fixedDt (1/60s)?
       │                       │
       │ (drain accumulator)   ▼
-      └───> while(accumulator >= fixedDt)
+      └──-> while(accumulator >= fixedDt)
                 scene.fixedUpdate(1/60)
                   │
                   ▼

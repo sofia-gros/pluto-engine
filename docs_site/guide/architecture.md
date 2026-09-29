@@ -1,6 +1,6 @@
 # アーキテクチャ概要
 
-PlutoEngine の圧倒的なパフォーマンスは、偶然の産物ではありません。CPUキャッシュ構造、JavaScriptエンジンの内部動作（V8 JIT / GC）、そしてGPUハードウェアの特性を徹底的に計算した**データ指向アーキテクチャ（Data-Oriented Architecture）**に基づいています。
+PlutoEngine のパフォーマンスは、CPUキャッシュ構造、JavaScriptエンジンの内部動作（V8 JIT / GC）、そしてGPUハードウェアの特性を考慮した**データ指向アーキテクチャ（Data-Oriented Architecture）**に基づいています。
 
 ```mermaid
 flowchart TD
@@ -143,7 +143,7 @@ export class Sprite {
   accumulator += dt     accumulator < fixedDt (1/60s)?
       │                       │
       │ (残余分を消費)           ▼
-      └───> while(accumulator >= fixedDt)
+      └──-> while(accumulator >= fixedDt)
                 scene.fixedUpdate(1/60)
                   │
                   ▼

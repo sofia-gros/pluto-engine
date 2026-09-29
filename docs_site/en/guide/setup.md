@@ -1,6 +1,6 @@
 # Installation & Setup
 
-PlutoEngine can be integrated into your workflow through four flexible distribution formats, accommodating everything from enterprise TypeScript bundlers to standalone HTML scripts.
+PlutoEngine can be integrated into your workflow through four distribution formats, covering everything from TypeScript bundler projects to standalone HTML scripts.
 
 ---
 
@@ -160,8 +160,8 @@ For single-file demos, prototyping, or embedding in CodePen and JSFiddle, load t
 
 1. **Editor**: [Visual Studio Code](https://code.visualstudio.com/) or [Cursor](https://www.cursor.com/)
 2. **Recommended Extensions**:
-   - `Biome` (Ultra-fast formatting and linting)
+   - `Biome` (Fast formatting and linting)
    - `TypeScript Vue Plugin` / `Tailwind CSS IntelliSense` (for hybrid UI overlays)
 3. **Local Dev Server**: Vite or Bun dev server (`bun run dev`)
 
-Now that your development environment is ready, continue to [Hello World](./hello-world) to launch your very first game canvas!
+Once your environment is ready, continue to [Hello World](./hello-world) to run your first game canvas.

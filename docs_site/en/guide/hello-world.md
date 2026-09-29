@@ -1,6 +1,6 @@
 # Hello World
 
-In this guide, you will create a minimal game with PlutoEngine, displaying your first animated sprite and controlling it smoothly using keyboard arrow keys.
+In this guide, you will create a minimal game with PlutoEngine, displaying your first sprite and controlling it with keyboard arrow keys.
 
 ---
 
@@ -21,7 +21,7 @@ my-pluto-game/
 
 ## 2. HTML Canvas Setup (`index.html`)
 
-Create a clean HTML file centering the canvas with a sleek dark aesthetic:
+Create a clean HTML file centering the canvas:
 
 ```html
 <!DOCTYPE html>
@@ -77,7 +77,7 @@ class MainScene extends Scene {
     // Spawn a sprite at screen center (400, 300) with scale 32px
     this.player = this.add.sprite(400, 300, 32);
 
-    // Apply a vibrant cyan tint (0x00E5FF)
+    // Apply a cyan tint (0x00E5FF)
     this.player.setTint(0x00e5ff);
 
     console.log(`Player created with Arena Slot ID: ${this.player.id}`);
@@ -150,7 +150,6 @@ bun run dev
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser. You will see a glowing cyan sprite centered on a deep cosmic background, responding instantly and smoothly to your WASD and arrow keys!
+Open `http://localhost:5173` in your browser. You will see a cyan sprite centered on a dark background, responding to your WASD and arrow keys.
 
-Congratulations! 🎉 You have mastered the fundamentals of PlutoEngine.
-Next, check out [Architecture Overview](./architecture) to explore the internals of SoA memory management, or dive directly into building a complete game in [Tutorial: Making a Swarm Survivor](/en/tutorial/01-setup)!
+Next, check out [Architecture Overview](./architecture) to explore the internals of SoA memory management, or dive directly into building a complete game in [Tutorial: Making a Swarm Survivor](/en/tutorial/01-setup).

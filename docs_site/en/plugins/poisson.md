@@ -1,16 +1,16 @@
 # Poisson Continuum Crowds & Flow Field Plugin
 
-The `@pluto-engine/poisson` package provides **Fluid-dynamics-based crowd simulation (Continuum Crowds)** and **High-performance Vector Field Precomputation**.
+The `@pluto-engine/poisson` package provides **fluid-dynamics-based crowd simulation (Continuum Crowds)** and **high-performance Vector Field Precomputation**.
 
-It effortlessly calculates smooth, fluid crowd navigation for hundreds of thousands of swarm entities, allowing them to flow around obstacles and avoid density congestion in **Zero-Allocation (GC-free)** execution.
+It calculates smooth crowd navigation for hundreds of thousands of swarm entities, allowing them to flow around obstacles and avoid density congestion in **Zero-Allocation (GC-free)** execution.
 
 ---
 
-## ⚡ Breakthrough in v1.1.0: Precomputed Vector Fields & Bilinear Interpolation
+## Improvements in v1.1.0: Precomputed Vector Fields & Bilinear Interpolation
 
 Previously, simulating 300,000 entities required each entity to read 4 neighboring pressure values to compute gradients (1.8 million random reads and square roots per frame).
 
-In v1.1.0, PlutoEngine precomputes the integrated velocity field once per frame across the 128x128 grid (16,384 cells in **0.04 ms**). Entities sample this precomputed grid using an algebraic **Lerp of Lerp Bilinear Interpolation**, reducing steering time from **16.2ms ➔ 2.9ms (5.6x speedup)**.
+In v1.1.0, PlutoEngine precomputes the integrated velocity field once per frame across the 128x128 grid (16,384 cells in **0.04 ms**). Entities sample this precomputed grid using an algebraic **Lerp of Lerp Bilinear Interpolation**, reducing steering time from **16.2ms → 2.9ms (5.6x speedup)**.
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,7 @@ flowchart LR
 
 ---
 
-## 🎮 Installation & Registration
+## Installation & Registration
 
 ```typescript
 import { PoissonPlugin } from '@pluto-engine/poisson';
@@ -36,7 +36,7 @@ export class MyScene extends Scene {
 
 ---
 
-## 🚀 Recommended Fast Implementation Pattern
+## Recommended Fast Implementation Pattern
 
 ```typescript
 // 1. Clear grid
@@ -67,7 +67,7 @@ for (let i = 0; i < count; i++) {
 
 ---
 
-## 📊 Performance Profile (300,000 Entities)
+## Performance Profile (300,000 Entities)
 
 | Step | Latency (300k) | Complexity | Notes |
 | :--- | :---: | :---: | :--- |
@@ -77,9 +77,9 @@ for (let i = 0; i < count; i++) {
 
 ---
 
-## 🔧 Key API Methods
+## Key API Methods
 
 - **`precomputeVectorField(baseDirX, baseDirY, speed, pressureWeight?)`**: Precomputes combined flow vectors across all grid cells.
-- **`sampleVelocityBilinear(x, y, outVel)`**: Performs 4-neighbor bilinear interpolation (Lerp of Lerp) for ultra-smooth sub-pixel velocities.
+- **`sampleVelocityBilinear(x, y, outVel)`**: Performs 4-neighbor bilinear interpolation (Lerp of Lerp) for smooth sub-pixel velocities.
 - **`getPressureGradient(x, y, outGradient)`**: Samples pressure gradient vector at a world coordinate.
 - **`splatDensity(x, y, amount)`**: Adds density weight to a grid cell.

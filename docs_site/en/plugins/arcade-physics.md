@@ -1,24 +1,24 @@
-# Arcade Physics Plugin (Phaser-like AABB Engine)
+# Arcade Physics Plugin (AABB Engine)
 
-PlutoEngine includes a built-in `ArcadePhysics` plugin featuring an intuitive Phaser-like API powered by **AABB Broadphase Culling capable of evaluating 300,000 entities in 0.08 ms**.
+PlutoEngine includes a built-in `ArcadePhysics` plugin with a declarative API powered by **AABB Broadphase Culling capable of evaluating 300,000 entities in 0.08 ms**.
 
 ---
 
-## ⚡ Key Features
+## Key Features
 
-- **Phaser-like Declarative API**: Simple registrations via `this.physics.add.overlap()` and `this.physics.add.collider()`.
+- **Declarative API**: Simple registrations via `this.physics.add.overlap()` and `this.physics.add.collider()`.
 - **Universal Target Support**: Seamless pairwise collision detection between:
   - **Single GameObjects** (`player`, `boss`, `Sprite`)
   - **Arrays** (`bullets: Sprite[]`, `items: PhysicsBody[]`)
   - **SoA Arenas** (`this.arena` - massive swarms with hundreds of thousands of entities)
   - **TypedArray Buffers** (`PhysicsBuffer` - custom Float32Array SoA collections)
-- **Ultra-Fast AABB Broadphase Culling**:
+- **AABB Broadphase Culling**:
   - Eliminates redundant distance calculations (square roots and multiplications) across large swarms. Skips 99.9% of distant entities using simple arithmetic bounds checks.
 - **Zero-Allocation**: No heap allocations or GC spikes during the collision detection loop.
 
 ---
 
-## 🎮 Usage Examples
+## Usage Examples
 
 ### 1. Player vs Massive Swarm (`this.arena`)
 
@@ -83,7 +83,7 @@ this.physics.add.collider(player, boss, (p, b) => {
 
 ---
 
-## 📊 Performance Comparison (300,000 Entities)
+## Performance Comparison (300,000 Entities)
 
 | Approach | Latency (300k) | Characteristics |
 | :--- | :---: | :--- |
@@ -92,7 +92,7 @@ this.physics.add.collider(player, boss, (p, b) => {
 
 ---
 
-## 🔧 API Reference
+## API Reference
 
 ### `this.physics.add.overlap(targetA, targetB, callback, margin?)`
 - **`targetA`**: `PhysicsBody` | `PhysicsBody[]` | `InstanceBufferArena` | `PhysicsBuffer`

@@ -4,7 +4,7 @@ PlutoEngine には、Phaser 開発者にとって馴染み深い直感的な API
 
 ---
 
-## ⚡ 特徴と設計
+## 特徴と設計
 
 - **Phaser-like な宣言的 API**: `this.physics.add.overlap()` や `this.physics.add.collider()` でシンプルに登録。
 - **全ターゲット形式のシームレスな相互判定**:
@@ -18,7 +18,7 @@ PlutoEngine には、Phaser 開発者にとって馴染み深い直感的な API
 
 ---
 
-## 🎮 基本的な使い方
+## 基本的な使い方
 
 ### 1. プレイヤー vs 巨大敵群集 (`this.arena`)
 
@@ -93,16 +93,16 @@ this.physics.add.collider(player, boss, (p, b) => {
 
 ---
 
-## 📊 パフォーマンス比較 (30万体エンティティ実行時)
+## パフォーマンス比較 (30万体エンティティ実行時)
 
 | 判定方式 | 30万体 処理時間 | 特徴 |
 | :--- | :---: | :--- |
 | **従来の全数距離計算 (Naive)** | **2.65 ms** | 30万回 全数で `dx*dx + dy*dy < r*r` を律儀に計算 |
-| **AABB Broadphase Culling (PlutoEngine)** | **0.08 ms (33倍 爆速化)** | AABB 境界外の 99.9% を四則演算のみで即座にスキップ |
+| **AABB Broadphase Culling (PlutoEngine)** | **0.08 ms (33倍 高速化)** | AABB 境界外の 99.9% を四則演算のみで即座にスキップ |
 
 ---
 
-## 🔧 API リファレンス
+## API リファレンス
 
 ### `this.physics.add.overlap(targetA, targetB, callback, margin?)`
 - **`targetA`**: `PhysicsBody` | `PhysicsBody[]` | `InstanceBufferArena` | `PhysicsBuffer`
