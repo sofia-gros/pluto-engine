@@ -44,20 +44,30 @@ describe('Texture Management & GPU Texture2DArray Upload', () => {
       }
 
       create() {
+        // テクスチャ配列のレイヤーサイズは実行時に確保できた値に依存します。
+        // 既定値は 1024 ですが ?textureSize= で上書きできるため、
+        // ハードコードせずデバイスから読み出した値で UV を検証します。
+        const dev = this.engine.device as unknown as {
+          textureWidth: number;
+          textureHeight: number;
+        };
+        const texW = dev.textureWidth;
+        const texH = dev.textureHeight;
+
         // 単一テクスチャのスプライト生成
         const heroSprite = this.add.sprite(100, 100, 'hero');
         expect(heroSprite).toBeDefined();
         expect(heroSprite.frameIdx).toBeGreaterThan(0);
-        expect(heroSprite.uvW).toBeCloseTo(64 / 2048, 4);
-        expect(heroSprite.uvH).toBeCloseTo(64 / 2048, 4);
+        expect(heroSprite.uvW).toBeCloseTo(64 / texW, 4);
+        expect(heroSprite.uvH).toBeCloseTo(64 / texH, 4);
 
         // スプライトシートの特定フレーム (Frame 3)
         const monsterSprite = this.add.sprite(200, 200, 'monsters', 3);
         expect(monsterSprite).toBeDefined();
         expect(monsterSprite.frameIdx).toBeGreaterThan(0);
         expect(monsterSprite.frame).toBe(3);
-        expect(monsterSprite.uvW).toBeCloseTo(32 / 2048, 4);
-        expect(monsterSprite.uvH).toBeCloseTo(32 / 2048, 4);
+        expect(monsterSprite.uvW).toBeCloseTo(32 / texW, 4);
+        expect(monsterSprite.uvH).toBeCloseTo(32 / texH, 4);
 
         // フレーム切り替え
         monsterSprite.setFrame(5);

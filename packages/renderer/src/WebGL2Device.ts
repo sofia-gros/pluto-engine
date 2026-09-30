@@ -113,14 +113,26 @@ export class WebGL2Device implements GraphicsDevice {
    * テクスチャ配列のサイズ設定。
    *
    * 3D テクスチャの領域は width * height * 4 * layers バイトを
-   * 丸ごと確保します。2048 x 2048 x 64 は **1 GB** になるため、
-   * メモリが限られた環境 (CI ランナー / ソフトウェアラスタライザ) では
-   * 確保に失敗して WebGL コンテキストごと失効します。
-   * 実測で CI 上で `CONTEXT_LOST_WEBGL` が出たため、
-   * 初期化時に確保結果を確認し、段階的に小さくして再試行します。
+   * 丸ごと確保します。**この確保は失敗しても GL エラーになりません。**
+   * ANGLE/Vulkan は `texImage3D` のメモリ不足で
+   * コンテキストごと破棄します (`CONTEXT_LOST_WEBGL`)。
+   * そのため「大きめに確保してから縮小リトライ」は構造上できず、
+   * 最初から安全な既定値で確保する必要があります。
+   *
+   * 実測: 2048 x 2048 x 64 は **1 GB** で、GitHub Actions ランナー
+   * (7 GB / SwiftShader) では確実にコンテキストが失効し、
+   * 全デモが「60 FPS でruns したまま何も描画されない」状態になりました。
+   * 1 GB を要求するゲームエンジンとしては異常な値です。
+   *
+   * 既定値は 1024 x 1024 x 64 = **256 MB** にしました。
+   * 2D ドット絵向けテクスチャなら 1 レイヤーあたり 1024px あれば
+   * 数百〜数千スプライトを余裕で格納できます。
+   *
+   * メモリがさらに限られる環境では `?textureSize=512` (64 MB) を
+   * 付けて指定できます。
    */
-  public textureWidth = 2048;
-  public textureHeight = 2048;
+  public textureWidth = 1024;
+  public textureHeight = 1024;
   public maxLayers = 64;
   private currentLayerCount = 1; // Layer 0 は白色単色ピクセル
 
@@ -140,6 +152,21 @@ export class WebGL2Device implements GraphicsDevice {
     const attributes: WebGLContextAttributes = {
       preserveDrawingBuffer: params?.has('preserveDrawingBuffer') ?? false,
     };
+    // テクスチャ配列のサイズ上書き。メモリが限られた環境向けです。
+    // 例: ?textureSize=512 で 512x512x64 = 64 MB。
+    const sizeParam = params?.get('textureSize');
+    if (sizeParam !== null && sizeParam !== undefined) {
+      const n = parseInt(sizeParam, 10);
+      if (Number.isFinite(n) && n >= 64 && n <= 4096) {
+        this.textureWidth = n;
+        this.textureHeight = n;
+      } else {
+        console.warn(
+          `[WebGL2Device] ?textureSize=${sizeParam} は 64〜4096 の整数で 아닙니다。` +
+            `既定値 ${this.textureWidth} を使います。`,
+        );
+      }
+    }
     const gl = (canvas.getContext('webgl2', attributes) ||
       canvas.getContext('experimental-webgl2', attributes)) as WebGL2RenderingContext | null;
     if (!gl) {
@@ -185,57 +212,51 @@ export class WebGL2Device implements GraphicsDevice {
   /**
    * テクスチャ配列を確保します。
    *
-   * 大きな領域から順に試し、`texImage3D` が GL エラーを返したら
-   * 半分に落として再試行します。どの段階で成功したかを
-   * `textureWidth` / `textureHeight` に反映します
-   * (UV の正規化がこの値を使うため、必ず実際の値に揃える必要があります)。
+   * メモリ不足の扱いに注意が必要です。**この確保は GL エラーを返しません。**
+   * ANGLE/Vulkan は texImage3D のメモリ不足でコンテキストごと破棄し、
+   * getError() も例外も出さず CONTEXT_LOST_WEBGL を返すだけです。
+   * 「大きめに確保して失敗したら小さくリトライ」方式是
+   * 1 度目で context を失った時点で破綻します。
+   * そのため ensure するサイズそのものを安全な既定値にしています。
    *
-   * @returns 確保に成功したら true。すべて失敗したら false
+   * @returns 確保に成功したら true。コンテキストを失った場合は false
    */
   private allocateTextureArray(): boolean {
     if (!this.gl) return false;
 
-    let w = this.textureWidth;
-    let h = this.textureHeight;
-
-    while (w >= 64 && h >= 64) {
-      // 過去のエラーを先に消化して、今回の判定を偽陽性にしないようにします。
-      // getError() は 1 回しかエラーを返さないため、ループで空になるまで回します。
-      while (this.gl.getError() !== this.gl.NO_ERROR) {
-        /* 溜まっているエラーを捨てる */
-      }
-
-      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
-      this.gl.texImage3D(
-        this.gl.TEXTURE_2D_ARRAY,
-        0,
-        this.gl.RGBA,
-        w,
-        h,
-        this.maxLayers,
-        0,
-        this.gl.RGBA,
-        this.gl.UNSIGNED_BYTE,
-        null,
-      );
-
-      const err = this.gl.getError();
-      if (err === this.gl.NO_ERROR) {
-        this.textureWidth = w;
-        this.textureHeight = h;
-        return true;
-      }
-
-      // コンテキスト喪失なら、これ以上縮小しても意味がありません。
-      if (err === this.gl.CONTEXT_LOST_WEBGL) {
-        this.contextLost = true;
-        return false;
-      }
-
-      w = Math.max(64, w >> 1);
-      h = Math.max(64, h >> 1);
+    // 過去のエラーを消化します (getError は 1 回しかエラーを返さないためループで空にします)。
+    while (this.gl.getError() !== this.gl.NO_ERROR) {
+      /* 溜まっているエラーを捨てる */
     }
-    return false;
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
+    this.gl.texImage3D(
+      this.gl.TEXTURE_2D_ARRAY,
+      0,
+      this.gl.RGBA,
+      this.textureWidth,
+      this.textureHeight,
+      this.maxLayers,
+      0,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      null,
+    );
+
+    // 確保直後に生存確認します。ANGLE は失敗を CONTEXT_LOST としてのみ返します。
+    if (this.gl.isContextLost()) {
+      this.contextLost = true;
+      return false;
+    }
+
+    const bytes = this.textureWidth * this.textureHeight * 4 * this.maxLayers;
+    const mb = (bytes / 1024 / 1024).toFixed(0);
+    console.log(
+      `[WebGL2Device] texture array allocated: ` +
+        `${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers ` +
+        `(= ${mb} MB)`,
+    );
+    return true;
   }
 
   private initTextureArray(): void {
