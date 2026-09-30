@@ -10,6 +10,7 @@ const packages = [
   'ai',
   'morton',
   'poisson',
+  'continuum',
   'sdf-collider',
   'verlet-ik',
   'xpbd',

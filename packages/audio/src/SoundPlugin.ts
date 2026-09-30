@@ -2,7 +2,10 @@
  * @file SoundPlugin.ts
  * @description
  * Scene にオーディオ機能を注入するプラグイン。
- * ユーザーは this.registerPlugin(new SoundPlugin()) として登録可能。
+ *
+ * `Scene.sound` が遅延サブシステムとして組み込まれたため、このプラグインは
+ * SoundManager の生成-timing と 3D 配置の追従だけを担当します。
+ * 既存の `this.registerPlugin(new SoundPlugin())` はそのまま動作します。
  */
 
 import type { Plugin, Scene } from '@pluto-engine/core';
@@ -13,26 +16,30 @@ export class SoundPlugin implements Plugin {
 
   private scene?: Scene;
 
-  constructor(config?: any) {
+  constructor(config?: ConstructorParameters<typeof SoundManager>[0]) {
     this.soundManager = new SoundManager(config);
   }
 
   public init(scene: Scene): void {
     this.scene = scene;
-    (scene as any).sound = this.soundManager;
+    // Scene の遅延サブシステムへ同じインスタンスを渡します。
+    // どちらから触っても AudioContext が 2 つできることはありません。
+    scene.setSoundManager(this.soundManager);
   }
 
   public update(): void {
-    if (this.scene && this.scene.camera) {
-      const cx = this.scene.camera.actualX || 0;
-      const cy = this.scene.camera.actualY || 0;
-      this.soundManager.setListenerPosition(cx, cy, 100);
-    }
+    if (this.scene === undefined) return;
+    // カメラ位置にリスナーを追従させます。
+    this.soundManager.setListenerPosition(
+      this.scene.camera.actualX || 0,
+      this.scene.camera.actualY || 0,
+      100,
+    );
+    // フェードインを進めます。
+    this.soundManager.update();
   }
 
   public destroy(): void {
-    if (this.soundManager.context.state !== 'closed') {
-      this.soundManager.context.close();
-    }
+    this.soundManager.destroy();
   }
 }

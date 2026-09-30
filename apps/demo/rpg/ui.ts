@@ -5,15 +5,7 @@
  */
 
 import { rpgAudio } from './audio';
-import {
-  ARMORS,
-  type ArmorData,
-  type Player,
-  type Quest,
-  type TownNPC,
-  WEAPONS,
-  type WeaponData,
-} from './entities';
+import { ARMORS, type Player, type TownNPC, WEAPONS } from './entities';
 
 export class RPGUIManager {
   private player: Player;
@@ -169,6 +161,7 @@ export class RPGUIManager {
    * NPC との会話開始
    */
   public startDialogue(npc: TownNPC, onComplete?: () => void): void {
+    void onComplete;
     if (npc.type === 'merchant') {
       this.openShop();
       return;

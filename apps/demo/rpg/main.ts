@@ -10,15 +10,16 @@ import { PlutoEngine, Scene } from '@pluto-engine/core';
 import { rpgAudio } from './audio';
 import {
   FloatingText,
-  type Monster,
-  MonsterType,
+  Monster,
+  type MonsterType,
   Player,
   RPGLoot,
   RPGProjectile,
   TownNPC,
 } from './entities';
 import { RPGUIManager } from './ui';
-import { RPGWorld, type WorldProp } from './world';
+import { MonsterUtilityAI } from './ai';
+import { RPGWorld } from './world';
 
 class RPGScene extends Scene {
   public world!: RPGWorld;
@@ -40,32 +41,55 @@ class RPGScene extends Scene {
   private currentFps = 60;
   private currentFrameTime = 0.8;
 
+  /** SoA Utility AI 本体 */
+  private readonly monsterAI: MonsterUtilityAI;
+  /** AI へ渡す SoA 配列 (.monsters を毎フレーム走査する個体が配列) */
+  private readonly aiX: Float32Array;
+  private readonly aiY: Float32Array;
+  private readonly aiHp: Float32Array;
+  private readonly aiMaxHp: Float32Array;
+  private readonly aiShoot: Float32Array;
+  private readonly aiBoss: Float32Array;
+  /** 評価対象とする最大個体数 */
+  private aiCount = 0;
+
   constructor() {
     super({ maxInstances: 100000 });
+    this.monsterAI = new MonsterUtilityAI(100000);
+    this.aiX = new Float32Array(100000);
+    this.aiY = new Float32Array(100000);
+    this.aiHp = new Float32Array(100000);
+    this.aiMaxHp = new Float32Array(100000);
+    this.aiShoot = new Float32Array(100000);
+    this.aiBoss = new Float32Array(100000);
   }
 
   create() {
     // 1. ワールド構築 (町・平原・ダンジョンのタイル & プロップ)
     this.world = new RPGWorld(this);
 
-    // 2. プレイヤー生成
+    // 2. 地形から符号付き距離場を生成する。
+    // これによりプレイヤーは壁の角で引っかからず滑らかに滑れるようになります。
+    this.world.buildSDF();
+
+    // 3. プレイヤー生成
     this.player = new Player(this, this.world);
 
-    // 3. 町の NPC 生成
+    // 4. 町の NPC 生成
     this.spawnTownNPCs();
 
-    // 4. 初期モンスター生成 (標準RPG構成: 80体)
+    // 5. 初期モンスター生成 (標準RPG構成: 80体)
     this.spawnMonsters(80);
 
-    // 5. UI マネージャー初期化
+    // 6. UI マネージャー初期化
     this.ui = new RPGUIManager(this.player, (count) => {
       this.setBenchmarkScale(count);
     });
 
-    // 6. 入力イベント設定
+    // 7. 入力イベント設定
     this.setupInput();
 
-    // 7. カメラ初期設定 (プレイヤーにフォーカス)
+    // 9. カメラ初期設定 (プレイヤーにフォーカス)
     this.camera.x = this.player.x;
     this.camera.y = this.player.y;
     this.camera.zoom = 1.0;
@@ -110,6 +134,8 @@ class RPGScene extends Scene {
       if (m.sprite) m.sprite.destroy();
     }
     this.monsters = [];
+    // AI が評価する対象数を記録します
+    this.aiCount = 0;
 
     // モンスターのエリア別配置
     for (let i = 0; i < count; i++) {
@@ -144,6 +170,9 @@ class RPGScene extends Scene {
     const bossX = 45 * 32 + 16;
     const bossY = 74 * 32 + 16;
     this.monsters.push(new Monster(this, 999999, 'boss', bossX, bossY));
+
+    // AI の評価対象数を確定します
+    this.aiCount = this.monsters.length;
   }
 
   public setBenchmarkScale(count: number): void {
@@ -331,7 +360,7 @@ class RPGScene extends Scene {
     const leveled = this.player.gainExp(m.expReward);
     this.spawnFloatingText(m.x, m.y, `+${m.expReward} EXP`, '#4ade80');
     if (leveled) {
-      this.spawnFloatingText(this.player.x, this.player.y - 24, '⭐ LEVEL UP!', '#facc15');
+      this.spawnFloatingText(this.player.x, this.player.y - 24, '✨ LEVEL UP!', '#facc15');
     }
 
     // クエスト進行度の加算
@@ -351,7 +380,7 @@ class RPGScene extends Scene {
             this.spawnFloatingText(
               this.player.x,
               this.player.y - 40,
-              `🏆 クエスト完了: ${q.title}!`,
+              '📜 QUEST COMPLETE!',
               '#facc15',
             );
           }
@@ -368,7 +397,7 @@ class RPGScene extends Scene {
     }
     if (m.isBoss) {
       this.loots.push(new RPGLoot(this, m.x, m.y, 'gem', 10));
-      this.spawnFloatingText(m.x, m.y - 30, '👑 BOSS VANQUISHED!', '#ef4444');
+    // 生存個体だけを先頭に詰めます (ipar 配列の隙間をなくす)
     }
 
     this.ui.updateHUD();
@@ -376,6 +405,46 @@ class RPGScene extends Scene {
 
   private spawnFloatingText(x: number, y: number, text: string, color = '#ffffff'): void {
     this.floatingTexts.push(new FloatingText(x, y, text, color));
+  }
+
+  /**
+   * 生存しているモンスターの状態を SoA へ写し、
+   * 一括で Utility AI の效y を採点し直します。
+   * 個体ごとの FSM を持たないので、個体追加が他の個体へ影響しません。
+   */
+  private updateMonsterAI(): void {
+    const ai = this.monsterAI;
+    const monsters = this.monsters;
+    const n = this.aiCount;
+
+    let live = 0;
+    for (let i = 0; i < n; i++) {
+      const m = monsters[i];
+      if (m.hp <= 0) continue;
+
+      // 生存個体だけを先頭に詰めます (ipar 配列の隙間をなくす)
+      const dst = live++;
+      this.aiX[dst] = m.x;
+      this.aiY[dst] = m.y;
+      this.aiHp[dst] = m.hp;
+      this.aiMaxHp[dst] = m.maxHp;
+      this.aiShoot[dst] = m.type === 'skeleton' || m.isBoss ? 1 : 0;
+      this.aiBoss[dst] = m.isBoss ? 1 : 0;
+      m.aiIndex = dst;
+      m.aiRef = ai;
+    }
+
+    ai.update(
+      this.aiX,
+      this.aiY,
+      this.aiHp,
+      this.aiMaxHp,
+      this.aiShoot,
+      this.aiBoss,
+      this.player.x,
+      this.player.y,
+      live,
+    );
   }
 
   update(dt: number): void {
@@ -395,7 +464,11 @@ class RPGScene extends Scene {
       npc.update(dt, this.world);
     }
 
-    // 4. モンスター更新 (古典的 AI & 攻撃)
+    // 4. モンスター AI の一括評価 (SoA Utility AI)
+    // 個体ごとの FSM ではなく、全個体の效y を 1 回で採点します。
+    this.updateMonsterAI();
+
+    // 5. モンスター更新 (Utility AI の結果に基づく行動)
     for (let i = 0; i < this.monsters.length; i++) {
       const m = this.monsters[i];
       if (m.hp <= 0) continue;

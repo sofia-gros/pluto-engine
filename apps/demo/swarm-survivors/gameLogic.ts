@@ -1,4 +1,6 @@
 import type { Scene, Sprite } from '@pluto-engine/core';
+import { XPBDSolver, type XPBDParticles } from '@pluto-engine/xpbd';
+import { ContinuumCrowds } from '@pluto-engine/continuum';
 
 export class Player {
   sprite: Sprite;
@@ -102,10 +104,12 @@ export class Player {
       const wandCd = Math.max(0.25, 0.6 - wandLvl * 0.05) * cdFactor;
       if (this.wandTimer >= wandCd) {
         this.wandTimer = 0;
-        const target = swarm.findNearestEnemy(this.x, this.y, 380, scene);
-        if (target !== -1) {
-          const tx = swarm.scene.arena.posX[target];
-          const ty = swarm.scene.arena.posY[target];
+        // findNearestEnemy は ID を返すため、位置参照には密添字へ変換します。
+        const targetId = swarm.findNearestEnemy(this.x, this.y, 380, scene);
+        const targetIdx = targetId === -1 ? -1 : scene.arena.idToIndex[targetId];
+        if (targetIdx >= 0) {
+          const tx = scene.arena.posX[targetIdx];
+          const ty = scene.arena.posY[targetIdx];
           const pCount = 1 + (stats.bonusProj || 0);
           for (let p = 0; p < pCount; p++) {
             const spread = (p - (pCount - 1) / 2) * 0.2;
@@ -166,11 +170,13 @@ export class Player {
       this.lightningTimer += dt;
       if (this.lightningTimer >= 2.0 * cdFactor) {
         this.lightningTimer = 0;
-        const target = swarm.findNearestEnemy(this.x, this.y, 350, scene);
-        if (target !== -1) {
+        // 戻り値は ID。位置は密添字で参照します。
+        const strikeId = swarm.findNearestEnemy(this.x, this.y, 350, scene);
+        const strikeIdx = strikeId === -1 ? -1 : scene.arena.idToIndex[strikeId];
+        if (strikeIdx >= 0) {
           swarm.applyAreaDamage(
-            swarm.scene.arena.posX[target],
-            swarm.scene.arena.posY[target],
+            scene.arena.posX[strikeIdx],
+            scene.arena.posY[strikeIdx],
             38 * areaScale,
             (45 + lightLvl * 20) * atkMult,
             14 * knockMult,
@@ -183,7 +189,18 @@ export class Player {
   }
 }
 
+/**
+ * プレイヤー中心で追従する Continuity 群集のフロー場。
+ *
+ * アルゴリズムの実体は同梱パッケージ `@pluto-engine/continuum` の
+ * ContinuumCrowds です。以前はこのデモ内に手書きの複製を持っており、
+ * パッケージ側とアルゴリズム・定数が食い違っていました。
+ * ここではワールド座標とグリッド座標の変換だけを担当します。
+ */
 export class ContinuumFlowGrid {
+  /** ContinuumCrowds 本体 */
+  private readonly crowd: ContinuumCrowds;
+
   cols: number;
   rows: number;
   cellSize: number;
@@ -191,14 +208,20 @@ export class ContinuumFlowGrid {
   width: number;
   height: number;
   size: number;
-  dirX: Float32Array;
-  dirY: Float32Array;
+
+  /** 密度場 (Compatible: 呼び出し側が直接 fill / 加算する) */
   density: Float32Array;
   pressure: Float32Array;
+  /** 一括計算済みの速度場 */
   precomputedVx: Float32Array;
   precomputedVy: Float32Array;
+
+  /** グリッド原点のワールド座標 (プレイヤー中心で動く) */
   originX = 0;
   originY = 0;
+
+  private readonly _dirX: Float32Array;
+  private readonly _dirY: Float32Array;
 
   constructor(cols = 96, rows = 96, cellSize = 24) {
     this.cols = cols;
@@ -208,82 +231,66 @@ export class ContinuumFlowGrid {
     this.width = cols * cellSize;
     this.height = rows * cellSize;
     this.size = cols * rows;
-    this.dirX = new Float32Array(this.size);
-    this.dirY = new Float32Array(this.size);
-    this.density = new Float32Array(this.size);
-    this.pressure = new Float32Array(this.size);
-    this.precomputedVx = new Float32Array(this.size);
-    this.precomputedVy = new Float32Array(this.size);
+
+    this.crowd = new ContinuumCrowds(cols, rows, cellSize, {
+      targetDensity: 3.5,
+      pressureStiffness: 1.5,
+    });
+
+    this.density = this.crowd.density;
+    this.pressure = this.crowd.pressure;
+    this.precomputedVx = this.crowd.fieldVx;
+    this.precomputedVy = this.crowd.fieldVy;
+
+    this._dirX = new Float32Array(this.size);
+    this._dirY = new Float32Array(this.size);
   }
 
-  updatePlayerCenter(px: number, py: number) {
+  /**
+   * プレイヤー位置を中心にグリッド原点を移動し、
+   * 全セルを「プレイヤーへ向かう方向」で埋めます。
+   */
+  updatePlayerCenter(px: number, py: number): void {
     this.originX = px - this.width * 0.5;
     this.originY = py - this.height * 0.5;
+
     const halfW = this.width * 0.5;
     const halfH = this.height * 0.5;
     for (let r = 0; r < this.rows; r++) {
       const cy = (r + 0.5) * this.cellSize;
       const dy = cy - halfH;
-      const rowIdx = r * this.cols;
+      const row = r * this.cols;
       for (let c = 0; c < this.cols; c++) {
         const cx = (c + 0.5) * this.cellSize;
         const dx = cx - halfW;
         const d2 = dx * dx + dy * dy;
         const invDist = 1.0 / (Math.sqrt(d2) + 0.001);
-        const idx = rowIdx + c;
-        this.dirX[idx] = -dx * invDist;
-        this.dirY[idx] = -dy * invDist;
+        this._dirX[row + c] = -dx * invDist;
+        this._dirY[row + c] = -dy * invDist;
       }
+    }
+
+    // 目標方向を ContinuumCrowds へ渡す
+    for (let i = 0; i < this.size; i++) {
+      this.crowd.setTargetDirectionRaw(i, this._dirX[i], this._dirY[i]);
     }
   }
 
-  solvePoissonUIC(iterations = 2) {
-    const cols = this.cols;
-    const rows = this.rows;
-    const p = this.pressure;
-    const rho = this.density;
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let r = 1; r < rows - 1; r++) {
-        const row = r * cols;
-        for (let c = 1; c < cols - 1; c++) {
-          const idx = row + c;
-          const excess = Math.max(0, rho[idx] - 3.5);
-          p[idx] = (p[idx - 1] + p[idx + 1] + p[idx - cols] + p[idx + cols] + excess * 1.5) * 0.25;
-        }
-      }
-    }
+  /**
+   * UIC 圧力を解きます。実時間では 2 反復が目安です。
+   */
+  solvePoissonUIC(iterations = 2): void {
+    this.crowd.computeDivergence();
+    this.crowd.solvePressure(iterations);
   }
 
-  precomputeVelocityField() {
-    const cols = this.cols;
-    const rows = this.rows;
-    const p = this.pressure;
-    const dX = this.dirX;
-    const dY = this.dirY;
-    const pVx = this.precomputedVx;
-    const pVy = this.precomputedVy;
-    for (let r = 1; r < rows - 1; r++) {
-      const row = r * cols;
-      for (let c = 1; c < cols - 1; c++) {
-        const idx = row + c;
-        const gradPx = (p[idx + 1] - p[idx - 1]) * 0.5;
-        const gradPy = (p[idx + cols] - p[idx - cols]) * 0.5;
-        const sx = dX[idx] - gradPx * 0.7;
-        const sy = dY[idx] - gradPy * 0.7;
-        const d2 = sx * sx + sy * sy;
-        if (d2 > 0.0001) {
-          const invLen = 1.0 / Math.sqrt(d2);
-          pVx[idx] = sx * invLen;
-          pVy[idx] = sy * invLen;
-        } else {
-          pVx[idx] = 0;
-          pVy[idx] = 0;
-        }
-      }
-    }
+  /**
+   * 目標方向と圧力勾配を合成して速度場を一括計算します。
+   */
+  precomputeVelocityField(speed = 1.0, pressureWeight = 0.7): void {
+    this.crowd.bakeVelocityField(speed, pressureWeight, false);
   }
 }
-
 export class SwarmSystem {
   scene: Scene;
   maxEnemies: number;
@@ -316,6 +323,24 @@ export class SwarmSystem {
   ppierce: Int8Array;
   psprite: Sprite[];
 
+  /** XPBD の接触ペア (i, j) を詰めた配列。上限は maxEnemies * 12。 */
+  private _overlapPairs: Int32Array;
+  /** Morton 近傍クエリの書き込み先 */
+  private _overlapQuery: Uint32Array;
+  /** XPBD へ渡す SoA 粒子データ */
+  private _overlapParticles: XPBDParticles;
+
+  /**
+   * プレイヤーのアリーナ ID。
+   *
+   * プレイヤーは敵と同じアリーナのインスタンスを 1 つ占めています。
+   * 敵だけを前提とした走査 (弾の衝突・範囲ダメージ・最近傍探索) では
+   * プレイヤーを除外しないと、プレイヤーが自傷したり
+   * 敵の弾で解放されてハンドルだけ宙に浮いたりします。
+   * update() の先頭で毎回取り直します。
+   */
+  playerId = -1;
+
   constructor(scene: Scene, maxEnemies = 40000) {
     this.scene = scene;
     this.maxEnemies = maxEnemies;
@@ -343,6 +368,22 @@ export class SwarmSystem {
     this.plife = new Float32Array(this.maxProjectiles);
     this.ppierce = new Int8Array(this.maxProjectiles);
     this.psprite = new Array(this.maxProjectiles);
+
+    // XPBD 用の事前確保バッファ。毎フレーム new しません。
+    // posX / posY はアリーナの配列を直接参照するため二重管理しません。
+    this._overlapPairs = new Int32Array(this.maxEnemies * 12);
+    this._overlapQuery = new Uint32Array(64);
+    this._overlapParticles = {
+      count: 0,
+      posX: this.scene.arena.posX,
+      posY: this.scene.arena.posY,
+      prevX: new Float32Array(this.maxEnemies),
+      prevY: new Float32Array(this.maxEnemies),
+      velX: new Float32Array(this.maxEnemies),
+      velY: new Float32Array(this.maxEnemies),
+      radii: new Float32Array(this.maxEnemies),
+      invMasses: new Float32Array(this.maxEnemies),
+    };
   }
 
   spawn(
@@ -400,11 +441,17 @@ export class SwarmSystem {
     this.psprite[i] = sprite;
   }
 
+  /**
+   * 敵を倒します。引数はアリーナの ID です。
+   */
   kill(id: number, coinRateBonus = 0, scene?: Scene) {
     const s = scene || this.scene;
     const isBoss = this.type[id] === 3;
-    const x = s.arena.posX[id];
-    const y = s.arena.posY[id];
+    // 位置は密添字で管理しているため、ID から変換します。
+    const idx = s.arena.idToIndex[id];
+    if (idx < 0) return;
+    const x = s.arena.posX[idx];
+    const y = s.arena.posY[idx];
     if (isBoss) {
       for (let c = 0; c < 5; c++) this.spawnDrop(x, y, 1, 2);
       for (let e = 0; e < 15; e++) this.spawnDrop(x, y, 0, 15);
@@ -422,6 +469,8 @@ export class SwarmSystem {
   update(dt: number, player: Player, flow: ContinuumFlowGrid, stats: any) {
     const px = player.x;
     const py = player.y;
+    // プレイヤーの ID を毎回取り直します (restartGame で再生成されるため)。
+    this.playerId = player.sprite.id;
 
     for (let i = 0; i < this.projCount; i++) {
       this.px[i] += this.pvx[i] * dt;
@@ -434,19 +483,27 @@ export class SwarmSystem {
       const projY = this.py[i];
       const dmg = this.pdmg[i];
 
+      // 弾の当たり判定。e はアリーナの ID なので、位置は密添字へ変換します。
       for (let e = 0; e < this.scene.arena.capacity; e++) {
-        if (this.scene.arena.idToIndex[e] < 0) continue;
-        const dx = this.scene.arena.posX[e] - projX;
-        const dy = this.scene.arena.posY[e] - projY;
-        const hitRadius = this.scene.arena.scale[e] * 0.5 + 6;
+        if (e === this.playerId) continue;
+        const ei = this.scene.arena.idToIndex[e];
+        if (ei < 0) continue;
+        const dx = this.scene.arena.posX[ei] - projX;
+        const dy = this.scene.arena.posY[ei] - projY;
+        const hitRadius = this.scene.arena.scale[ei] * 0.5 + 6;
         if (dx * dx + dy * dy < hitRadius * hitRadius) {
           this.hp[e] -= dmg;
           const kForce = 8 * (1.0 - this.knockResist[e]);
-          this.scene.arena.posX[e] += (dx || 1) * 0.1 * kForce;
-          this.scene.arena.posY[e] += (dy || 1) * 0.1 * kForce;
+          // 位置は密添字。方向が不明でも 0 除算しないよう微小量を足します。
+          const invLen = 1.0 / (Math.sqrt(dx * dx + dy * dy) + 1e-4);
+          this.scene.arena.posX[ei] += dx * invLen * 0.1 * kForce;
+          this.scene.arena.posY[ei] += dy * invLen * 0.1 * kForce;
 
           if (this.hp[e] <= 0) {
             this.kill(e, stats.coinRate || 0);
+            // kill() は swap-remove で密添字を移すため、
+            // 続く反復で ei が無効になります。ここでは弾を処理終了します。
+            break;
           }
           this.ppierce[i]--;
           if (this.ppierce[i] <= 0) {
@@ -492,6 +549,10 @@ export class SwarmSystem {
     flow.precomputeVelocityField();
 
     const pRadius = 12;
+    // プレイヤーはアリーナのインスタンスを 1 つ占めています。
+    // このパスは敵の衝突判定なので、自分自身とは判定してはいけません。
+    // 放任すると毎フレーム自分へ接触ダメージが入り、即死します。
+    const pIdx = player.sprite.index;
     this.scene.spatialHash.clear();
 
     const pVx = flow.precomputedVx;
@@ -504,10 +565,18 @@ export class SwarmSystem {
     const vy = this.vy;
     const spd = this.spd;
 
+    // 以降のパスでは 2 つの添字空間を取り違えないようにします。
+    //   i  : アリーナの密添字 (0..activeCount)。posX / posY / scale / facing のキー
+    //   id : アリーナの ID (再利用される)。vx / vy / spd / hp などのキー
+    // free() は swap-remove を行うため、解放が 1 度でも起きると
+    // ID と密添字は一致しなくなります。
+    const indexToId = this.scene.arena.indexToId;
+
     // =========================================================================
     // Pass 1: Flow Steering (Lerp of Lerp 双線形補間 & 速度更新)
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
+      const id = indexToId[i];
       const ex = posX[i];
       const ey = posY[i];
       const lx = ex - ox;
@@ -546,26 +615,30 @@ export class SwarmSystem {
         steerY = dy * invD;
       }
 
-      const targetSpd = spd[i];
-      vx[i] += (steerX * targetSpd - vx[i]) * 8.0 * dt;
-      vy[i] += (steerY * targetSpd - vy[i]) * 8.0 * dt;
+      // 速度と速度特性は ID 添字で管理しています。
+      const targetSpd = spd[id];
+      vx[id] += (steerX * targetSpd - vx[id]) * 8.0 * dt;
+      vy[id] += (steerY * targetSpd - vy[id]) * 8.0 * dt;
     }
 
     // =========================================================================
     // Pass 2: 座標積分 (Position Integration - V8 自動 SIMD アンローリング)
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
-      posX[i] += vx[i] * dt;
-      posY[i] += vy[i] * dt;
+      const id = indexToId[i];
+      posX[i] += vx[id] * dt;
+      posY[i] += vy[id] * dt;
     }
 
     // =========================================================================
     // Pass 3: 向き判定 & Spatial Hash 登録
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
-      if (vx[i] > 2) facing[i] = 1.0;
-      else if (vx[i] < -2) facing[i] = -1.0;
-      this.scene.spatialHash.addEntity(i, posX[i], posY[i]);
+      const id = indexToId[i];
+      if (vx[id] > 2) facing[i] = 1.0;
+      else if (vx[id] < -2) facing[i] = -1.0;
+      // 空間ハッシュは ID で登録します。後続の Pass 5 も ID 前提で動きます。
+      this.scene.spatialHash.addEntity(id, posX[i], posY[i]);
     }
 
     // =========================================================================
@@ -578,6 +651,8 @@ export class SwarmSystem {
     const maxY = py + maxReach;
 
     for (let i = 0; i < activeCount; i++) {
+      if (i === pIdx) continue;
+      const id = indexToId[i];
       const ex = posX[i];
       const ey = posY[i];
 
@@ -589,7 +664,7 @@ export class SwarmSystem {
         const reach = pRadius + scale[i] * 0.42;
 
         if (pDist2 < reach * reach) {
-          player.takeDamage(this.atkPower[i] * dt, stats);
+          player.takeDamage(this.atkPower[id] * dt, stats);
           this.scene.camera.shake(3, 0.1);
           const pDist = Math.sqrt(pDist2);
           const pen = reach - pDist;
@@ -604,36 +679,49 @@ export class SwarmSystem {
 
     this.scene.spatialHash.build();
 
-    const outArray = new Uint32Array(32);
-    for (let i = 0; i < activeCount; i++) {
-      const eRadius = this.scene.arena.scale[i] * 0.42;
-      const count = this.scene.spatialHash.query(
-        this.scene.arena.posX[i],
-        this.scene.arena.posY[i],
-        eRadius * 2,
-        outArray,
-      );
+    // -------------------------------------------------------------------------
+    // Pass 5: XPBD による群集の重なり緩和
+    // -------------------------------------------------------------------------
+    // 近傍リストは Morton 空間ハッシュから作ります (O(n) 構築)。
+    // 位置の押し戻しは XPBD のサブステップで解くため、
+    // 以前の手書きの対称押し出しより収束が速く、密集時も貫通しにくくなります。
+    const pairs = this._overlapPairs;
+    const scratch = this._overlapQuery;
+    let pairCount = 0;
+
+    for (let i = 0; i < activeCount && pairCount * 2 < pairs.length - 2; i++) {
+      const eRadius = scale[i] * 0.42;
+      const count = this.scene.spatialHash.query(posX[i], posY[i], eRadius * 2, scratch);
       for (let j = 0; j < count; j++) {
-        const other = outArray[j];
-        if (other > i && other < activeCount) {
-          const oRadius = this.scene.arena.scale[other] * 0.42;
-          const targetDist = eRadius + oRadius;
-          const dx = this.scene.arena.posX[other] - this.scene.arena.posX[i];
-          const dy = this.scene.arena.posY[other] - this.scene.arena.posY[i];
-          const d2 = dx * dx + dy * dy;
-          if (d2 < targetDist * targetDist && d2 > 0.0001) {
-            const dist = Math.sqrt(d2);
-            const overlap = (targetDist - dist) * 0.45;
-            const invDist = 1.0 / dist;
-            const nx = dx * invDist;
-            const ny = dy * invDist;
-            this.scene.arena.posX[i] -= nx * overlap * 0.5;
-            this.scene.arena.posY[i] -= ny * overlap * 0.5;
-            this.scene.arena.posX[other] += nx * overlap * 0.5;
-            this.scene.arena.posY[other] += ny * overlap * 0.5;
-          }
-        }
+        const otherId = scratch[j];
+        // 空間ハッシュは ID を返すため、密添字へ変換して比較します。
+        const other = this.scene.arena.idToIndex[otherId];
+        // 各ペアを 1 度だけ処理する
+        if (other < 0 || other <= i) continue;
+        pairs[pairCount * 2] = i;
+        pairs[pairCount * 2 + 1] = other;
+        pairCount++;
+        if (pairCount * 2 >= pairs.length - 2) break;
       }
+    }
+
+    if (pairCount > 0) {
+      const particles = this._overlapParticles;
+      particles.count = activeCount;
+      // 半径は SoA から読み戻すため、ここへ写す (毎フレームの割り当ては無い)
+      for (let i = 0; i < activeCount; i++) {
+        particles.radii[i] = scale[i] * 0.42;
+        // プレイヤーは群集の押し出し対象ではありません。
+        // 動かすと操作感が悪く、かつ毎フレーム位置が上書きされます。
+        particles.invMasses[i] = i === pIdx ? 0.0 : 1.0;
+      }
+      // posX / posY はアリーナの配列を直接参照するため、鍵は密添字です。
+      XPBDSolver.resolveOverlaps(particles, dt, {
+        pairs,
+        pairCount,
+        substeps: 2,
+        compliance: 0.0005,
+      });
     }
 
     const pRad = player.pickupRadius * (1 + (stats.pickupRadius || 0));
@@ -644,8 +732,12 @@ export class SwarmSystem {
 
       if (dist < pRad) {
         const pull = (1.0 - dist / pRad) * 440 + 130;
-        this.dx[i] += (dx / dist) * pull * dt;
-        this.dy[i] += (dy / dist) * pull * dt;
+        // アイテムがプレイヤーと完全に重なると dist が 0 になり、
+        // 0/0 で NaN 发生后アリーナ全体が汚染されます。
+        // 向きが決められないので 1e-4 を足して有限値に収めます。
+        const invDist = 1.0 / (dist + 1e-4);
+        this.dx[i] += dx * invDist * pull * dt;
+        this.dy[i] += dy * invDist * pull * dt;
         this.dsprite[i].x = this.dx[i];
         this.dsprite[i].y = this.dy[i];
 
@@ -680,41 +772,52 @@ export class SwarmSystem {
     scene: Scene,
   ) {
     const r2 = radius * radius;
+    // i はアリーナの ID、ii は密添字です。位置参照は密添字側だけを使います。
     for (let i = 0; i < scene.arena.capacity; i++) {
-      if (scene.arena.idToIndex[i] < 0) continue;
-      const dx = scene.arena.posX[i] - x;
-      const dy = scene.arena.posY[i] - y;
+      if (i === this.playerId) continue;
+      const ii = scene.arena.idToIndex[i];
+      if (ii < 0) continue;
+      const dx = scene.arena.posX[ii] - x;
+      const dy = scene.arena.posY[ii] - y;
       const d2 = dx * dx + dy * dy;
       if (d2 < r2) {
         this.hp[i] -= dmg;
         if (knockback > 0) {
           const actualKnock = knockback * (1.0 - this.knockResist[i]);
           if (actualKnock > 0.4) {
-            const d = Math.sqrt(d2) || 1;
-            scene.arena.posX[i] += (dx / d) * actualKnock;
-            scene.arena.posY[i] += (dy / d) * actualKnock;
+            const invLen = 1.0 / (Math.sqrt(d2) + 1e-4);
+            scene.arena.posX[ii] += dx * invLen * actualKnock;
+            scene.arena.posY[ii] += dy * invLen * actualKnock;
           }
         }
         if (this.hp[i] <= 0) {
+          // kill() は swap-remove で密添字を移すため、以降の反復 Affected します。
           this.kill(i, coinRate, scene);
+          break;
         }
       }
     }
   }
 
+  /**
+   * 指定座標に最も近い敵の ID を返します。該当なしは -1。
+   * 戻り値は ID であり、位置参照には `arena.idToIndex` が必要です。
+   */
   findNearestEnemy(x: number, y: number, maxDist = 380, scene: Scene) {
-    let nearestIdx = -1;
+    let nearestId = -1;
     let minDist2 = maxDist * maxDist;
     for (let i = 0; i < scene.arena.capacity; i++) {
-      if (scene.arena.idToIndex[i] < 0) continue;
-      const dx = scene.arena.posX[i] - x;
-      const dy = scene.arena.posY[i] - y;
+      if (i === this.playerId) continue;
+      const ii = scene.arena.idToIndex[i];
+      if (ii < 0) continue;
+      const dx = scene.arena.posX[ii] - x;
+      const dy = scene.arena.posY[ii] - y;
       const d2 = dx * dx + dy * dy;
       if (d2 < minDist2) {
         minDist2 = d2;
-        nearestIdx = i;
+        nearestId = i;
       }
     }
-    return nearestIdx;
+    return nearestId;
   }
 }

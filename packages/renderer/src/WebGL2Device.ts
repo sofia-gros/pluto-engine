@@ -20,27 +20,42 @@ layout(location = 2) in float posX;
 layout(location = 3) in float posY;
 layout(location = 4) in float scale;
 layout(location = 5) in float facing;
-layout(location = 6) in float uvX;
-layout(location = 7) in float uvY;
-layout(location = 8) in float uvW;
-layout(location = 9) in float uvH;
-layout(location = 10) in float layerDepth;
-layout(location = 11) in float frameIdx;
-layout(location = 12) in vec4 tint;
+layout(location = 6) in float rotation;
+// 0.0 なら描画をスキップします (Phaser 互換の setVisible)。
+// かつては depth (描画順) をここに渡していましたが、頂点シェーダで
+// 参照されておらず、デッド属性でした。頂点属性には上限 (WebGL2 では 16) が
+// あるため、空いた枠を可視性に使っています。
+layout(location = 7) in float visible;
+layout(location = 8) in float uvX;
+layout(location = 9) in float uvY;
+layout(location = 10) in float uvW;
+layout(location = 11) in float uvH;
+layout(location = 12) in float frameIdx;
+layout(location = 13) in vec4 tint;
+// 1.0 のインスタンスは SDF テキスト。0.0 は通常のスプライト。
+layout(location = 14) in float isText;
 
 uniform mat4 projectionMatrix;
 
 out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
+out float vIsText;
+out float vVisible;
 
 void main() {
-    vec2 scaledPos = vec2(vertexPos.x * scale * facing, vertexPos.y * scale);
-    vec2 worldPos = scaledPos + vec2(posX, posY);
+    // 頂点を中心に scale してから rotation だけ回す
+    vec2 scaled = vertexPos * scale;
+    float c = cos(rotation);
+    float s = sin(rotation);
+    vec2 rotated = vec2(scaled.x * c - scaled.y * s, scaled.x * s + scaled.y * c);
+    vec2 worldPos = vec2(rotated.x * facing, rotated.y) + vec2(posX, posY);
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
     vUV = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
     vLayer = frameIdx;
     vTint = tint;
+    vIsText = isText;
+    vVisible = visible;
 }
 `;
 
@@ -52,16 +67,35 @@ const SPRITE_FRAG_GLSL = `#version 300 es
 precision highp float;
 
 uniform highp sampler2DArray textureArray;
+// SDF の輪郭位置。0.5 がグリフの縁に対応します。
+uniform float sdfThreshold;
+// 輪郭をぼかす幅 (0.0 はハードエッジ)
+uniform float sdfSmoothing;
 
 in vec2 vUV;
 in float vLayer;
 in vec4 vTint;
+// 1.0 のインスタンスは SDF テキストとして扱います。
+in float vIsText;
+// 0.0 のインスタンスは描画しません (setVisible(false))。
+in float vVisible;
 
 out vec4 fragColor;
 
 void main() {
+    // 非表示のインスタンスはテクスチャを引かずに打ち切ります。
+    // フラグメント側で捨てることで、テクスチャフェッチを回避できます。
+    if (vVisible < 0.5) discard;
+
     vec4 texColor = texture(textureArray, vec3(vUV, vLayer));
-    fragColor = texColor * vTint;
+    // 通常のスプライトはテクスチャの色をそのまま使います。
+    // テキスト (isText = 1) だけ距離場を閾値で切り、輪郭を滑らかにします。
+    if (vIsText > 0.5) {
+        float alpha = smoothstep(sdfThreshold - sdfSmoothing, sdfThreshold + sdfSmoothing, texColor.r);
+        fragColor = vec4(vTint.rgb, vTint.a * alpha);
+    } else {
+        fragColor = texColor * vTint;
+    }
 }
 `;
 
@@ -70,23 +104,97 @@ export class WebGL2Device implements GraphicsDevice {
   private currentPipeline: WebGLProgram | null = null;
 
   private spritePipeline: PipelineInfo | null = null;
+  /** setupInstancedAttributes で使うバッファ表。クロージャを new しないため保持します。 */
+  private _boundBuffers: Record<string, BufferInfo> = {};
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
 
-  public readonly textureWidth = 2048;
-  public readonly textureHeight = 2048;
-  public readonly maxLayers = 64;
+  /**
+   * テクスチャ配列のサイズ設定。
+   *
+   * 3D テクスチャの領域は width * height * 4 * layers バイトを
+   * 丸ごと確保します。**この確保は失敗しても GL エラーになりません。**
+   * ANGLE/Vulkan は `texImage3D` のメモリ不足で
+   * コンテキストごと破棄します (`CONTEXT_LOST_WEBGL`)。
+   * そのため「大きめに確保してから縮小リトライ」は構造上できず、
+   * 最初から安全な既定値で確保する必要があります。
+   *
+   * 実測: 2048 x 2048 x 64 は **1 GB** で、GitHub Actions ランナー
+   * (7 GB / SwiftShader) では確実にコンテキストが失効し、
+   * 全デモが「60 FPS でruns したまま何も描画されない」状態になりました。
+   * 1 GB を要求するゲームエンジンとしては異常な値です。
+   *
+   * 既定値は 1024 x 1024 x 64 = **256 MB** にしました。
+   * 2D ドット絵向けテクスチャなら 1 レイヤーあたり 1024px あれば
+   * 数百〜数千スプライトを余裕で格納できます。
+   *
+   * メモリがさらに限られる環境では `?textureSize=512` (64 MB) を
+   * 付けて指定できます。
+   */
+  public textureWidth = 1024;
+  public textureHeight = 1024;
+  public maxLayers = 64;
   private currentLayerCount = 1; // Layer 0 は白色単色ピクセル
+
+  /** コンテキスト喪失を検出したら true。失効中の描画はスキップします。 */
+  private contextLost = false;
 
   private textures: Map<string, TextureAsset> = new Map();
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
-    const gl = (canvas.getContext('webgl2') ||
-      canvas.getContext('experimental-webgl2')) as WebGL2RenderingContext | null;
+    // preserveDrawingBuffer は既定で無効です。このままだと
+    // 合成後の描画バッファが破棄されるため、.canvas へ drawImage しても
+    // 透明な 0 が返り、描画の有無を自動テストで判定できません。
+    // URL に ?preserveDrawingBuffer を付けたときだけ有効化します
+    // (通常の実行では性能に影響しません)。
+    const params =
+      typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    const attributes: WebGLContextAttributes = {
+      preserveDrawingBuffer: params?.has('preserveDrawingBuffer') ?? false,
+    };
+    // テクスチャ配列のサイズ上書き。メモリが限られた環境向けです。
+    // 例: ?textureSize=512 で 512x512x64 = 64 MB。
+    const sizeParam = params?.get('textureSize');
+    if (sizeParam !== null && sizeParam !== undefined) {
+      const n = parseInt(sizeParam, 10);
+      if (Number.isFinite(n) && n >= 64 && n <= 4096) {
+        this.textureWidth = n;
+        this.textureHeight = n;
+      } else {
+        console.warn(
+          `[WebGL2Device] ?textureSize=${sizeParam} は 64〜4096 の整数で 아닙니다。` +
+            `既定値 ${this.textureWidth} を使います。`,
+        );
+      }
+    }
+    const gl = (canvas.getContext('webgl2', attributes) ||
+      canvas.getContext('experimental-webgl2', attributes)) as WebGL2RenderingContext | null;
     if (!gl) {
       throw new Error('WebGL2 is not supported');
     }
     this.gl = gl;
+
+    // コンテキスト喪失を検出します。
+    // 喪失中は一切描画せず、黙って 60 FPS を走り続けます
+    // (CI で実際に発生しました。描画が死んでいても
+    //  ループは動くため、FPS だけでは検出できません)。
+    canvas.addEventListener('webglcontextlost', (e) => {
+      // preventDefault しないと restored が発火しません。
+      e.preventDefault();
+      this.contextLost = true;
+      console.error(
+        '[WebGL2Device] WebGL context lost. ' +
+          'The texture array is allocated in one shot, so a 1 GB shortfall ' +
+          'will kill the context. Check the GPU memory budget.',
+      );
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      console.warn('[WebGL2Device] WebGL context restored. Rebuilding the texture array.');
+      this.currentLayerCount = 1;
+      this.textures.clear();
+      this.initTextureArray();
+    });
 
     // ブレンド設定 (透過PNG対応)
     this.gl.enable(this.gl.BLEND);
@@ -94,6 +202,61 @@ export class WebGL2Device implements GraphicsDevice {
 
     // Texture2DArray の初期化 (Layer 0 に白ピクセルを格納)
     this.initTextureArray();
+  }
+
+  /** コンテキストが失効していないか */
+  public isContextLost(): boolean {
+    return this.contextLost;
+  }
+
+  /**
+   * テクスチャ配列を確保します。
+   *
+   * メモリ不足の扱いに注意が必要です。**この確保は GL エラーを返しません。**
+   * ANGLE/Vulkan は texImage3D のメモリ不足でコンテキストごと破棄し、
+   * getError() も例外も出さず CONTEXT_LOST_WEBGL を返すだけです。
+   * 「大きめに確保して失敗したら小さくリトライ」方式是
+   * 1 度目で context を失った時点で破綻します。
+   * そのため ensure するサイズそのものを安全な既定値にしています。
+   *
+   * @returns 確保に成功したら true。コンテキストを失った場合は false
+   */
+  private allocateTextureArray(): boolean {
+    if (!this.gl) return false;
+
+    // 過去のエラーを消化します (getError は 1 回しかエラーを返さないためループで空にします)。
+    while (this.gl.getError() !== this.gl.NO_ERROR) {
+      /* 溜まっているエラーを捨てる */
+    }
+
+    this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
+    this.gl.texImage3D(
+      this.gl.TEXTURE_2D_ARRAY,
+      0,
+      this.gl.RGBA,
+      this.textureWidth,
+      this.textureHeight,
+      this.maxLayers,
+      0,
+      this.gl.RGBA,
+      this.gl.UNSIGNED_BYTE,
+      null,
+    );
+
+    // 確保直後に生存確認します。ANGLE は失敗を CONTEXT_LOST としてのみ返します。
+    if (this.gl.isContextLost()) {
+      this.contextLost = true;
+      return false;
+    }
+
+    const bytes = this.textureWidth * this.textureHeight * 4 * this.maxLayers;
+    const mb = (bytes / 1024 / 1024).toFixed(0);
+    console.log(
+      `[WebGL2Device] texture array allocated: ` +
+        `${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers ` +
+        `(= ${mb} MB)`,
+    );
+    return true;
   }
 
   private initTextureArray(): void {
@@ -107,19 +270,14 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
 
-    // 2048x2048 x 64レイヤー の 3D テクスチャ領域を GPU 側に事前確保
-    this.gl.texImage3D(
-      this.gl.TEXTURE_2D_ARRAY,
-      0,
-      this.gl.RGBA,
-      this.textureWidth,
-      this.textureHeight,
-      this.maxLayers,
-      0,
-      this.gl.RGBA,
-      this.gl.UNSIGNED_BYTE,
-      null,
-    );
+    if (!this.allocateTextureArray()) {
+      throw new Error(
+        'Failed to allocate the texture array: ' +
+          `${this.maxLayers} layers could not be allocated ` +
+          `(contextLost=${this.contextLost}). ` +
+          'GPU memory is insufficient. Reduce the texture array size or layer count.',
+      );
+    }
 
     // Layer 0: 単色・未テクスチャ用 1x1 白ピクセルを書き込み
     const whitePixel = new Uint8Array([255, 255, 255, 255]);
@@ -191,20 +349,34 @@ export class WebGL2Device implements GraphicsDevice {
 
     // フレーム UV 座標の計算
     const frames: TextureFrame[] = [];
-    const frameWidth = options?.frameWidth || width;
-    const frameHeight = options?.frameHeight || height;
-
-    const cols = Math.max(1, Math.floor(width / frameWidth));
-    const rows = Math.max(1, Math.floor(height / frameHeight));
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+    const explicit = options?.frames;
+    if (explicit !== undefined && explicit.length > 0) {
+      // 明示指定がある場合はピクセル矩形のまま正規化します (アトラス用)。
+      for (let i = 0; i < explicit.length; i++) {
+        const r = explicit[i];
         frames.push({
-          uvX: (c * frameWidth) / this.textureWidth,
-          uvY: (r * frameHeight) / this.textureHeight,
-          uvW: frameWidth / this.textureWidth,
-          uvH: frameHeight / this.textureHeight,
+          uvX: r.x / this.textureWidth,
+          uvY: r.y / this.textureHeight,
+          uvW: r.w / this.textureWidth,
+          uvH: r.h / this.textureHeight,
         });
+      }
+    } else {
+      const gridW = options?.frameWidth || width;
+      const gridH = options?.frameHeight || height;
+
+      const cols = Math.max(1, Math.floor(width / gridW));
+      const rows = Math.max(1, Math.floor(height / gridH));
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          frames.push({
+            uvX: (c * gridW) / this.textureWidth,
+            uvY: (r * gridH) / this.textureHeight,
+            uvW: gridW / this.textureWidth,
+            uvH: gridH / this.textureHeight,
+          });
+        }
       }
     }
 
@@ -213,8 +385,8 @@ export class WebGL2Device implements GraphicsDevice {
       layerIndex,
       width,
       height,
-      frameWidth,
-      frameHeight,
+      frameWidth: options?.frameWidth || width,
+      frameHeight: options?.frameHeight || height,
       frames,
     };
 
@@ -253,22 +425,44 @@ export class WebGL2Device implements GraphicsDevice {
     return { buffer, size };
   }
 
-  updateBuffer(bufferInfo: BufferInfo, data: Float32Array | Uint32Array | Uint8Array): void {
+  /**
+   * SoA 配列を GPU へ転送します。
+   *
+   * `TypedArray.prototype.subarray()` は呼び出しごとに新しいビューオブジェクトを
+   * ヒープへ確保するため、毎フレーム呼ぶとゼロアロケーションの掟に反します。
+   * WebGL2 の bufferSubData は srcOffset / length を受け取れるため、
+   * 配列全体と範囲だけを渡し、ビュー生成を完全に排除します。
+   */
+  updateBuffer(
+    bufferInfo: BufferInfo,
+    data: Float32Array | Uint32Array | Uint8Array,
+    srcOffset = 0,
+    length?: number,
+  ): void {
     if (!this.gl) throw new Error('Device not initialized');
     const buffer = bufferInfo.buffer as WebGLBuffer;
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
-    this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, data);
+    this.gl.bufferSubData(
+      this.gl.ARRAY_BUFFER,
+      0,
+      data,
+      srcOffset,
+      length ?? data.length - srcOffset,
+    );
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
   }
 
   clear(r: number, g: number, b: number, a: number): void {
     if (!this.gl) return;
+    // コンテキスト喪失中の clear / draw はすべて無効命令になります。
+    // 無駄な GPU 通信を避けて黙ります。
+    if (this.contextLost) return;
     this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
     this.gl.clearColor(r, g, b, a);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
-  bindShaders(): void {
+  bindShaders(sdfThreshold = 0.5, sdfSmoothing = 0.08): void {
     if (this.spritePipeline && this.gl) {
       this.bindPipeline(this.spritePipeline);
       // Texture2DArray をバインド
@@ -279,6 +473,11 @@ export class WebGL2Device implements GraphicsDevice {
       if (loc !== null) {
         this.gl.uniform1i(loc, 0);
       }
+      // SDF テキスト用の閾値。uniform を忘れると未定義値になりグリフが消えます。
+      const t = this.gl.getUniformLocation(program, 'sdfThreshold');
+      if (t !== null) this.gl.uniform1f(t, sdfThreshold);
+      const s = this.gl.getUniformLocation(program, 'sdfSmoothing');
+      if (s !== null) this.gl.uniform1f(s, sdfSmoothing);
     }
   }
 
@@ -293,46 +492,55 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.enableVertexAttribArray(1);
     this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
 
-    const bindInstancedAttr = (loc: number, bufName: string, size: number) => {
-      const b = buffers[bufName];
-      if (b && this.gl) {
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-        this.gl.enableVertexAttribArray(loc);
-        this.gl.vertexAttribPointer(loc, size, this.gl.FLOAT, false, 0, 0);
-        this.gl.vertexAttribDivisor(loc, 1);
-      }
-    };
+    this._boundBuffers = buffers;
+    this._bindAttr(2, 'posX');
+    this._bindAttr(3, 'posY');
+    this._bindAttr(4, 'scale');
+    this._bindAttr(6, 'rotation');
+    // 7: visible (未使用だった枠を可視性フラグとして再利用)
+    this._setDefault(7, 'visible', 1.0);
 
-    const setDef1f = (loc: number, bufName: string, def: number) => {
-      if (buffers[bufName]) {
-        bindInstancedAttr(loc, bufName, 1);
-      } else if (this.gl) {
-        this.gl.disableVertexAttribArray(loc);
-        this.gl.vertexAttrib1f(loc, def);
-      }
-    };
-
-    bindInstancedAttr(2, 'posX', 1);
-    bindInstancedAttr(3, 'posY', 1);
-    bindInstancedAttr(4, 'scale', 1);
-
-    setDef1f(5, 'facing', 1.0);
-    setDef1f(6, 'uvX', 0.0);
-    setDef1f(7, 'uvY', 0.0);
-    setDef1f(8, 'uvW', 1.0);
-    setDef1f(9, 'uvH', 1.0);
-    setDef1f(10, 'layerDepth', 0.0);
-    setDef1f(11, 'frameIdx', 0.0);
+    this._setDefault(5, 'facing', 1.0);
+    this._setDefault(8, 'uvX', 0.0);
+    this._setDefault(9, 'uvY', 0.0);
+    this._setDefault(10, 'uvW', 1.0);
+    this._setDefault(11, 'uvH', 1.0);
+    this._setDefault(12, 'frameIdx', 0.0);
 
     if (buffers['tint']) {
       const b = buffers['tint'];
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-      this.gl.enableVertexAttribArray(12);
-      this.gl.vertexAttribPointer(12, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
-      this.gl.vertexAttribDivisor(12, 1);
+      this.gl.enableVertexAttribArray(13);
+      this.gl.vertexAttribPointer(13, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
+      this.gl.vertexAttribDivisor(13, 1);
     } else {
-      this.gl.disableVertexAttribArray(12);
-      this.gl.vertexAttrib4f(12, 1.0, 1.0, 1.0, 1.0);
+      this.gl.disableVertexAttribArray(13);
+      this.gl.vertexAttrib4f(13, 1.0, 1.0, 1.0, 1.0);
+    }
+
+    // 14: isText (SDF テキストか否か)
+    this._bindAttr(14, 'isText');
+  }
+
+  /** 単一スカラー属性をインスタンス属性としてバインドします。 */
+  private _bindAttr(loc: number, bufName: string): void {
+    if (!this.gl) return;
+    const b = this._boundBuffers[bufName];
+    if (b) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
+      this.gl.enableVertexAttribArray(loc);
+      this.gl.vertexAttribPointer(loc, 1, this.gl.FLOAT, false, 0, 0);
+      this.gl.vertexAttribDivisor(loc, 1);
+    }
+  }
+
+  /** バッファが無い属性は定数へバインドします (無効化しません)。 */
+  private _setDefault(loc: number, bufName: string, def: number): void {
+    if (this._boundBuffers[bufName]) {
+      this._bindAttr(loc, bufName);
+    } else if (this.gl) {
+      this.gl.disableVertexAttribArray(loc);
+      this.gl.vertexAttrib1f(loc, def);
     }
   }
 

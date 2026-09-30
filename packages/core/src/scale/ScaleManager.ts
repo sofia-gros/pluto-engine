@@ -112,4 +112,19 @@ export class ScaleManager {
     const rect = this.canvas.getBoundingClientRect();
     return (screenY - rect.top) * (this.height / rect.height);
   }
+
+  /**
+   * 画面座標をゲーム座標へ変換し、呼び出し側のバッファへ書き込みます。
+   * InputManager は毎フレームこの関数を 1 度だけ呼ぶため、ヒープ割り当てが発生しません。
+   */
+  public transform(clientX: number, clientY: number, out: Float32Array): void {
+    if (!this.canvas) {
+      out[0] = clientX;
+      out[1] = clientY;
+      return;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    out[0] = (clientX - rect.left) * (this.width / rect.width);
+    out[1] = (clientY - rect.top) * (this.height / rect.height);
+  }
 }

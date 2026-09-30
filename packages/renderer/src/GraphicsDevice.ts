@@ -34,6 +34,13 @@ export interface TextureAsset {
 export interface TextureUploadOptions {
   frameWidth?: number;
   frameHeight?: number;
+  /**
+   * 明示的なフレーム矩形 (ピクセル単位)。
+   *
+   * 指定すると、frameWidth / frameHeight による均一グリッドの自動計算を
+   * 飛ばしてこの配列をそのまま使います。TexturePacker のアトラス用です。
+   */
+  frames?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface GraphicsDevice {
@@ -54,8 +61,16 @@ export interface GraphicsDevice {
 
   /**
    * GPUバッファをゼロアロケーションで更新します。
+   *
+   * `subarray()` は毎回新しいビューオブジェクトをヒープへ確保するため使わないでください。
+   * 配列全体と範囲 (srcOffset / length) を渡し、転送したい範囲だけを GPU へ送ります。
    */
-  updateBuffer(bufferInfo: BufferInfo, data: Float32Array | Uint32Array | Uint8Array): void;
+  updateBuffer(
+    bufferInfo: BufferInfo,
+    data: Float32Array | Uint32Array | Uint8Array,
+    srcOffset?: number,
+    length?: number,
+  ): void;
 
   /**
    * 画像・Canvas・BitmapをGPUのTexture2DArrayに転送し、テクスチャアセットを登録します。
@@ -78,8 +93,11 @@ export interface GraphicsDevice {
 
   /**
    * スプライト描画用シェーダーとテクスチャ配列をバインドします。
+   *
+   * @param sdfThreshold SDF テキストの輪郭位置 (0.5 が縁)
+   * @param sdfSmoothing 輪郭をぼかす幅
    */
-  bindShaders(): void;
+  bindShaders(sdfThreshold?: number, sdfSmoothing?: number): void;
 
   /**
    * インスタンシング描画用の頂点属性を設定します。

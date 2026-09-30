@@ -4,7 +4,57 @@
  * シーンおよびエンジン全体でテクスチャアセットを一元管理し、GPUへの転送・キャッシュを統括するマネージャー。
  */
 
-import type { GraphicsDevice, TextureAsset, TextureUploadOptions } from '@pluto-engine/renderer';
+import type {
+  GraphicsDevice,
+  TextureAsset,
+  TextureFrame,
+  TextureUploadOptions,
+} from '@pluto-engine/renderer';
+
+/**
+ * フレーム UV を構築します。
+ *
+ * `options.frames` に明示矩形があればそれを使い、無ければ
+ * `frameWidth` / `frameHeight` から均一グリッドを計算します。
+ *
+ * 登録時のみ呼ばれるため、配列の new は想定内です。
+ */
+function buildFrames(
+  width: number,
+  height: number,
+  options: TextureUploadOptions,
+): TextureFrame[] {
+  const frames: TextureFrame[] = [];
+  const explicit = options.frames;
+  if (explicit !== undefined && explicit.length > 0) {
+    for (let i = 0; i < explicit.length; i++) {
+      const r = explicit[i];
+      frames.push({
+        uvX: r.x / width,
+        uvY: r.y / height,
+        uvW: r.w / width,
+        uvH: r.h / height,
+      });
+    }
+    return frames;
+  }
+
+  const gridW = options.frameWidth || width;
+  const gridH = options.frameHeight || height;
+  const cols = Math.max(1, Math.floor(width / gridW));
+  const rows = Math.max(1, Math.floor(height / gridH));
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      frames.push({
+        uvX: (c * gridW) / width,
+        uvY: (r * gridH) / height,
+        uvW: gridW / width,
+        uvH: gridH / height,
+      });
+    }
+  }
+  return frames;
+}
 
 export class TextureManager {
   private device: GraphicsDevice | null = null;
@@ -59,6 +109,9 @@ export class TextureManager {
 
   /**
    * スプライトシートからテクスチャを登録・GPU転送します。
+   *
+   * `options.frames` に明示矩形があればそれを使い、
+   * 無ければ `frameWidth` / `frameHeight` から均一グリッドを計算します。
    */
   public addSpritesheet(
     key: string,
@@ -70,17 +123,41 @@ export class TextureManager {
       this.textures.set(key, asset);
       return asset;
     }
+
+    // デバイスが無い間も UV を計算しないと Sprite.setFrame() が何もできません。
+    const width = source.width;
+    const height = source.height;
     const asset: TextureAsset = {
       key,
       layerIndex: 0,
-      width: source.width,
-      height: source.height,
-      frameWidth: options.frameWidth || source.width,
-      frameHeight: options.frameHeight || source.height,
+      width,
+      height,
+      frameWidth: options.frameWidth || width,
+      frameHeight: options.frameHeight || height,
+      frames: buildFrames(width, height, options),
       ...({ _source: source } as any),
     };
     this.textures.set(key, asset);
     return asset;
+  }
+
+  /**
+   * アトラス (TexturePacker 形式) を登録・GPU転送します。
+   *
+   * 均一グリッドではないため、フレーム UV は呼び出し側が矩形一覧で渡します。
+   * 配列順がそのままフレーム番号になるため、
+   * 描画時は `setFrame(番号)` で指定します。
+   *
+   * @param key テクスチャキー
+   * @param source 画像
+   * @param frames フレーム矩形 (ピクセル)。配列順 = フレーム番号
+   */
+  public addAtlas(
+    key: string,
+    source: HTMLImageElement | HTMLCanvasElement | ImageBitmap | ImageData,
+    frames: { x: number; y: number; w: number; h: number }[],
+  ): TextureAsset {
+    return this.addSpritesheet(key, source, { frames });
   }
 
   /**

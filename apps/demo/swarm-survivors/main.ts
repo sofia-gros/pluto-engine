@@ -62,11 +62,18 @@ class GameScene extends Scene {
     this.isPaused = false;
     this.bossSpawnsDone.clear();
 
+    // 旧プレイヤーを破棄してからアリーナを空にします。
+    // 順序を逆にすると、新しく作ったプレイヤーのハンドルだけが宙に浮き、
+    // idx が -1 になります。その状態で player.x を読むと posX[-1] が
+    // undefined になり、以後の生成座標がすべて NaN になります。
     if (this.player?.sprite) this.player.sprite.destroy();
+
+    // clear() は必ず Player 生成より前に行います。
+    this.arena.clear();
+
     this.player = new Player(this, 0, 0);
     this.player.recalculateStats(this.getComputedTreeStats());
 
-    this.arena.clear();
     // re-init swarm if needed, but clearing arena is mostly enough.
     this.swarm.dropCount = 0;
     this.swarm.projCount = 0;
