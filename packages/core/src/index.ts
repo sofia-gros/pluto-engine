@@ -17,6 +17,8 @@ export * from './math/Math';
 export * from './input/InputManager';
 export * from './time/TimeStepManager';
 export * from './loader/LoaderManager';
+export * from './loader/AtlasParser';
+export * from './loader/BitmapFontParser';
 export * from './loader/TextureManager';
 export * from './tween/TweenManager';
 export * from './tween/Easing';

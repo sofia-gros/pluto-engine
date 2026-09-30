@@ -20,6 +20,7 @@ import type {
   GraphicsDevice,
   PipelineInfo,
   TextureAsset,
+  TextureFrame,
   TextureUploadOptions,
 } from './GraphicsDevice';
 
@@ -368,6 +369,36 @@ export class WebGPUDevice implements GraphicsDevice {
       { width, height, depthOrArrayLayers: 1 },
     );
 
+    // フレーム UV の構築。WebGL2 側と同じ規則に揃えます。
+    const frames: TextureFrame[] = [];
+    const explicit = options?.frames;
+    if (explicit !== undefined && explicit.length > 0) {
+      for (let i = 0; i < explicit.length; i++) {
+        const r = explicit[i];
+        frames.push({
+          uvX: r.x / width,
+          uvY: r.y / height,
+          uvW: r.w / width,
+          uvH: r.h / height,
+        });
+      }
+    } else {
+      const gridW = options?.frameWidth || width;
+      const gridH = options?.frameHeight || height;
+      const cols = Math.max(1, Math.floor(width / gridW));
+      const rows = Math.max(1, Math.floor(height / gridH));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          frames.push({
+            uvX: (c * gridW) / width,
+            uvY: (r * gridH) / height,
+            uvW: gridW / width,
+            uvH: gridH / height,
+          });
+        }
+      }
+    }
+
     const asset: TextureAsset = {
       key,
       layerIndex,
@@ -375,7 +406,7 @@ export class WebGPUDevice implements GraphicsDevice {
       height,
       frameWidth: options?.frameWidth || width,
       frameHeight: options?.frameHeight || height,
-      frames: [{ uvX: 0, uvY: 0, uvW: 1, uvH: 1 }],
+      frames,
     };
     this.textures.set(key, asset);
     return asset;

@@ -53,13 +53,26 @@ export class SceneManager {
 
   /**
    * シーンを開始します (Phaser 互換の this.scene.start)。
+   *
+   * `preload()` でキューに積まれたアセットがある場合は読み込みを待ってから
+   * `create()` を呼びます。キューが空 (preload を使わないシーン) なら
+   * await せずに同期的に進むので、既存の挙動は変わりません。
    */
   public start(key: string): void {
     const scene = this._scenes.get(key);
     if (!scene) throw new Error(`Scene ${key} not found.`);
     this._activeScene = scene;
     scene.sysInit(this._engine);
-    scene.sysCreate();
+
+    if (scene.load.pendingCount === 0) {
+      scene.sysCreate();
+      return;
+    }
+    void scene.load.start().then(() => {
+      // 待ちている間にシーンが停止されていたら create() は呼ばれません。
+      if (this._activeScene !== scene) return;
+      scene.sysCreate();
+    });
   }
 
   /**

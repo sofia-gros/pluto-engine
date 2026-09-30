@@ -378,7 +378,8 @@ export class Sprite {
       }
       return this;
     }
-    const fIdx = typeof frame === 'number' ? frame : 0;
+    // 数値はそのまま添字、文字はアトラスのフレーム名として解決します。
+    const fIdx = typeof frame === 'number' ? frame : this._resolveFrameName(frame);
     if (fIdx >= 0 && fIdx < frames.length) {
       this._arena.srcFrame[i] = fIdx;
       const fData = frames[fIdx];
@@ -389,6 +390,21 @@ export class Sprite {
       this._arena.dirtyUv = true;
     }
     return this;
+  }
+
+  /**
+   * フレーム名 → 添字を解決します。
+   *
+   * アトラスを読んでいる場合 (frameNames がある) は名前で引きます。
+   * 均一グリッドのスプライトシートには名前が無いため 0 を返します
+   * (従来の「文字列は必ず 0」という挙動を維持します)。
+   */
+  private _resolveFrameName(frame: string): number {
+    const asset = this._arena.assetRef[this.idx];
+    const names = asset?.frameNames;
+    if (names === null || names === undefined) return 0;
+    const found = names.get(frame);
+    return found === undefined ? 0 : found;
   }
 
   /**

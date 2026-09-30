@@ -328,3 +328,115 @@ FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています
 FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています。
 3 デモとも `this.sound` に触れていないため、SoundManager の生成コストは発生していません。
 
+---
+
+### STEP 6: Loader の Phaser 互換（完了）
+
+#### 追加したファイル
+
+| ファイル | 内容 |
+|---|---|
+| `packages/core/src/loader/AtlasParser.ts` | TexturePacker の JSON Hash / 旧配列形式の解析 |
+| `packages/core/src/loader/BitmapFontParser.ts` | AngelCode のテキスト形式と JSON 形式の解析 |
+| `packages/core/tests/loader.test.ts` | 22 テスト |
+
+#### アトラス対応のためにレンダラ側を拡張
+
+均一グリッドしか扱えなかった `uploadTexture` に、明示フレームの経路を足しました。
+
+- `TextureUploadOptions.frames?: { x, y, w, h }[]` を追加。
+  指定すると `frameWidth` / `frameHeight` による自動計算を飛ばします
+- `WebGL2Device` と `WebGPUDevice` の両方を同じ規則に揃えました
+- `TextureAsset.frameNames?: Map<string, number>` を追加。
+  名前でコマを引けるようにするためです
+- `TextureManager.addAtlas(key, source, frames, frameNames)` を追加
+
+#### `Sprite.setFrame` の名前解決
+
+`setFrame('hero_idle_0')` が 0 番へ落ちるだけだった挙動を、名前解決できるようにしました。
+`frameNames` が無い，一律グリッドのスプライトシートでは従来どおり 0 へフォールバックします（挙動互換）。
+
+#### 追加した Loader API
+
+| API | 内容 |
+|---|---|
+| `atlas(key, url, config?)` | TexturePacker の JSON。画像は「`config.textureURL` → JSON の `meta.image`」の順で解決します |
+| `bitmapfont(key, url, dataURL?)` | AngelCode テキスト / JSON。画像は「`dataURL` → `.fnt` 内の `file`」の順で、`.fnt` の位置を基準に解決します |
+| `on` / `once` / `off` | `filecomplete` / `progress` / `complete` の購読 |
+| `pendingCount` / `isLoading` / `exists` | キューとキャッシュの照会 |
+
+`spritesheet` は既に `{ frameWidth, frameHeight }` 形式だったので、変更はありません。
+
+#### 見つけた既存バグ: `preload()` が永久に実行されなかった
+
+`Scene.load` は生成されるだけで `start()` を呼ぶ箇所がエンジン側に存在しませんでした。
+`preload()` でキューに積んだアセットが読み込まれる機会自体がありませんでした。
+
+`SceneManager.start()` を次のように直しました。
+
+```typescript
+scene.sysInit(this._engine);          // ここで preload() が走る
+
+if (scene.load.pendingCount === 0) {
+  scene.sysCreate();                  // キューが空なら同期的に進む（従来と同一）
+  return;
+}
+void scene.load.start().then(() => {
+  if (this._activeScene !== scene) return;  // 待ってる間に停止されたら create は呼ばない
+  scene.sysCreate();
+});
+```
+
+キューが空のシーンは `await` しないので、既存の同期挙動は変わっていません。
+
+#### 見つけたバグ: デバイス未設定時の `addSpritesheet` が `frames` を空にしていた
+
+`TextureManager` はデバイスが無い間だけプレーンな `TextureAsset` を作るのですが、
+そこに `frames` を入れていませんでした。そのため `setFrame()` が常に 0 番を返す状態でした。
+`buildFrames()` を切り出して、デバイスあり / なしの両方で同じ UV を計算するようにしています。
+
+#### ゲート結果
+
+| 項目 | 結果 |
+|---|---|
+| `bun run build` | 成功 |
+| `bun run test` | 33 ファイル / 418 テスト全通過（今回 22 件追加） |
+| `apps/demo` の `tsc --noEmit` | エラー 0 |
+| `apps/demo` の `vite build` | 成功 |
+| `scripts/smoke-test.mjs` | 3 デモ PASS / errors 0 |
+
+| デモ | FPS | B/frame |
+|---|---|---|
+| swarm-survivors | 59.6 | 62.42 |
+| rpg | 60.4 | 124.73 |
+| benchmark | 38.3 | 3655.36（対象外） |
+
+FPS は 60 前後で安定しています。B/frame について、この指標は測定ごとの分散が大きく、
+同じコミットでも 48〜125 B/frame を取ります。参考のため `f04ac82`（STEP 開始前）を
+同じ環境・同じ手順で 3 回測ったところ swarm 27 / 60 / 32、rpg 177 / 21 / 37 でした。
+つまり baseline にも同程度の分散があり、50 B/frame の差は
+この指標のノイズと区別できません。
+
+強いて言えば、3 デモとも強制予算 2048 B/frame に対しては 6% 前後にとどまっており、
+FPS 低下もありません。STEP 6 はロード時にしか走らない経路の追加なので、
+毎フレームのアロケーションを誘発する構造ではありません。
+
+**この一点は計測ノイズの影響を受けるため、プランの 50 B 判定では
+STEP 6 の合格を断言できません。** 必要ならヒープ計測をフレーム数で正規化する
+改善を `scripts/heap-profile.mjs` 側に入れてから再判定することを提案します。
+
+---
+
+## 実装順序（実績）
+
+| STEP | 内容 | 属性増減 | コミット | テスト数 |
+|---|---|---|---|---|
+| 0 | デッド属性削除 + isText dirty 化 | -1 | `fc3e7b9` | — |
+| 1 | SoA 相乗り (alpha, texture, Transform, visible) | +1 | `fc3e7b9` | 313 |
+| 2 | カメラ複数対応 + Phaser 互換 API | 0 | `6fe838d` | 344 |
+| 3 | Scene システムファサード | 0 | `0283f74` | 363 |
+| 4 | Tween ファサード + イージング | 0 | `b6caa4f` | 382 |
+| 5 | 音声接続 + 改良 | 0 | `be121a0` | 396 |
+| 6 | Loader 互換 | 0 | (STEP 6) | 418 |
+
+

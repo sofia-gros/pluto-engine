@@ -29,11 +29,26 @@ export interface TextureAsset {
   frameWidth?: number;
   frameHeight?: number;
   frames?: TextureFrame[];
+  /**
+   * フレーム名 → 添字の対応表。
+   *
+   * TexturePacker などのアトラスを読む場合だけ入ります。
+   * 均一グリッドのスプライトシートでは null のままです
+   * (null のままでも setFrame('name') は 0 へフォールバックします)。
+   */
+  frameNames?: Map<string, number> | null;
 }
 
 export interface TextureUploadOptions {
   frameWidth?: number;
   frameHeight?: number;
+  /**
+   * 明示的なフレーム矩形 (ピクセル単位)。
+   *
+   * 指定すると、frameWidth / frameHeight による均一グリッドの自動計算を
+   * 飛ばしてこの配列をそのまま使います。TexturePacker のアトラス用です。
+   */
+  frames?: { x: number; y: number; w: number; h: number }[];
 }
 
 export interface GraphicsDevice {

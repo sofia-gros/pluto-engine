@@ -237,20 +237,34 @@ export class WebGL2Device implements GraphicsDevice {
 
     // フレーム UV 座標の計算
     const frames: TextureFrame[] = [];
-    const frameWidth = options?.frameWidth || width;
-    const frameHeight = options?.frameHeight || height;
-
-    const cols = Math.max(1, Math.floor(width / frameWidth));
-    const rows = Math.max(1, Math.floor(height / frameHeight));
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
+    const explicit = options?.frames;
+    if (explicit !== undefined && explicit.length > 0) {
+      // 明示指定がある場合はピクセル矩形のまま正規化します (アトラス用)。
+      for (let i = 0; i < explicit.length; i++) {
+        const r = explicit[i];
         frames.push({
-          uvX: (c * frameWidth) / this.textureWidth,
-          uvY: (r * frameHeight) / this.textureHeight,
-          uvW: frameWidth / this.textureWidth,
-          uvH: frameHeight / this.textureHeight,
+          uvX: r.x / this.textureWidth,
+          uvY: r.y / this.textureHeight,
+          uvW: r.w / this.textureWidth,
+          uvH: r.h / this.textureHeight,
         });
+      }
+    } else {
+      const gridW = options?.frameWidth || width;
+      const gridH = options?.frameHeight || height;
+
+      const cols = Math.max(1, Math.floor(width / gridW));
+      const rows = Math.max(1, Math.floor(height / gridH));
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          frames.push({
+            uvX: (c * gridW) / this.textureWidth,
+            uvY: (r * gridH) / this.textureHeight,
+            uvW: gridW / this.textureWidth,
+            uvH: gridH / this.textureHeight,
+          });
+        }
       }
     }
 
@@ -259,8 +273,8 @@ export class WebGL2Device implements GraphicsDevice {
       layerIndex,
       width,
       height,
-      frameWidth,
-      frameHeight,
+      frameWidth: options?.frameWidth || width,
+      frameHeight: options?.frameHeight || height,
       frames,
     };
 
