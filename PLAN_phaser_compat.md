@@ -241,3 +241,90 @@ FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています
 - 旧 `add(entityId, propType, start, end, durationMs)` とファサード `add(config)` が名前上で衝突したため、内部用を `_addSlot()` へ改名しました
 - `const enum EaseKind` を `TweenManager` から使うため `Easing.ts` を値として import する必要があり、`isolatedModules` では `const enum` の逆引き（`EaseKind[k]`）が使えません。名前を明示した配列に置き換えました
 - イージング名 `Quad.easeIn` はそのままでは検索キーに合いません。`normalizeName` で `quad.in` に落とします
+
+---
+
+### STEP 5: 音声接続 + 改良（完了）
+
+#### 依存の向きを反転
+
+プランには「`core` の dependencies に `audio` を追加」と書かれていましたが、そのままでは
+循環参照になります（`audio` が既に `core` に依存済み）。そのため実装を `core` 側へ移し、
+`packages/audio` は後方互換用の再エクスポートに留めました。
+
+| ファイル | 変更 |
+|---|---|
+| `packages/core/src/sound/SoundManager.ts` | 新規。実装本体 |
+| `packages/audio/src/SoundManager.ts` | `core` からの再エクスポートのみ |
+| `packages/audio/src/SoundPlugin.ts` | `scene.setSoundManager()` を使う形に更新 |
+
+`import { SoundManager } from '@pluto-engine/audio'` はそのまま動作します。
+
+#### `Scene.sound`（遅延サブシステム）
+
+- `Subsystem.Sound`（`1 << 8`、定義済み・未使用だったもの）を初次アクセスで立てます
+- `sysUpdate` は `if ((active & Subsystem.Sound) !== 0) this._sound!.update();` の 1 行だけ追加。
+  未使用なら AND 1 回でスキップされます
+- `sysShutdown` で `AudioContext` を必ず閉じます（有限リソースなので）
+- `setSoundManager(manager)` を追加し、`SoundPlugin` が自前のインスタンスを渡せるようにしました。
+  ビットもここで立てるため二重生成は起きません
+
+#### Phaser 互換 API
+
+| API | 内容 |
+|---|---|
+| `play(key, config)` | `SoundHandle` を返します。Phaser の `Sound` に相当 |
+| `playAudioSprite(key, config)` | `seek` を割合として受け取り `delay`（秒）へ変換します |
+| `stopByKey(key)` | `Voice` に `key` を持たせ、プール側を直接照合します。停止本数を返します |
+| `add` / `remove` / `exists` / `count` | 登録済み音声の管理 |
+| `loadAudioData(key, arrayBuffer)` | エンコード済みデータの登録 |
+| `get(key)` / `isPlaying(key)` | 再生ハンドルの取得と状態照会 |
+| `setVolume` / `volume` | master gain 0〜1。範囲外は丸めます |
+| `mute` / `setMute` | master gain を 0 にします |
+| `unlock` / `unlocked` | 自動再生ポリシーによる停止からの復帰 |
+| `pauseAll` / `resumeAll` / `paused` | context 全体のサスペンド |
+| `setListenerPosition(x, y, z)` | 3D 配置。`positionX` が無い WebKit 向けに `setPosition` へフォールバック |
+| `stopAll` / `removeAll` / `destroy` | 解放 |
+| `setConfig` | 旧 API の別名 |
+
+`config` は `volume` / `loop` / `rate` / `seek` / `delay` / `x` / `y` / `z` / `mute` / `fadeIn` を受け付けます。
+
+#### ゼロアロケーション上の論点（プランの論点を、計測の代わりに構造で解決）
+
+`AudioBufferSourceNode` は Web Audio の仕様で再生ごとに新規生成が必須です。ただし
+`SoundManager` は「空いている `Voice` を再利用する」設計なので、プール上限（既定 32）までは
+毎フレームの `new` は 1 再生 1 個だけです。`Voice` の `PannerNode` と `GainNode` は
+生成時 1 度しか作らず、以降は `positionX.value` への書き込みと `gain.value` の更新だけです。
+
+`SoundHandle` もプール済みの `Voice` をそのままラップするので、`play()` の戻り値に new は発生しません。
+
+`fadeIn` は `setValueCurve`（呼び出しごとに new が要る）を使わず、
+`Voice.updateFade()` が `gain.value` を線形ランプで書き込みます。
+`SoundManager.update()` は毎フレーム `voicePool` を 1 回走査するだけなので new は 0 です。
+
+#### 未実装（意図的）
+
+- `AudioSprite` は実装しません。`SoundManager` が既に 1 キーで複数同時再生でき、
+  同じ用途の音源が重複しない 1 本の Voice で足ります
+- フェードアウトは未実装です。逆再生はテクスチャの reverse 再生一样の見栄えになり、
+  現段階では複雑さが割に合わないと判断しました
+
+#### ゲート結果
+
+| 項目 | 結果 |
+|---|---|
+| `bun run build` | 成功 |
+| `bun run test` | 32 ファイル / 396 テスト全通過（今回 14 件追加） |
+| `apps/demo` の `tsc --noEmit` | エラー 0 |
+| `apps/demo` の `vite build` | 成功 |
+| `scripts/smoke-test.mjs` | 3 デモ PASS / errors 0 |
+
+| デモ | FPS | B/frame |
+|---|---|---|
+| swarm-survivors | 59.8 | 60.29 |
+| rpg | 60.4 | -8.2 |
+| benchmark | 37.2 | 3254.16（対象外） |
+
+FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています。
+3 デモとも `this.sound` に触れていないため、SoundManager の生成コストは発生していません。
+

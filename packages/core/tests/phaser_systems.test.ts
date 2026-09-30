@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { InputManager, Key, Pointer } from '../src/input/InputManager';
 import { Scene } from '../src/scene/Scene';
 import { SceneManager } from '../src/scene/SceneManager';
+import { Subsystem } from '../src/scene/SubsystemMask';
+import { SoundHandle, SoundManager } from '../src/sound/SoundManager';
 
 /** キー押下を模擬するためのヘルパー */
 function pressKey(input: InputManager, code: string): void {
@@ -570,5 +572,219 @@ describe('Phaser 互換 - tweens.add', () => {
     scene.tweens.add({ targets: sprite, props: { x: 100 }, duration: 1000 });
     scene.tweens.clear();
     expect(scene.tweens.count).toBe(0);
+  });
+});
+
+/** 1 秒分の無音バッファを作ります。ファイル読み込みなしで実 AudioBuffer を得るためです。 */
+function makeSilentBuffer(context: BaseAudioContext, seconds = 1): AudioBuffer {
+  const buf = context.createBuffer(1, context.sampleRate * seconds, context.sampleRate);
+  return buf;
+}
+
+describe('Phaser 互換 - this.sound', () => {
+  it('遅延生成され、Subsystem.Sound が立つ', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    expect(scene.hasSubsystem(Subsystem.Sound)).toBe(false);
+
+    const sound = scene.sound;
+    expect(sound).toBeInstanceOf(SoundManager);
+    expect(scene.hasSubsystem(Subsystem.Sound)).toBe(true);
+    // 2 回目は同じインスタンス (AudioContext が 2 つできてはいけない)
+    expect(scene.sound).toBe(sound);
+
+    scene.sysShutdown();
+  });
+
+  it('add / exists / count / remove で音声を管理する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    const buffer = makeSilentBuffer(sound.context);
+
+    sound.add('hit', buffer);
+    expect(sound.exists('hit')).toBe(true);
+    expect(sound.exists('nope')).toBe(false);
+    expect(sound.count).toBe(1);
+
+    expect(sound.remove('hit')).toBe(true);
+    expect(sound.exists('hit')).toBe(false);
+    expect(sound.count).toBe(0);
+    expect(sound.remove('hit')).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('play が SoundHandle を返し、音量と再生状態を反映する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('hit', makeSilentBuffer(sound.context));
+
+    const handle = sound.play('hit', { volume: 0.5 });
+    expect(handle).toBeInstanceOf(SoundHandle);
+    expect(handle).not.toBeNull();
+    expect(handle!.key).toBe('hit');
+    expect(handle!.isPlaying).toBe(true);
+    expect(handle!.volume).toBeCloseTo(0.5, 3);
+
+    handle!.setVolume(0.25);
+    expect(handle!.volume).toBeCloseTo(0.25, 3);
+
+    handle!.stop();
+    expect(handle!.isPlaying).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('未登録のキーで play すると null を返す', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    expect(sound.play('missing')).toBeNull();
+    scene.sysShutdown();
+  });
+
+  it('get / isPlaying が再生状態を返す', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('bgm', makeSilentBuffer(sound.context));
+
+    expect(sound.get('bgm')).toBeNull();
+    expect(sound.isPlaying('bgm')).toBe(false);
+
+    sound.play('bgm');
+    expect(sound.get('bgm')).not.toBeNull();
+    expect(sound.isPlaying('bgm')).toBe(true);
+
+    sound.stopByKey('bgm');
+    expect(sound.isPlaying('bgm')).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('stopByKey が同じキーの再生を全て止める', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('hit', makeSilentBuffer(sound.context));
+
+    // 3 本同時に再生します
+    sound.play('hit', { volume: 0.1 });
+    sound.play('hit', { volume: 0.2 });
+    sound.play('hit', { volume: 0.3 });
+    expect(sound.playingCount).toBe(3);
+
+    expect(sound.stopByKey('hit')).toBe(3);
+    expect(sound.playingCount).toBe(0);
+    expect(sound.isPlaying('hit')).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('stopByKey は他キーの再生を止めない', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('hit', makeSilentBuffer(sound.context));
+    sound.add('bgm', makeSilentBuffer(sound.context, 2));
+
+    sound.play('hit');
+    sound.play('bgm');
+
+    expect(sound.stopByKey('hit')).toBe(1);
+    expect(sound.isPlaying('hit')).toBe(false);
+    expect(sound.isPlaying('bgm')).toBe(true);
+
+    scene.sysShutdown();
+  });
+
+  it('Voice プールを上限まで使い切ると null を返す', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = new SoundManager({ poolSize: 2 });
+    sound.add('hit', makeSilentBuffer(sound.context));
+
+    expect(sound.play('hit')).not.toBeNull();
+    expect(sound.play('hit')).not.toBeNull();
+    // 3 本目はプールが枯れているため null
+    expect(sound.play('hit')).toBeNull();
+
+    sound.destroy();
+    scene.sysShutdown();
+  });
+
+  it('setVolume / mute が master gain を切り替える', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+
+    sound.setVolume(0.4);
+    expect(sound.volume).toBeCloseTo(0.4, 3);
+    // 範囲外は 0〜1 に丸められます
+    sound.setVolume(5);
+    expect(sound.volume).toBe(1);
+    sound.setVolume(-1);
+    expect(sound.volume).toBe(0);
+
+    sound.setVolume(0.8);
+    expect(sound.mute).toBe(false);
+    sound.setMute(true);
+    expect(sound.mute).toBe(true);
+    // ミュート中も音量値は保持されます
+    expect(sound.volume).toBeCloseTo(0.8, 3);
+    sound.setMute(false);
+    expect(sound.mute).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('stopAll / removeAll が音と登録を解放する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('hit', makeSilentBuffer(sound.context));
+    sound.add('bgm', makeSilentBuffer(sound.context));
+    sound.play('hit');
+    sound.play('bgm');
+
+    sound.removeAll();
+    expect(sound.playingCount).toBe(0);
+    expect(sound.count).toBe(0);
+    expect(sound.isPlaying('hit')).toBe(false);
+
+    scene.sysShutdown();
+  });
+
+  it('setListenerPosition が例外を投げずに位置を設定する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    expect(() => sound.setListenerPosition(10, 20, 30)).not.toThrow();
+    scene.sysShutdown();
+  });
+
+  it('update が new を発生させずにフェードインを進める', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.add('hit', makeSilentBuffer(sound.context));
+
+    const handle = sound.play('hit', { volume: 1, fadeIn: 1000 });
+    expect(handle).not.toBeNull();
+
+    // update を呼んでも例外が出ず、再生は続いています
+    expect(() => sound.update()).not.toThrow();
+    expect(sound.isPlaying('hit')).toBe(true);
+
+    scene.sysShutdown();
+  });
+
+  it('destroy が AudioContext を閉じる', async () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sound = scene.sound;
+    sound.destroy();
+    expect(sound.context.state).toBe('closed');
+    scene.sysShutdown();
+  });
+
+  it('sysShutdown が SoundManager を解放し、作り直せる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const first = scene.sound;
+    scene.sysShutdown();
+
+    expect(scene.hasSubsystem(Subsystem.Sound)).toBe(false);
+    const second = scene.sound;
+    expect(second).not.toBe(first);
+    scene.sysShutdown();
   });
 });

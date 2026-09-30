@@ -16,6 +16,7 @@ import { Camera } from './Camera';
 import { CameraManager } from './CameraManager';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
+import { SoundManager } from '../sound/SoundManager';
 import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
 import { Subsystem } from './SubsystemMask';
 import { EventEmitter } from '../events/EventEmitter';
@@ -68,6 +69,7 @@ export class Scene {
   private _anim: AnimationManager | null = null;
   private _particles: ParticleManager | null = null;
   private _physics: ArcadePhysics | null = null;
+  private _sound: SoundManager | null = null;
 
   // --- カメラの追従対象 ---
   // sysUpdate() の先頭でカメラへ渡すため、値を保持しておきます。
@@ -151,6 +153,35 @@ export class Scene {
       this._active |= Subsystem.Particles;
     }
     return this._particles;
+  }
+
+  /**
+   * サブシステム {@link this.sound} (遅延生成)
+   *
+   * 初回参照時に SoundManager を生成し、Subsystem.Sound のビットを立てます。
+   *  SoundManager はコンストラクタで AudioContext を 1 つだけ作るため、
+   * シーン 1 あたり 1 回しか生成されません。
+   *
+   * @param config 初期化時に反映する構成値
+   */
+  public get sound(): SoundManager {
+    if (this._sound === null) {
+      this._sound = new SoundManager();
+      this._active |= Subsystem.Sound;
+    }
+    return this._sound;
+  }
+
+  /**
+   * 外部で生成した SoundManager を差し込みます。
+   *
+   * プラグイン (SoundPlugin) が SoundManager を自前で持つ場合に、
+   * Scene の遅延サブシステムと二重に作らないために使います。
+   * ビットをここで立てるので、毎フレームの update も確実に走ります。
+   */
+  public setSoundManager(manager: SoundManager): void {
+    this._sound = manager;
+    this._active |= Subsystem.Sound;
   }
 
   /**
@@ -351,6 +382,10 @@ export class Scene {
     for (let i = 0; i < this._plugins.length; i++) {
       this._plugins[i].destroy?.();
     }
+    // AudioContext は有限リソースなので、シーン破棄時に必ず閉じます。
+    this._sound?.destroy();
+    this._sound = null;
+    this._active &= ~Subsystem.Sound;
   }
 
   public sysInit(engine: PlutoEngine): void {
@@ -374,7 +409,7 @@ export class Scene {
   public sysUpdate(dt: number): void {
     if (this._paused) return;
 
-    // Subsystems not yet initialized are skipped by a single bitwise AND.
+    // Subsystems that have not been accessed yet are skipped with a single bitwise AND.
     // The cost of an unused subsystem is one AND, not a virtual call.
     const active = this._active;
 
@@ -386,6 +421,7 @@ export class Scene {
     if ((active & Subsystem.Tweens) !== 0) this._tweens!.update(dt);
     if ((active & Subsystem.Anims) !== 0) this._anim!.update(dt);
     if ((active & Subsystem.Particles) !== 0) this._particles!.update(dt);
+    if ((active & Subsystem.Sound) !== 0) this._sound!.update();
     if ((active & Subsystem.Physics) !== 0) {
       this._physics!.update(dt);
       this._physics!.collide();

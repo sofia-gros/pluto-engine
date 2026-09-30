@@ -60,7 +60,7 @@ export const SUBSYSTEM_NAMES: Record<number, string> = {
 };
 
 /**
- * Converts a mask into a name list, for profiler display.
+ * ビットマスクを名前のリストへ変換します (プロファイラ表示用)。
  */
 export function describeSubsystems(mask: number): string {
   if (mask === 0) return 'None';
