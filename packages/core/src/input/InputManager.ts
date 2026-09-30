@@ -11,6 +11,92 @@ export interface PointerTransform {
   (clientX: number, clientY: number, out: Float32Array): void;
 }
 
+/**
+ * キー 1 個分の参照ハンドル (Phaser 互換の Key)。
+ *
+ * 状態は InputManager 内の Set を参照するため、
+ * このインスタンスは own プロパティを code と _input の 2 つだけ持ちます。
+ */
+export class Key {
+  /** KeyboardEvent.code (例: 'KeyW', 'ArrowUp') */
+  public readonly code: string;
+  private readonly _input: InputManager;
+
+  constructor(code: string, input: InputManager) {
+    this.code = code;
+    this._input = input;
+  }
+
+  /** 押されているか */
+  public get isDown(): boolean {
+    return this._input.isKeyPressed(this.code);
+  }
+  /** このフレームで押されたか */
+  public get isJustDown(): boolean {
+    return this._input.isKeyJustPressed(this.code);
+  }
+  /** このフレームで離されたか */
+  public get isJustUp(): boolean {
+    return this._input.isKeyJustReleased(this.code);
+  }
+}
+
+/** 矢印キーなどの定型キーの集合 (Phaser 互換の cursorKeys) */
+export interface CursorKeys {
+  up: Key;
+  down: Key;
+  left: Key;
+  right: Key;
+  space: Key;
+  shift: Key;
+}
+
+/**
+ * ポインタの参照ハンドル (Phaser 互換の Pointer)。
+ *
+ * pluto-engine は単一ポインタのみを扱うため、座標と状態を
+ * InputManager から参照するだけの薄い存在です。
+ */
+export class Pointer {
+  private readonly _input: InputManager;
+  /** 常に 0 です (単一ポインタのため) */
+  public readonly id = 0;
+
+  constructor(input: InputManager) {
+    this._input = input;
+  }
+
+  /** ゲーム座標の X */
+  public get x(): number {
+    return this._input.pointerX;
+  }
+  /** ゲーム座標の Y */
+  public get y(): number {
+    return this._input.pointerY;
+  }
+  /** 画面座標の X (CSS ピクセル) */
+  public get worldX(): number {
+    return this._input.clientX;
+  }
+  /** 画面座標の Y (CSS ピクセル) */
+  public get worldY(): number {
+    return this._input.clientY;
+  }
+  public get isDown(): boolean {
+    return this._input.isPointerDown();
+  }
+  public get isJustDown(): boolean {
+    return this._input.isPointerJustPressed();
+  }
+  public get isJustUp(): boolean {
+    return this._input.isPointerJustReleased();
+  }
+  /** ボタン番号は無視され、常に左ボタン相当です */
+  public get button(): number {
+    return 0;
+  }
+}
+
 export class InputManager {
   // --- Keyboard ---
   private _rawKeys = new Set<string>();
@@ -50,12 +136,52 @@ export class InputManager {
   private _boundOnPointerUp: (e: PointerEvent) => void;
   private _boundTarget: GlobalEventHandlers | null = null;
 
+  // --- Phaser 互換のファサード用キャッシュ ---
+  /** 生成済みの Key ハンドル。code -> Key の対応です。 */
+  private readonly _keyHandles = new Map<string, Key>();
+  /** 矢印キーの集合。初回要求時に 1 度だけ生成します。 */
+  private _cursorKeys: CursorKeys | null = null;
+  /** 単一ポインタのハンドル。 */
+  private readonly _primaryPointer: Pointer;
+
   constructor() {
     this._boundOnKeyDown = this.onKeyDown.bind(this);
     this._boundOnKeyUp = this.onKeyUp.bind(this);
     this._boundOnPointerMove = this.onPointerMove.bind(this);
     this._boundOnPointerDown = this.onPointerDown.bind(this);
     this._boundOnPointerUp = this.onPointerUp.bind(this);
+    this._primaryPointer = new Pointer(this);
+  }
+
+  /**
+   * キーボードのファサード (Phaser 互換の this.input.keyboard)。
+   * this 自体を返します。
+   */
+  public get keyboard(): this {
+    return this;
+  }
+
+  /**
+   * ポインタのファサード (Phaser 互換の this.input)。
+   * this 自体を返します。
+   */
+  public get pointer(): Pointer {
+    return this._primaryPointer;
+  }
+
+  /**
+   * ゲームパッドのファサード (Phaser 互換の this.input.gamepad)。
+   * this 自体を返します。
+   */
+  public get gamepad(): this {
+    return this;
+  }
+
+  /**
+   * プライマリポインタ (Phaser 互換の activePointer)。
+   */
+  public get activePointer(): Pointer {
+    return this._primaryPointer;
   }
 
   public attach(target: GlobalEventHandlers = window): void {
@@ -208,6 +334,66 @@ export class InputManager {
   }
   public isKeyJustReleased(code: string): boolean {
     return !this._currentKeys.has(code) && this._previousKeys.has(code);
+  }
+
+  // ============================================================
+  // Phaser 互換のファサード
+  // ============================================================
+
+  /**
+   * キーの参照ハンドルを生成します (Phaser 互換の this.input.keyboard.addKey)。
+   *
+   * 生成された Key は内部の Set と同じ状態を見ます。
+   * 状態自体を複製しないため、毎フレーム new も発生しません。
+   * 同じ code を複数回要求しても同じ Key インスタンスを返します。
+   */
+  public addKey(code: string): Key {
+    let key = this._keyHandles.get(code);
+    if (key === undefined) {
+      key = new Key(code, this);
+      this._keyHandles.set(code, key);
+    }
+    return key;
+  }
+
+  /**
+   * 複数のキーをまとめて生成します (Phaser 互換の addKeys)。
+   *
+   * @param codes KeyboardEvent.code の配列、または単一文字列
+   * @returns 生成した Key の配列
+   */
+  public addKeys(codes: string | string[]): Key[] {
+    const list = typeof codes === 'string' ? [codes] : codes;
+    const out: Key[] = [];
+    for (let i = 0; i < list.length; i++) out.push(this.addKey(list[i]));
+    return out;
+  }
+
+  /**
+   * 矢印キーの Key 群を生成します (Phaser 互換の createCursorKeys)。
+   */
+  public createCursorKeys(): CursorKeys {
+    if (this._cursorKeys === null) {
+      this._cursorKeys = {
+        up: this.addKey('ArrowUp'),
+        down: this.addKey('ArrowDown'),
+        left: this.addKey('ArrowLeft'),
+        right: this.addKey('ArrowRight'),
+        space: this.addKey('Space'),
+        shift: this.addKey('ShiftLeft'),
+      };
+    }
+    return this._cursorKeys;
+  }
+
+  /**
+   * ポインタを追加します (Phaser 互換の addPointer)。
+   *
+   * pluto-engine は単一ポインタのみを扱うため、2 つ目以降は無視されます。
+   * 戻り値は常に this.primaryPointer です。
+   */
+  public addPointer(_id?: number): Pointer {
+    return this._primaryPointer;
   }
 
   public isPointerDown(): boolean {

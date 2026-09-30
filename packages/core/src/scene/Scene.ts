@@ -184,6 +184,21 @@ export class Scene {
     return this.engine.scale;
   }
 
+  /**
+   * エンジン本体への参照 (Phaser 互換の this.game)。
+   */
+  public get game(): PlutoEngine {
+    return this.engine;
+  }
+
+  /**
+   * シーン管理への参照 (Phaser 互換の this.scene)。
+   * コンストラクタ内で代入される Field として保持します。
+   */
+  public get scenePlugin(): SceneManager {
+    return this.scene;
+  }
+
   public get time() {
     return this.engine.time;
   }
@@ -267,20 +282,29 @@ export class Scene {
       return tm;
     },
     /**
-     * Group a batch of display objects under a parent.
-     * Parent-child transforms are resolved on the SoA scene graph.
+     * 複数の表示オブジェクトを親の下へまとめます。
+     * 親子変換は SoA のシーングラフで解決されます。
      */
     container: (x = 0, y = 0, children: Sprite[] = []): Sprite => {
       const parent = this.add.sprite(x, y);
       this._active |= Subsystem.Sprites;
       for (let i = 0; i < children.length; i++) {
         const child = children[i];
-        // Children's coordinates become relative to the container.
+        // 子の座標は親基準のローカル座標へ変換します。
         child.x = child.x - x;
         child.y = child.y - y;
         child.setParentId(parent.id);
       }
       return parent;
+    },
+    /**
+     * 静的な画像を生成します (Phaser 互換の this.add.image)。
+     *
+     * 内部は sprite と同一です。pluto-engine の Flyweight 設計では
+     * 画像もスプライトも同じアリーナ上の 1 スロットで表現されます。
+     */
+    image: (x = 0, y = 0, textureKey?: string, frameKey?: string | number): Sprite => {
+      return this.add.sprite(x, y, textureKey, frameKey);
     },
   };
 
