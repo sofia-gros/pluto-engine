@@ -21,7 +21,11 @@ layout(location = 3) in float posY;
 layout(location = 4) in float scale;
 layout(location = 5) in float facing;
 layout(location = 6) in float rotation;
-layout(location = 7) in float layerDepth;
+// 0.0 なら描画をスキップします (Phaser 互換の setVisible)。
+// かつては depth (描画順) をここに渡していましたが、頂点シェーダで
+// 参照されておらず、デッド属性でした。頂点属性には上限 (WebGL2 では 16) が
+// あるため、空いた枠を可視性に使っています。
+layout(location = 7) in float visible;
 layout(location = 8) in float uvX;
 layout(location = 9) in float uvY;
 layout(location = 10) in float uvW;
@@ -37,9 +41,10 @@ out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
 out float vIsText;
+out float vVisible;
 
 void main() {
-    // 頂点を中心に scale してから rotation  만큼 回す
+    // 頂点を中心に scale してから rotation だけ回す
     vec2 scaled = vertexPos * scale;
     float c = cos(rotation);
     float s = sin(rotation);
@@ -50,6 +55,7 @@ void main() {
     vLayer = frameIdx;
     vTint = tint;
     vIsText = isText;
+    vVisible = visible;
 }
 `;
 
@@ -71,10 +77,16 @@ in float vLayer;
 in vec4 vTint;
 // 1.0 のインスタンスは SDF テキストとして扱います。
 in float vIsText;
+// 0.0 のインスタンスは描画しません (setVisible(false))。
+in float vVisible;
 
 out vec4 fragColor;
 
 void main() {
+    // 非表示のインスタンスはテクスチャを引かずに打ち切ります。
+    // フラグメント側で捨てることで、テクスチャフェッチを回避できます。
+    if (vVisible < 0.5) discard;
+
     vec4 texColor = texture(textureArray, vec3(vUV, vLayer));
     // 通常のスプライトはテクスチャの色をそのまま使います。
     // テキスト (isText = 1) だけ距離場を閾値で切り、輪郭を滑らかにします。
@@ -356,7 +368,8 @@ export class WebGL2Device implements GraphicsDevice {
     this._bindAttr(3, 'posY');
     this._bindAttr(4, 'scale');
     this._bindAttr(6, 'rotation');
-    this._bindAttr(7, 'depth');
+    // 7: visible (未使用だった枠を可視性フラグとして再利用)
+    this._setDefault(7, 'visible', 1.0);
 
     this._setDefault(5, 'facing', 1.0);
     this._setDefault(8, 'uvX', 0.0);

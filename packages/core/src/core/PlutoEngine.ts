@@ -144,7 +144,7 @@ export class PlutoEngine {
       'rotation',
       'scale',
       'facing',
-      'depth',
+      'visible',
       'uvX',
       'uvY',
       'uvW',
@@ -218,10 +218,9 @@ export class PlutoEngine {
         arena.dirtyScale = false;
       }
 
-      if (arena.dirtyDepth) {
-        this.device.updateBuffer(this.gpuBuffers['depth'], arena.depth, 0, renderCount);
-        arena.dirtyDepth = false;
-      }
+      // depth は GPU へ渡していません。かつては属性として渡していましたが、
+      // 頂点シェーダで参照されないデッド属性でした。
+      // 描画順のソートを実装するまでは CPU 側（SoA）で保持するだけです。
 
       if (arena.dirtyUv) {
         this.device.updateBuffer(this.gpuBuffers['uvX'], arena.uvX, 0, renderCount);
@@ -245,8 +244,16 @@ export class PlutoEngine {
 
       // isText は文字列内容が変わらない限り変化しないため、
       // テキストを 1 つも使っていないシーンでは転送を丸ごと省けます。
-      if (arena.hasText) {
+      // dirty が立っていなければ、前回転送済みの内容のままなので送信不要です。
+      if (arena.hasText && arena.dirtyIsText) {
         this.device.updateBuffer(this.gpuBuffers['isText'], arena.isText, 0, renderCount);
+        arena.dirtyIsText = false;
+      }
+
+      // visible は setVisible() が呼ばれたフレームだけ転送します。
+      if (arena.dirtyVisible) {
+        this.device.updateBuffer(this.gpuBuffers['visible'], arena.visible, 0, renderCount);
+        arena.dirtyVisible = false;
       }
     }
     const tUploadEnd = performance.now();

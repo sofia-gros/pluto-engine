@@ -22,6 +22,8 @@ export interface SpriteAssetLike {
   layerIndex?: number;
   width?: number;
   height?: number;
+  /** テクスチャキー (Phaser 互換の texture プロパティで返します) */
+  key?: string;
   /** スプライトシート内のフレーム UV */
   frames?: { uvX: number; uvY: number; uvW: number; uvH: number }[];
   /** ラッパー構造で保持されている場合の互換フィールド */
@@ -58,6 +60,13 @@ export class InstanceBufferArena {
    * 頂点属性 14 として渡し、フラグメントシェーダーで描画方式を分岐させます。
    */
   public readonly isText: Float32Array;
+  /**
+   * 1.0 = 描画する、0.0 = 描画しない (Phaser 互換の setVisible)。
+   *
+   * 頂点属性の上限 (WebGL2 では 16) があるため、depth の空き枠
+   * (location 7) を再利用しています。depth は CPU 側 (SoA) で保持します。
+   */
+  public readonly visible: Float32Array;
 
   /**
    * `frameIdx` は GPU のテクスチャーアレイ・レイヤーIDを保持する。
@@ -127,6 +136,15 @@ export class InstanceBufferArena {
    * false の間は isText バッファの転送を丸ごと省略できます。
    */
   public hasText = false;
+  /**
+   * isText バッファが前回転送時から変化したかどうか。
+   * false のフレームは GPU 側に前回の内容が残っているので送信不要です。
+   */
+  public dirtyIsText = false;
+  /**
+   * visible バッファが前回転送時から変化したかどうか。
+   */
+  public dirtyVisible = false;
 
   constructor(maxInstances: number) {
     this.capacity = maxInstances;
@@ -145,6 +163,11 @@ export class InstanceBufferArena {
     this.frameIdx = new Float32Array(maxInstances);
     this.tint = new Uint32Array(maxInstances);
     this.isText = new Float32Array(maxInstances);
+    // 確保時は全て「表示」にしておきます (0 だと何も描画されません)。
+    // 頂点属性として 1 インスタンス 1 バイト版を渡すと GPU 側の
+    // ストライド (4 バイト) と食い合い、値がずれて描画されなくなるため
+    // 必ず Float32Array にします。
+    this.visible = new Float32Array(maxInstances).fill(1);
     this.srcFrame = new Uint16Array(maxInstances);
 
     // 参照を保持する密配列は new Array を1度だけ行う。.push() は使わない。
@@ -193,6 +216,7 @@ export class InstanceBufferArena {
     this.srcFrame[idx] = 0;
     this.tint[idx] = 0xffffffff;
     this.isText[idx] = 0.0;
+    this.visible[idx] = 1.0;
     this.assetRef[idx] = null;
     this.parentId[idx] = -1;
     this.localX[idx] = 0.0;
@@ -237,6 +261,7 @@ export class InstanceBufferArena {
       this.frameIdx[idx] = this.frameIdx[lastIdx];
       this.tint[idx] = this.tint[lastIdx];
       this.isText[idx] = this.isText[lastIdx];
+      this.visible[idx] = this.visible[lastIdx];
       this.srcFrame[idx] = this.srcFrame[lastIdx];
       this.assetRef[idx] = this.assetRef[lastIdx];
       this.parentId[idx] = this.parentId[lastIdx];
@@ -280,6 +305,10 @@ export class InstanceBufferArena {
     this.dirtyTint = true;
     this.dirtyDepth = true;
     this.dirtyHierarchy = true;
+    // isText / visible はスロットの入れ替えで内容が変わるため、
+    // 同時に転送します。GPU 側と CPU 側で内容が違うままだと描画が壊れます。
+    this.dirtyIsText = true;
+    this.dirtyVisible = true;
   }
 
   /**
@@ -393,9 +422,15 @@ export class InstanceBufferArena {
     this.indexToId.fill(-1);
     this.parentId.fill(-1);
     this.hasHierarchy = false;
+    this.hasText = false;
     for (let i = 0; i < this.capacity; i++) {
       this.assetRef[i] = null;
       this.freeList[i] = i;
+      // 再利用されるスロットを表示状態に戻しておきます。
+      // 0 のままだと setVisible(false) の影響が次の生成へ漏れます。
+      this.visible[i] = 1.0;
+      this.isText[i] = 0.0;
     }
+    this.markAllDirty();
   }
 }
