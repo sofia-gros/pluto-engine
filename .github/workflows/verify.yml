@@ -2,7 +2,7 @@ name: Verify
 
 # 注意: このワークフローはテストとビルドの検証のみを行います。
 # npm への publish や GitHub Release の作成は行いません。
-# それらは tag upon 時の release.yml の責務です。
+# それらはタグ作成をトリガーとする release.yml の責務です。
 
 on:
   push:
@@ -37,6 +37,12 @@ jobs:
 
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
+
+      # テストは workspace パッケージの dist/ を import します。
+      # build せずに test を走らせると "Failed to resolve entry for package
+      # @pluto-engine/renderer" で失敗するため、必ず先にビルドします。
+      - name: Build all packages
+        run: bun run build
 
       # テストは vitest の browser mode で実ブラウザを実行します。
       # WebGL2 が要るため、CI でもソフトウェアラスタライザ (SwiftShader) を使います。
