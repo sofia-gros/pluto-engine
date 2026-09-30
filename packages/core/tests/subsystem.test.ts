@@ -3,7 +3,6 @@ import { Scene } from '../src/scene/Scene';
 import { Subsystem, describeSubsystems } from '../src/scene/SubsystemMask';
 import { EventEmitter } from '../src/events/EventEmitter';
 import { DataRegistry } from '../src/events/DataRegistry';
-import type { TweenProperty } from '../src/tween/TweenManager';
 
 describe('SubsystemMask', () => {
   it('各ビットが単一ビットであり、互いに重ならない', () => {
@@ -24,7 +23,7 @@ describe('SubsystemMask', () => {
       // 2 の冪乗であること
       expect(b & (b - 1)).toBe(0);
     }
-    // 全部加起来ても重複ビットがないこと
+    // 全部足しても重複ビットがないこと
     const all = bits.reduce((a, b) => a | b, 0);
     let seen = 0;
     for (const b of bits) {
@@ -41,7 +40,7 @@ describe('SubsystemMask', () => {
     expect((mask & Subsystem.Anims) !== 0).toBe(false);
   });
 
-  it('describeSubsystems は名前列表を返す', () => {
+  it('describeSubsystems は名前リストを返す', () => {
     expect(describeSubsystems(Subsystem.None)).toBe('None');
     const s = describeSubsystems(Subsystem.Tweens | Subsystem.Physics);
     expect(s).toContain('Tweens');
@@ -126,11 +125,10 @@ describe('ゼロコスト・サブシステム (遅延アクティベーショ�
 
   it('使用中の tweens は update される', () => {
     const scene = new Scene({ maxInstances: 100 });
-    const id = scene.arena.allocate();
-    const idx = scene.arena.idToIndex[id];
-    // x を 0 -> 100 へ 1000ms でトゥイーン
-    const tid = scene.tweens.add(id, 'x' as TweenProperty, 0, 100, 1000);
-    expect(tid).toBeGreaterThanOrEqual(0);
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+    // x を 0 -> 100 へ 1000ms でトゥイーン (Phaser 互換の記法)
+    scene.tweens.add({ targets: sprite, props: { x: 100 }, duration: 1000 });
     expect(scene.arena.posX[idx]).toBe(0);
 
     scene.sysUpdate(500);

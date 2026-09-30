@@ -210,3 +210,365 @@ describe('Phaser 互換 - SceneManager', () => {
     expect(scene.paused).toBe(false);
   });
 });
+
+describe('Phaser 互換 - tweens.add', () => {
+  it('props で指定したプロパティをトゥイーンする', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({ targets: sprite, props: { x: 100 }, duration: 1000 });
+    expect(scene.tweens.count).toBe(1);
+    expect(scene.arena.posX[idx]).toBe(0);
+
+    scene.sysUpdate(500);
+    expect(scene.arena.posX[idx]).toBeCloseTo(50, 0);
+
+    scene.sysUpdate(500);
+    expect(scene.arena.posX[idx]).toBe(100);
+    // 完了後は解放されます
+    expect(scene.tweens.count).toBe(0);
+  });
+
+  it('複数プロパティを同時にトゥイーンする', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100, y: 200 },
+      duration: 1000,
+    });
+    // props 1 つにつきスロットが 1 個確保されます
+    expect(scene.tweens.count).toBe(2);
+
+    scene.sysUpdate(1000);
+    expect(scene.arena.posX[idx]).toBe(100);
+    expect(scene.arena.posY[idx]).toBe(200);
+  });
+
+  it('targets に配列を渡すと全てへ適用する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const a = scene.add.sprite(0, 0);
+    const b = scene.add.sprite(0, 0);
+
+    scene.tweens.add({ targets: [a, b], props: { x: 50 }, duration: 100 });
+    scene.sysUpdate(100);
+
+    expect(scene.arena.posX[a.index]).toBe(50);
+    expect(scene.arena.posX[b.index]).toBe(50);
+  });
+
+  it('delay 中は進行しない', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      delay: 500,
+    });
+
+    scene.sysUpdate(400);
+    expect(scene.arena.posX[sprite.index]).toBe(0);
+
+    // 遅延の境界ちょうどではまだ 0 です (経過時間が 0 なので)
+    scene.sysUpdate(100);
+    expect(scene.arena.posX[sprite.index]).toBe(0);
+
+    // 遅延を抜けた後は進行します
+    scene.sysUpdate(100);
+    expect(scene.arena.posX[sprite.index]).toBeGreaterThan(0);
+  });
+
+  it('イージングで前半の進みが遅くなる', () => {
+    const linear = new Scene({ maxInstances: 100 });
+    const eased = new Scene({ maxInstances: 100 });
+    const a = linear.add.sprite(0, 0);
+    const b = eased.add.sprite(0, 0);
+
+    linear.tweens.add({ targets: a, props: { x: 100 }, duration: 1000 });
+    eased.tweens.add({
+      targets: b,
+      props: { x: 100 },
+      duration: 1000,
+      ease: 'Quad.easeIn',
+    });
+
+    linear.sysUpdate(250);
+    eased.sysUpdate(250);
+
+    // Quad.easeIn は 0.25^2 = 0.0625 なので 100 ではなく約 6.25
+    expect(linear.arena.posX[a.index]).toBeCloseTo(25, 1);
+    expect(eased.arena.posX[b.index]).toBeLessThan(
+      linear.arena.posX[a.index] / 2,
+    );
+  });
+
+  it('yoyo で往復する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      yoyo: true,
+    });
+
+    scene.sysUpdate(1000);
+    expect(scene.arena.posX[idx]).toBeCloseTo(100, 0);
+
+    scene.sysUpdate(1000);
+    expect(scene.arena.posX[idx]).toBeCloseTo(0, 0);
+    // 往復 1 往復で完了します
+    expect(scene.tweens.count).toBe(0);
+  });
+
+  it('repeat で指定回数だけ繰り返す', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      repeat: 1,
+    });
+
+    scene.sysUpdate(1000);
+    expect(scene.tweens.count).toBe(1);
+    scene.sysUpdate(1000);
+    expect(scene.tweens.count).toBe(0);
+    expect(scene.arena.posX[idx]).toBe(100);
+  });
+
+  it('alpha は tint の A チャンネルへ反映される', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { alpha: 0 },
+      duration: 1000,
+    });
+    scene.sysUpdate(1000);
+
+    // 下位 24 ビット (色) は保持され、最上位バイトが 0 になる
+    expect(scene.arena.tint[idx] & 0x00ffffff).toBe(0x00ffffff);
+    expect((scene.arena.tint[idx] >>> 24) & 0xff).toBe(0);
+  });
+
+  it('angle を指定すると rotation へ反映される', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { angle: 1.5708 },
+      duration: 1000,
+    });
+    scene.sysUpdate(1000);
+
+    expect(scene.arena.rotation[idx]).toBeCloseTo(1.5708, 3);
+  });
+
+  it('killTweensOf が対象だけ停止する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const a = scene.add.sprite(0, 0);
+    const b = scene.add.sprite(0, 0);
+
+    scene.tweens.add({ targets: [a, b], props: { x: 100 }, duration: 1000 });
+    expect(scene.tweens.count).toBe(2);
+
+    const killed = scene.tweens.killTweensOf(a);
+    expect(killed).toBe(1);
+    expect(scene.tweens.count).toBe(1);
+
+    scene.sysUpdate(500);
+    expect(scene.arena.posX[a.index]).toBe(0);
+    expect(scene.arena.posX[b.index]).toBeGreaterThan(0);
+  });
+
+  it('killTweensOfGroup がグループ単位で停止する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+
+    const group = scene.tweens.add({
+      targets: sprite,
+      props: { x: 100, y: 100 },
+      duration: 1000,
+    });
+    expect(scene.tweens.count).toBe(2);
+
+    expect(scene.tweens.killTweensOfGroup(group)).toBe(2);
+    expect(scene.tweens.count).toBe(0);
+  });
+
+  it('未対応のプロパティ名は静かにスキップする', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { unknownProp: 100 },
+      duration: 1000,
+    });
+    expect(scene.tweens.count).toBe(0);
+  });
+
+  it('onStart は遅延明けに 1 度だけ呼ばれる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    let starts = 0;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      delay: 200,
+      onStart: () => starts++,
+    });
+
+    scene.sysUpdate(100);
+    expect(starts).toBe(0);
+
+    scene.sysUpdate(200);
+    expect(starts).toBe(1);
+    scene.sysUpdate(100);
+    expect(starts).toBe(1);
+  });
+
+  it('onUpdate は進行中に毎フレーム呼ばれる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    let updates = 0;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      onUpdate: () => updates++,
+    });
+
+    scene.sysUpdate(100);
+    scene.sysUpdate(100);
+    scene.sysUpdate(100);
+    expect(updates).toBe(3);
+  });
+
+  it('onComplete はグループ全てが終わったら 1 度だけ呼ばれる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    let completes = 0;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100, y: 100 },
+      duration: 1000,
+      onComplete: () => completes++,
+    });
+
+    scene.sysUpdate(1000);
+    expect(completes).toBe(1);
+
+    // 追加でフレームを回しても二重には起きません
+    scene.sysUpdate(1000);
+    expect(completes).toBe(1);
+  });
+
+  it('killTweensOf では onComplete が起きない', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    let completes = 0;
+
+    scene.tweens.add({
+      targets: sprite,
+      props: { x: 100 },
+      duration: 1000,
+      onComplete: () => completes++,
+    });
+    scene.tweens.killTweensOf(sprite);
+    expect(completes).toBe(0);
+  });
+
+  it('chain が設定を順番に実行する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+    const order: string[] = [];
+
+    scene.tweens.chain([
+      {
+        targets: sprite,
+        props: { x: 100 },
+        duration: 1000,
+        onComplete: () => order.push('first'),
+      },
+      {
+        targets: sprite,
+        props: { x: 200 },
+        duration: 1000,
+        onComplete: () => order.push('second'),
+      },
+    ]);
+
+    // 1 ステップ目が終わるまでは 2 つ目が動かない
+    scene.sysUpdate(1000);
+    expect(scene.arena.posX[idx]).toBe(100);
+    expect(order).toEqual(['first']);
+
+    scene.sysUpdate(500);
+    expect(scene.arena.posX[idx]).toBe(150);
+
+    scene.sysUpdate(500);
+    expect(scene.arena.posX[idx]).toBe(200);
+    expect(order).toEqual(['first', 'second']);
+    expect(scene.tweens.count).toBe(0);
+  });
+
+  it('chain を killTweensOfGroup で中断できる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+    const ran: string[] = [];
+
+    const chainId = scene.tweens.chain([
+      {
+        targets: sprite,
+        props: { x: 100 },
+        duration: 1000,
+        onComplete: () => ran.push('first'),
+      },
+      {
+        targets: sprite,
+        props: { x: 200 },
+        duration: 1000,
+        onComplete: () => ran.push('second'),
+      },
+    ]);
+
+    scene.sysUpdate(1000);
+    expect(ran).toEqual(['first']);
+
+    scene.tweens.killTweensOfGroup(chainId);
+    scene.sysUpdate(1000);
+    expect(ran).toEqual(['first']);
+    expect(scene.arena.posX[idx]).toBe(100);
+  });
+
+  it('clear が全トゥイーンを解放する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+
+    scene.tweens.add({ targets: sprite, props: { x: 100 }, duration: 1000 });
+    scene.tweens.clear();
+    expect(scene.tweens.count).toBe(0);
+  });
+});

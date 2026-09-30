@@ -172,3 +172,72 @@ benchmark        37.8 FPS  計測対象外
 **Q3. `setVisible` の属性** — STEP 0 で空く `layerDepth` (loc 7) を `visible` に再利用します。それでよろしいですか。
 
 ご回答をいただければ STEP 0 から着手します。
+
+---
+
+## 実施記録
+
+### STEP 4: Tween ファサード + イージング（完了）
+
+#### 追加したファイル
+
+`packages/core/src/tween/Easing.ts`（新規）
+
+- `EaseKind` は 28 種類（Linear / Quad / Cubic / Quart / Sine / Expo / Circ / Back / Bounce / Elastic の In / Out / InOut）
+- 64 サンプル × 28 = 1792 エントリを 1 本の `Float32Array` に詰めて module スコープで 1 度だけ構築。以降は読み取り専用です
+- `evaluateEase(kind, t)` は添字参照 1 回 + 線形補間のみ。毎フレームの `new` は 0 です
+- `getEaseKind(name)` は `Quad.easeIn` / `quad.in` / `quadin` のいずれの書き方も受け付けます（`normalizeName` が区切りと `ease` を落として検索キーにします）
+
+#### `TweenManager` の変更
+
+SoA に 7 本を追加しました（頂点属性は 0 個です）。
+
+| 配列 | 型 | 役割 |
+|---|---|---|
+| `delay` | `Float32Array` | 開始までの待機。減算してから判定するので境界で 1 フレームずれません |
+| `easeKind` | `Uint8Array` | `EaseKind` |
+| `yoyo` | `Uint8Array` | 往復フラグ |
+| `direction` | `Uint8Array` | 0 = 往路、1 = 復路 |
+| `repeatLeft` | `Int32Array` | 残り繰り返し回数（-1 = 無限） |
+| `groupId` | `Int32Array` | グループ ID |
+| `started` | `Uint8Array` | `onStart` の発済みフラグ |
+
+`update()` の書き換えでは次を行います。
+
+- `ALPHA` を tint の最上位バイト（A チャンネル）へ書き込みます。独立した SoA を作らないので属性追加は 0 です
+- `ROTATION` / `FLIP_X` を実装しました
+- `yoyo` は復路が終わってから `repeat` を消費します（1 往復 = 1 回と数える）
+- 位置系は ID ではなく密添字で管理されているため、`_apply()` 内で `idToIndex` を通します
+
+ファサードは次の通りです。
+
+- `add(config)` — `targets` / `props` / `duration` / `delay` / `ease` / `yoyo` / `repeat` / `onStart` / `onUpdate` / `onComplete`。`props` 1 つにつき SoA スロット 1 個。`targets` は配列可。開始値は現在値から取るので、登録した瞬間に座標が飛ばない
+- `chain(configs)` — 順番に実行します。完了判定をコールバック呼び出しより先に行うため、`onComplete` の中から `killTweensOfGroup()` しても次のステップは始まりません
+- `killTweensOf` / `killTweensOfGroup` — Phaser と同じく `onComplete` は発火しません（`_freeSilent` 経路）
+- `count` — `getTweens().length` 相当
+
+コールバックは `onStart` / `onUpdate` を 1 スロット目にだけ載せ、`onComplete` はグループ生存数を `Map` で数えて 0 になった 1 回だけ呼びます。`Map` のエントリは 1 グループにつき 1 つで、毎フレームには増えません。
+
+#### ゲート結果
+
+| 項目 | 結果 |
+|---|---|
+| `bun run build` | 成功 |
+| `bun run test` | 32 ファイル / 382 テスト全通過（今回 19 件追加） |
+| `apps/demo` の `tsc --noEmit` | エラー 0 |
+| `apps/demo` の `vite build` | 成功 |
+| `scripts/smoke-test.mjs` | 3 デモ PASS / errors 0 |
+
+| デモ | FPS | B/frame |
+|---|---|---|
+| swarm-survivors | 59.8 | 63.24 |
+| rpg | 60.7 | 65.42 |
+| benchmark | 37.0 | 3680.76（対象外） |
+
+FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています。
+
+#### 実装中に見つけた不整合
+
+- 旧 `add(entityId, propType, start, end, durationMs)` とファサード `add(config)` が名前上で衝突したため、内部用を `_addSlot()` へ改名しました
+- `const enum EaseKind` を `TweenManager` から使うため `Easing.ts` を値として import する必要があり、`isolatedModules` では `const enum` の逆引き（`EaseKind[k]`）が使えません。名前を明示した配列に置き換えました
+- イージング名 `Quad.easeIn` はそのままでは検索キーに合いません。`normalizeName` で `quad.in` に落とします
