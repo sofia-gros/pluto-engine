@@ -13,7 +13,7 @@ A traditional top-down 2D Action RPG built **without any fluid dynamics (zero Co
 - **Real-Time Action Combat**: Sword slashes, fireball magic spells, whirlwind dash attacks, loot magnets, and treasure chests.
 - **Built-in Benchmark Panel**: Press `[B]` to switch live from standard RPG mode (100 entities) to 1,000, 5,000, and 20,000 monsters, demonstrating stable 60–144 FPS with zero GC spikes.
 
-**[Play Pluto Quest (2D RPG)](/pluto-engine/demos/rpg/index.html)**
+**<a href="/pluto-engine/demos/rpg/index.html" target="_blank" rel="noopener noreferrer">Play Pluto Quest (2D RPG)</a>**
 
 ---
 
@@ -21,7 +21,7 @@ A traditional top-down 2D Action RPG built **without any fluid dynamics (zero Co
 
 A swarm survival game where 10,000–40,000+ enemies spawn and flow towards the player using Continuum Crowds (Poisson Fluid Dynamics) and XPBD physics.
 
-**[Play Swarm Survivors](/pluto-engine/demos/swarm-survivors/index.html)**
+**<a href="/pluto-engine/demos/swarm-survivors/index.html" target="_blank" rel="noopener noreferrer">Play Swarm Survivors</a>**
 
 ---
 
@@ -29,7 +29,7 @@ A swarm survival game where 10,000–40,000+ enemies spawn and flow towards the 
 
 Interactive profiling dashboard covering steering algorithm variations and Arcade Physics AABB culling performance.
 
-**[Open Benchmark Dashboard](/pluto-engine/demos/benchmark/index.html)**
+**<a href="/pluto-engine/demos/benchmark/index.html" target="_blank" rel="noopener noreferrer">Open Benchmark Dashboard</a>**
 
 ---
 

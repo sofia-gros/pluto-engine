@@ -138,3 +138,16 @@ Performance measurements running a standard 2D Top-Down Action RPG without fluid
 | **20,000 Entities (Extreme Stress)** | **0.38 ms** | **0.11 ms** | **144+ FPS** | Processes 20k monsters, projectiles & drops under 0.4ms |
 
 > **Key Takeaway**: Even when building standard 2D RPGs, bullet-hell games, or platformers without fluid mechanics, PlutoEngine's SoA architecture provides substantial frame time headroom and reduced mobile battery usage while keeping a familiar scene-based API.
+
+
+## CPU vs WebGL2 vs WebGPU Benchmark
+
+Performance comparison when rendering and simulating 300,000 entities.
+
+| Backend | Max Entities Reached | Measured FPS | Notes |
+| :--- | :--- | :--- | :--- |
+| **CPU (Headless/ANGLE)** | 300,000 | 23 FPS | Pure CPU simulation limit without GPU rendering overhead |
+| **WebGL2** | 300,000 | 12 FPS | 1-draw-call batch rendering via Texture2DArray |
+| **WebGPU** | 300,000 | 10 FPS | Inline packing and optimized dynamically sized writeBuffer |
+
+* Note: Measured on NVIDIA GeForce RTX 4060.

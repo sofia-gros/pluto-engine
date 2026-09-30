@@ -13,7 +13,7 @@ PlutoEngine のパフォーマンス（10万体描画・ゼロアロケーショ
 - **リアルタイム戦闘**: 剣撃、火炎魔法、旋風ダッシュ、ドロップ品回収、宝箱開封。
 - **内蔵ベンチマーク機能**: ゲーム画面上の `[B]` ボタンから、通常RPG（100体）から 1,000体、5,000体、20,000体の大群ダンジョンへ瞬時に切り替えて 60〜144 FPS の動作を確認可能。
 
-**[Pluto Quest をプレイする](/pluto-engine/demos/rpg/index.html)**
+**<a href="/pluto-engine/demos/rpg/index.html" target="_blank" rel="noopener noreferrer">Pluto Quest をプレイする</a>**
 
 ---
 
@@ -21,7 +21,7 @@ PlutoEngine のパフォーマンス（10万体描画・ゼロアロケーショ
 
 10,000〜40,000体以上の敵がシームレスに出現し、Continuum Crowds (ポアソン群集流体) や XPBD 物理によって滑らかに押し寄せる大群集デモゲームです。
 
-**[Swarm Survivors をプレイする](/pluto-engine/demos/swarm-survivors/index.html)**
+**<a href="/pluto-engine/demos/swarm-survivors/index.html" target="_blank" rel="noopener noreferrer">Swarm Survivors をプレイする</a>**
 
 ---
 
@@ -29,7 +29,7 @@ PlutoEngine のパフォーマンス（10万体描画・ゼロアロケーショ
 
 Steering アルゴリズム（Baseline / FastMath / FastIndex / Precomputed Bilinear）および AABB 枝刈り物理の内部詳細分解ベンチマークツールです。
 
-**[ベンチマークダッシュボードを開く](/pluto-engine/demos/benchmark/index.html)**
+**<a href="/pluto-engine/demos/benchmark/index.html" target="_blank" rel="noopener noreferrer">ベンチマークダッシュボードを開く</a>**
 
 ---
 

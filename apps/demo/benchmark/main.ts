@@ -462,7 +462,7 @@ class BenchmarkScene extends Scene {
       <p style="color:#feca57">2. FastMath (sqrt): ${steer_fastmath_ms.toFixed(2)} ms</p>
       <p style="color:#48dbfb">3. FastIndex: ${steer_fastindex_ms.toFixed(2)} ms</p>
       <p style="color:#1dd1a1">4. Precomputed Nearest: ${steer_precomputed_grid_ms.toFixed(2)} ms</p>
-      <p style="color:#54a0ff; font-weight:bold">5. Precomputed Bilinear: ${steer_bilinear_grid_ms.toFixed(2)} ms (滑らか&爆速)</p>
+      <p style="color:#54a0ff; font-weight:bold">5. Precomputed Bilinear: ${steer_bilinear_grid_ms.toFixed(2)} ms</p>
     `;
 
     this.framesSinceSpawn++;
@@ -560,7 +560,7 @@ class BenchmarkScene extends Scene {
               backgroundColor: '#10b981',
             },
             {
-              label: '5. Precomputed Bilinear (本命)',
+              label: '5. Precomputed Bilinear',
               data: this.benchmarkResults.map((r) => r.steer_bilinear_grid_ms),
               backgroundColor: '#54a0ff',
             },
