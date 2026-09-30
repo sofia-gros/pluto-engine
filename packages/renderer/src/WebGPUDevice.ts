@@ -317,15 +317,7 @@ export class WebGPUDevice implements GraphicsDevice {
       throw new Error('Device not initialized');
     }
     const n = length ?? data.length - srcOffset;
-    const byteOffset = data.byteOffset + srcOffset * data.BYTES_PER_ELEMENT;
-    const byteLength = n * data.BYTES_PER_ELEMENT;
-    this.device.queue.writeBuffer(
-      bufferInfo.buffer as GPUBuffer,
-      0,
-      data.buffer as ArrayBuffer,
-      byteOffset,
-      byteLength,
-    );
+            
     this._sources.set(bufferInfo, { data, srcOffset, count: n });
   }
 
@@ -499,16 +491,36 @@ export class WebGPUDevice implements GraphicsDevice {
     const isTextData = (isTextSrc && isTextSrc.data instanceof Float32Array) ? isTextSrc.data : null;
     const isTextOffset = isTextSrc ? isTextSrc.srcOffset : 0;
 
+    
+    const DUMMY_F32 = new Float32Array(1);
+    
+    const a0 = attrArrays[0] || DUMMY_F32; const o0 = attrArrays[0] ? attrOffsets[0] : 0;
+    const a1 = attrArrays[1] || DUMMY_F32; const o1 = attrArrays[1] ? attrOffsets[1] : 0;
+    const a2 = attrArrays[2] || DUMMY_F32; const o2 = attrArrays[2] ? attrOffsets[2] : 0;
+    const a3 = attrArrays[3] || DUMMY_F32; const o3 = attrArrays[3] ? attrOffsets[3] : 0;
+    const a4 = attrArrays[4] || DUMMY_F32; const o4 = attrArrays[4] ? attrOffsets[4] : 0;
+    const a5 = attrArrays[5] || DUMMY_F32; const o5 = attrArrays[5] ? attrOffsets[5] : 0;
+    const a6 = attrArrays[6] || DUMMY_F32; const o6 = attrArrays[6] ? attrOffsets[6] : 0;
+    const a7 = attrArrays[7] || DUMMY_F32; const o7 = attrArrays[7] ? attrOffsets[7] : 0;
+    const a8 = attrArrays[8] || DUMMY_F32; const o8 = attrArrays[8] ? attrOffsets[8] : 0;
+    const a9 = attrArrays[9] || DUMMY_F32; const o9 = attrArrays[9] ? attrOffsets[9] : 0;
+    const a10 = attrArrays[10] || DUMMY_F32; const o10 = attrArrays[10] ? attrOffsets[10] : 0;
+
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_INSTANCE;
       
-      // 11属性
-      for (let a = 0; a < 11; a++) {
-        const arr = attrArrays[a];
-        staging[base + a] = arr ? arr[attrOffsets[a] + i] : 0;
-      }
+      staging[base + 0] = a0[o0 + i] || 0;
+      staging[base + 1] = a1[o1 + i] || 0;
+      staging[base + 2] = a2[o2 + i] || 0;
+      staging[base + 3] = a3[o3 + i] || 0;
+      staging[base + 4] = a4[o4 + i] || 0;
+      staging[base + 5] = a5[o5 + i] || 0;
+      staging[base + 6] = a6[o6 + i] || 0;
+      staging[base + 7] = a7[o7 + i] || 0;
+      staging[base + 8] = a8[o8 + i] || 0;
+      staging[base + 9] = a9[o9 + i] || 0;
+      staging[base + 10] = a10[o10 + i] || 0;
       
-      // tint は 44 バイト目 (base + 11 float) に RGBA バイトとして書き込む
       const tv = tintData ? tintData[tintOffset + i] : 0xffffffff;
       let o = (base + 11) * 4;
       u8[o] = tv & 0xff;
@@ -516,7 +528,6 @@ export class WebGPUDevice implements GraphicsDevice {
       u8[o + 2] = (tv >> 16) & 0xff;
       u8[o + 3] = (tv >>> 24) & 0xff;
 
-      // isText は 48 バイト目 (base + 12 float) に float として書き込む
       staging[base + 12] = isTextData ? isTextData[isTextOffset + i] : 0;
     }
 
