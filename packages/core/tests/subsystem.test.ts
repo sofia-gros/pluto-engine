@@ -131,7 +131,7 @@ describe('ゼロコスト・サブシステム (遅延アクティベーショ�
     scene.tweens.add({ targets: sprite, props: { x: 100 }, duration: 1000 });
     expect(scene.arena.posX[idx]).toBe(0);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.5);
     // 半分まで進んでいること
     expect(scene.arena.posX[idx]).toBeGreaterThan(0);
     expect(scene.arena.posX[idx]).toBeLessThan(100);

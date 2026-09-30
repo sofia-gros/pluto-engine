@@ -35,6 +35,7 @@ export interface SpriteAssetLike {
  */
 export interface AnimPlayTarget {
   play(id: number, key: string, ignoreIfPlaying?: boolean): void;
+  stop(id: number): void;
 }
 
 export class InstanceBufferArena {

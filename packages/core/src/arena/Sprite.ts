@@ -672,6 +672,17 @@ export class Sprite {
   }
 
   /**
+   * 再生中のアニメーションを停止します (Phaser 互換の sprite.anims.stop)。
+   *
+   * 現在のフレームの UV はそのまま残ります。キーは文字列で、
+   * フレーム番号を指定する経路はないため、引数は取りません。
+   */
+  public stop(): this {
+    this._arena.animTracker?.stop(this.id);
+    return this;
+  }
+
+  /**
    * アリーナからこのスプライトの ID を解放 (削除) します。
    */
   public destroy(): void {

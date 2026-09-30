@@ -418,7 +418,12 @@ export class Scene {
       this.cameras.update(dt, this._followId, this._followX, this._followY);
     }
     this.input.update();
-    if ((active & Subsystem.Tweens) !== 0) this._tweens!.update(dt);
+    if ((active & Subsystem.Tweens) !== 0) {
+      // ループの dt は秒ですが、Phaser 互換の `duration` / `delay` はミリ秒です。
+      // 変換をこの境界 1 か所に閉じることで、TweenManager 側は ms 前提で
+      // 書き続けられます (Phaser から移植したコードがそのまま動くようにするため)。
+      this._tweens!.update(dt * 1000);
+    }
     if ((active & Subsystem.Anims) !== 0) this._anim!.update(dt);
     if ((active & Subsystem.Particles) !== 0) this._particles!.update(dt);
     if ((active & Subsystem.Sound) !== 0) this._sound!.update();

@@ -61,6 +61,71 @@ flowchart LR
 
 ---
 
+## Re-verification of the CPU-Side Numbers
+
+The dashboard above was captured on a machine with a discrete GPU. Because a
+missing or software GPU changes *what the numbers mean*, CPU-side and GPU-side
+results must be read separately.
+
+The `benchmark` demo's internal timings are **CPU-bound** (Flow Field gradient
+computation, memory lookups, floating-point math). They are therefore comparable
+across machines **as long as the CPU is the same**, regardless of GPU.
+
+Below is a full 300,000-entity run captured in a GPU-less environment
+(ANGLE / SwiftShader software rasterizer). The **CPU is identical to the
+reference machine above** (AMD Ryzen 7 2700 / 32 GB), so the values are
+directly comparable.
+
+| Entities | Baseline | FastMath (sqrt) | FastIndex | **Precomputed Grid** | Bilinear Grid |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| 50k | 2.71 ms | 1.48 ms | 1.08 ms | **0.61 ms** | 1.47 ms |
+| 100k | 5.67 ms | 2.97 ms | 2.21 ms | **1.03 ms** | 2.79 ms |
+| 150k | 8.98 ms | 4.65 ms | 3.36 ms | **1.59 ms** | 4.34 ms |
+| 200k | 11.66 ms | 6.38 ms | 4.45 ms | **1.96 ms** | 5.55 ms |
+| 250k | 14.83 ms | 7.60 ms | 5.55 ms | **2.55 ms** | 7.11 ms |
+| 300k | **16.93 ms** | 9.30 ms | 6.61 ms | **2.75 ms** | 7.87 ms |
+
+At 300k entities:
+
+| Metric | Documented | Re-measured | Delta |
+| :--- | ---: | ---: | ---: |
+| Baseline (old path) | 16.2 ms | 16.93 ms | +4.5% |
+| Precomputed Grid (current fastest) | 2.9 ms | 2.75 ms | -5.2% |
+| Bilinear Grid (high quality) | 8.15 ms | 7.87 ms | -3.4% |
+
+The documented CPU-side numbers **reproduce**. The Precomputed Grid speedup is
+**6.2x** (16.93 / 2.75), consistent with the documented 5.6x.
+
+::: warning GPU-side numbers are NOT reproducible without a GPU
+The dashboard FPS figures (140 FPS at 25k entities, 23 FPS at 300k) were
+measured on a GeForce RTX 4060. Under a software rasterizer the same 300k-entity
+scene runs at roughly **31 FPS**. Do not quote the dashboard FPS values on
+hardware with a different GPU.
+:::
+
+### Automated Zero-Allocation Verification
+
+`node scripts/smoke-test.mjs` measures JavaScript heap growth per frame in a real
+browser via CDP and fails if it exceeds the budget.
+
+| Demo | Heap growth (median) | Noise floor | Budget | FPS |
+| --- | ---: | ---: | ---: | ---: |
+| swarm-survivors | 1.9 B/frame | 21-25 B/frame | 2048 B/frame | 60 |
+| rpg | 1.4 B/frame | 44-80 B/frame | 2048 B/frame | 61 |
+| benchmark | 0.0 B/frame | - | excluded | 38 |
+
+The harness warms up for 2.5 s + 300 frames, discards the first of four samples,
+and reports the **median** together with a `spread` (noise floor) column. The
+warm-up matters: V8 tier-up / deopt makes the first ~2 samples show
+200-340 B/frame, then settles to zero once optimization completes. An earlier
+version of the harness measured only 1 s of warm-up and misread that phase as a
+violation.
+
+If `spread` exceeds **50 B/frame** the harness prints a warning meaning that
+differences below 50 B/frame cannot be resolved in that run.
+
+---
+
 ## 2D Classic Action RPG Benchmark (Non-Fluid / Standard Architecture)
 
 Performance measurements running a standard 2D Top-Down Action RPG without fluid dynamics, using pure **state-machine AI + ArcadePhysics AABB collision culling**:

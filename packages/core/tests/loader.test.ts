@@ -314,6 +314,7 @@ describe('anim.play は文字列キーで行う', () => {
     canvas.height = 64;
     scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
 
+    // frameRate 10 = 1 コマ 0.1 秒。dt は秒で渡します。
     scene.anim.create({ key: 'walk', frames: [0, 1, 2, 3], frameRate: 10 });
 
     const sprite = scene.add.sprite(0, 0);
@@ -325,12 +326,57 @@ describe('anim.play は文字列キーで行う', () => {
     expect(scene.anim.hasKey('walk')).toBe(true);
     expect(scene.arena.srcFrame[i]).toBe(0);
 
-    // 1 コマ分 (100ms) 進めると次のフレームへ
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.1);
     expect(scene.arena.srcFrame[i]).toBe(1);
 
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.1);
     expect(scene.arena.srcFrame[i]).toBe(2);
+  });
+
+  it('dt がコマ時間を超えても 1 回で複数コマを進める', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+
+    // 4 コマ × frameRate 10 = 1 コマ 0.1 秒。4 コマ分は 0.4 秒
+    scene.anim.create({ key: 'walk', frames: [0, 1, 2, 3], frameRate: 10, repeat: -1 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 0);
+    const i = sprite.index;
+    sprite.play('walk');
+    expect(scene.arena.srcFrame[i]).toBe(0);
+
+    // 0.35 秒 (3.5 コマ分) を 1 回で渡します。
+    // 取りこぼさないので 3 コマ進みます (0.35 / 0.1 = 3 なので 4 ではない)
+    scene.sysUpdate(0.35);
+    expect(scene.arena.srcFrame[i]).toBe(3);
+
+    // ちょうど 0.4 秒なら 4 コマで折り返します (無限ループなので 0 へ)
+    scene.sysUpdate(0.05);
+    expect(scene.arena.srcFrame[i]).toBe(0);
+  });
+
+  it('dt が巨大な場合は上限で打ち切る (暴走しない)', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+
+    // 1 コマ 0.01 秒。タブ復帰時の巨大 dt を想定します
+    scene.anim.create({ key: 'fast', frames: [0, 1], frameRate: 100, repeat: -1 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 0);
+    sprite.play('fast');
+
+    // 10000 秒 (理論的には 100 万コマ) を渡しても 1 フレーム内で終わります
+    const t0 = performance.now();
+    expect(() => scene.sysUpdate(10000)).not.toThrow();
+    expect(performance.now() - t0).toBeLessThan(1000);
   });
 
   it('未知のキーでは何も起きない', () => {
@@ -348,25 +394,29 @@ describe('anim.play は文字列キーで行う', () => {
     expect(scene.anim.active.filter((v) => v === 1).length).toBe(0);
   });
 
-  it('再生が終わるとスロットが解放される', () => {
+  it('Sprite.stop でアニメーションを止められる', () => {
     const scene = new Scene({ maxInstances: 100 });
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 64;
     scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
-    // 2 コマ × frameRate 10 = 1 コマ 100ms
-    scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10 });
+    // 無限ループなので自然には終わりません
+    scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10, repeat: -1 });
 
     const sprite = scene.add.sprite(0, 0);
     sprite.setTextureByKey(scene, 'sheet', 0);
     sprite.play('walk');
     expect(scene.anim.active.filter((v) => v === 1).length).toBe(1);
 
-    // update() は 1 回の呼び出しで 1 コマだけ進むので、2 フレーム分回します。
-    scene.sysUpdate(100);
-    expect(scene.arena.srcFrame[sprite.index]).toBe(1);
-    scene.sysUpdate(100);
+    // stop() は this を返すのでチェーンできます
+    const returned = sprite.stop();
+    expect(returned).toBe(sprite);
     expect(scene.anim.active.filter((v) => v === 1).length).toBe(0);
+
+    // 停止後はフレームが進みません
+    const before = scene.arena.srcFrame[sprite.index];
+    scene.sysUpdate(1.0);
+    expect(scene.arena.srcFrame[sprite.index]).toBe(before);
   });
 
   it('AnimationManager.stop で ID を指定して停止できる', () => {
@@ -375,7 +425,6 @@ describe('anim.play は文字列キーで行う', () => {
     canvas.width = 64;
     canvas.height = 64;
     scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
-    // 無限ループなので自然には終わりません
     scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10, repeat: -1 });
 
     const sprite = scene.add.sprite(0, 0);

@@ -18,6 +18,16 @@ export interface AnimationConfig {
   repeat?: number; // -1 は無限ループ
 }
 
+/**
+ * 1 回の update() で進めるコマ数の上限です。
+ *
+ * タブが非表示だった-carbox 時に(dt が数百秒) なると、
+ * 取りこぼしを全部消化しようとして CPU を占有し続けます。
+ * 1 フレームあたり 256 コマまでに制限して、
+ * 追い付け分は意図的に落として描画を優先します。
+ */
+const MAX_CATCHUP_STEPS = 256;
+
 interface AnimationData {
   key: string;
   frames: number[];
@@ -214,10 +224,17 @@ export class AnimationManager {
       const aId = this.animId[i];
       const duration = this.refFrameDuration[aId];
 
+      // frameRate が 0 や負なら 1 コマ目の無限ループになるため、0 に丸めます。
+      const step = duration > 0 ? duration : 0;
+
       this.elapsed[i] += dt;
 
-      if (this.elapsed[i] >= duration) {
-        this.elapsed[i] -= duration;
+      // dt が 1 コマ時間を超える場合 (低フレームレート、タブ復帰時の巨大 dt など) は
+      // 取りこぼさないよう while で複数コマを進めます。
+      // 1 回の update で進める上限を設けて spirals of death を防ぎます。
+      let guard = MAX_CATCHUP_STEPS;
+      while (this.elapsed[i] >= step && this.active[i] === 1 && guard-- > 0) {
+        this.elapsed[i] -= step;
 
         const len = this.refFramesLength[aId];
         this.currentFrameIdx[i]++;
@@ -236,12 +253,13 @@ export class AnimationManager {
           }
         }
 
-        if (!isEnded) {
-          const ptr = this.refFramesPtr[aId] + this.currentFrameIdx[i];
-          this._applyFrame(eId, this._flatFrames[ptr]);
-        } else {
+        if (isEnded) {
           this.free(i);
+          break;
         }
+
+        const ptr = this.refFramesPtr[aId] + this.currentFrameIdx[i];
+        this._applyFrame(eId, this._flatFrames[ptr]);
       }
     }
   }

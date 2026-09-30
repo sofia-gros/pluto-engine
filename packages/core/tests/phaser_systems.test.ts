@@ -214,6 +214,23 @@ describe('Phaser 互換 - SceneManager', () => {
 });
 
 describe('Phaser 互換 - tweens.add', () => {
+  it('duration はミリ秒、sysUpdate の dt は秒で受け取る', () => {
+    // この単位契約を 1 か所に固定します。
+    // ループの dt は秒 (GameLoop.maxDeltaTime = 0.1) で、
+    // Phaser 互換の duration はミリ秒なので、Scene が境界で *1000 します。
+    // ここが崩れると実機では 1000 倍遅くなるので、明示的に検証します。
+    const scene = new Scene({ maxInstances: 100 });
+    const sprite = scene.add.sprite(0, 0);
+    const idx = sprite.index;
+
+    scene.tweens.add({ targets: sprite, props: { x: 1000 }, duration: 1000 });
+
+    // 60 FPS で 1 秒 = 60 フレーム進めます
+    for (let i = 0; i < 60; i++) scene.sysUpdate(1 / 60);
+    expect(scene.arena.posX[idx]).toBeCloseTo(1000, 0);
+    expect(scene.tweens.count).toBe(0);
+  });
+
   it('props で指定したプロパティをトゥイーンする', () => {
     const scene = new Scene({ maxInstances: 100 });
     const sprite = scene.add.sprite(0, 0);
@@ -223,10 +240,10 @@ describe('Phaser 互換 - tweens.add', () => {
     expect(scene.tweens.count).toBe(1);
     expect(scene.arena.posX[idx]).toBe(0);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.500);
     expect(scene.arena.posX[idx]).toBeCloseTo(50, 0);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.500);
     expect(scene.arena.posX[idx]).toBe(100);
     // 完了後は解放されます
     expect(scene.tweens.count).toBe(0);
@@ -245,7 +262,7 @@ describe('Phaser 互換 - tweens.add', () => {
     // props 1 つにつきスロットが 1 個確保されます
     expect(scene.tweens.count).toBe(2);
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.arena.posX[idx]).toBe(100);
     expect(scene.arena.posY[idx]).toBe(200);
   });
@@ -256,7 +273,7 @@ describe('Phaser 互換 - tweens.add', () => {
     const b = scene.add.sprite(0, 0);
 
     scene.tweens.add({ targets: [a, b], props: { x: 50 }, duration: 100 });
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
 
     expect(scene.arena.posX[a.index]).toBe(50);
     expect(scene.arena.posX[b.index]).toBe(50);
@@ -273,15 +290,15 @@ describe('Phaser 互換 - tweens.add', () => {
       delay: 500,
     });
 
-    scene.sysUpdate(400);
+    scene.sysUpdate(0.400);
     expect(scene.arena.posX[sprite.index]).toBe(0);
 
     // 遅延の境界ちょうどではまだ 0 です (経過時間が 0 なので)
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
     expect(scene.arena.posX[sprite.index]).toBe(0);
 
     // 遅延を抜けた後は進行します
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
     expect(scene.arena.posX[sprite.index]).toBeGreaterThan(0);
   });
 
@@ -299,8 +316,8 @@ describe('Phaser 互換 - tweens.add', () => {
       ease: 'Quad.easeIn',
     });
 
-    linear.sysUpdate(250);
-    eased.sysUpdate(250);
+    linear.sysUpdate(0.250);
+    eased.sysUpdate(0.250);
 
     // Quad.easeIn は 0.25^2 = 0.0625 なので 100 ではなく約 6.25
     expect(linear.arena.posX[a.index]).toBeCloseTo(25, 1);
@@ -321,10 +338,10 @@ describe('Phaser 互換 - tweens.add', () => {
       yoyo: true,
     });
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.arena.posX[idx]).toBeCloseTo(100, 0);
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.arena.posX[idx]).toBeCloseTo(0, 0);
     // 往復 1 往復で完了します
     expect(scene.tweens.count).toBe(0);
@@ -342,9 +359,9 @@ describe('Phaser 互換 - tweens.add', () => {
       repeat: 1,
     });
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.tweens.count).toBe(1);
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.tweens.count).toBe(0);
     expect(scene.arena.posX[idx]).toBe(100);
   });
@@ -359,7 +376,7 @@ describe('Phaser 互換 - tweens.add', () => {
       props: { alpha: 0 },
       duration: 1000,
     });
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
 
     // 下位 24 ビット (色) は保持され、最上位バイトが 0 になる
     expect(scene.arena.tint[idx] & 0x00ffffff).toBe(0x00ffffff);
@@ -376,7 +393,7 @@ describe('Phaser 互換 - tweens.add', () => {
       props: { angle: 1.5708 },
       duration: 1000,
     });
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
 
     expect(scene.arena.rotation[idx]).toBeCloseTo(1.5708, 3);
   });
@@ -393,7 +410,7 @@ describe('Phaser 互換 - tweens.add', () => {
     expect(killed).toBe(1);
     expect(scene.tweens.count).toBe(1);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.500);
     expect(scene.arena.posX[a.index]).toBe(0);
     expect(scene.arena.posX[b.index]).toBeGreaterThan(0);
   });
@@ -438,12 +455,12 @@ describe('Phaser 互換 - tweens.add', () => {
       onStart: () => starts++,
     });
 
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
     expect(starts).toBe(0);
 
-    scene.sysUpdate(200);
+    scene.sysUpdate(0.200);
     expect(starts).toBe(1);
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
     expect(starts).toBe(1);
   });
 
@@ -459,9 +476,9 @@ describe('Phaser 互換 - tweens.add', () => {
       onUpdate: () => updates++,
     });
 
-    scene.sysUpdate(100);
-    scene.sysUpdate(100);
-    scene.sysUpdate(100);
+    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.100);
     expect(updates).toBe(3);
   });
 
@@ -477,11 +494,11 @@ describe('Phaser 互換 - tweens.add', () => {
       onComplete: () => completes++,
     });
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(completes).toBe(1);
 
     // 追加でフレームを回しても二重には起きません
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(completes).toBe(1);
   });
 
@@ -522,14 +539,14 @@ describe('Phaser 互換 - tweens.add', () => {
     ]);
 
     // 1 ステップ目が終わるまでは 2 つ目が動かない
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(scene.arena.posX[idx]).toBe(100);
     expect(order).toEqual(['first']);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.500);
     expect(scene.arena.posX[idx]).toBe(150);
 
-    scene.sysUpdate(500);
+    scene.sysUpdate(0.500);
     expect(scene.arena.posX[idx]).toBe(200);
     expect(order).toEqual(['first', 'second']);
     expect(scene.tweens.count).toBe(0);
@@ -556,11 +573,11 @@ describe('Phaser 互換 - tweens.add', () => {
       },
     ]);
 
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(ran).toEqual(['first']);
 
     scene.tweens.killTweensOfGroup(chainId);
-    scene.sysUpdate(1000);
+    scene.sysUpdate(1);
     expect(ran).toEqual(['first']);
     expect(scene.arena.posX[idx]).toBe(100);
   });
