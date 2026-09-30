@@ -14,6 +14,7 @@ import type { BufferInfo, GraphicsDevice } from '@pluto-engine/renderer';
 import { ScaleManager, ScaleMode } from '../scale/ScaleManager';
 import type { Scene } from '../scene/Scene';
 import { SceneManager } from '../scene/SceneManager';
+import type { Camera } from '../scene/Camera';
 import { TimeStepManager } from '../time/TimeStepManager';
 import { GameLoop } from './GameLoop';
 
@@ -59,6 +60,12 @@ export class PlutoEngine {
 
   /** 毎フレーム再利用するためのバッファ。render() 内で new してはいけません。 */
   private readonly _projMatrix = new Float32Array(16);
+  /**
+   * 描画対象のカメラを一時的に保持する配列です。
+   * CameraManager.collectForRender() が上書きします。
+   * 毎フレーム new しないため、確保済みの配列を再利用します。
+   */
+  private readonly _activeCameras: Camera[] = [];
 
   constructor(config: EngineConfig) {
     this.config = Object.assign(
@@ -264,17 +271,44 @@ export class PlutoEngine {
 
     const w = this.canvasElement!.width;
     const h = this.canvasElement!.height;
-    const zoom = activeScene.camera?.zoom || 1.4;
-    const rot = activeScene.camera?.rotation || 0.0;
-    const cx = activeScene.camera?.actualX || 0;
-    const cy = activeScene.camera?.actualY || 0;
+
+    // カメラごとに描画します。
+    // SoA への GPU 転送は上の 1 回だけで済みます。増えるのは
+    // 投影行列の更新とドローコールだけです。
+    if (renderCount > 0) {
+      const camCount = activeScene.cameras.collectForRender(this._activeCameras);
+      if (camCount === 0) {
+        // 全カメラが非表示なら描画をスキップします。
+        this.drawTimeMs = performance.now() - tUploadEnd;
+        return;
+      }
+
+      this.device.setupInstancedAttributes(this.gpuBuffers);
+
+      for (let ci = 0; ci < camCount; ci++) {
+        this._writeProjection(this._activeCameras[ci], w, h);
+        this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
+        this.device.drawInstanced(renderCount);
+      }
+    }
+    this.drawTimeMs = performance.now() - tUploadEnd;
+  }
+
+  /**
+   * 指定したカメラの投影行列を _projMatrix へ書き出します。
+   * 使い回しバッファを使うため、毎フレーム new しません。
+   */
+  private _writeProjection(cam: Camera, w: number, h: number): void {
+    const zoom = cam?.zoom || 1.4;
+    const rot = cam?.rotation || 0.0;
+    const cx = cam?.actualX || 0;
+    const cy = cam?.actualY || 0;
 
     const cosR = Math.cos(-rot);
     const sinR = Math.sin(-rot);
     const sx = (2 / w) * zoom;
     const sy = -(2 / h) * zoom;
 
-    // 使い回しバッファへ書き込む (毎フレーム new しない)
     const proj = this._projMatrix;
     proj[0] = sx * cosR;
     proj[1] = sy * sinR;
@@ -292,14 +326,6 @@ export class PlutoEngine {
     proj[13] = sy * (-cx * sinR - cy * cosR);
     proj[14] = 0;
     proj[15] = 1;
-
-    this.device.setUniformMatrix4fv('projectionMatrix', proj);
-
-    if (renderCount > 0) {
-      this.device.setupInstancedAttributes(this.gpuBuffers);
-      this.device.drawInstanced(renderCount);
-    }
-    this.drawTimeMs = performance.now() - tUploadEnd;
   }
 
   /**

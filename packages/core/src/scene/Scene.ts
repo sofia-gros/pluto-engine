@@ -13,6 +13,7 @@ import type { Plugin } from './Plugin';
 import type { SceneManager } from './SceneManager';
 import { Tilemap } from '../tilemap/Tilemap';
 import { Camera } from './Camera';
+import { CameraManager } from './CameraManager';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
 import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
@@ -44,7 +45,15 @@ export class Scene {
    */
   private readonly _ownRegistry = new DataRegistry();
 
-  public camera: Camera;
+  /**
+   * カメラ管理 (Phaser 互換の this.cameras)。
+   */
+  public cameras!: CameraManager;
+  /**
+   * メインカメラ (this.cameras.main の別名)。
+   * 既存のコードとの互換のために残しています。
+   */
+  public camera!: Camera;
 
   private _plugins: Plugin[] = [];
   private _tilemaps: Tilemap[] = [];
@@ -59,6 +68,29 @@ export class Scene {
   private _anim: AnimationManager | null = null;
   private _particles: ParticleManager | null = null;
   private _physics: ArcadePhysics | null = null;
+
+  // --- カメラの追従対象 ---
+  // sysUpdate() の先頭でカメラへ渡すため、値を保持しておきます。
+  // -1 は「追従なし」を表します。
+  private _followId = -1;
+  private _followX = -1;
+  private _followY = -1;
+
+  /**
+   * カメラの追従対象を設定します。
+   *
+   * 既存の startFollow(target) を使う場合は ID だけで十分ですが、
+   * ワールド座標を明示したい場合はこちらを使います。
+   *
+   * @param id 追従対象の ID (-1 で解除)
+   * @param x 追従対象の世界座標 X
+   * @param y 追従対象の世界座標 Y
+   */
+  public setCameraFollowTarget(id: number, x: number, y: number): void {
+    this._followId = id;
+    this._followX = x;
+    this._followY = y;
+  }
 
   /**
    * ビットマスク。初期化済みのサブシステムのみが立ちます。
@@ -265,7 +297,8 @@ export class Scene {
     this.input = new InputManager();
     this.textures = new TextureManager();
     this.load = new LoaderManager(this.textures);
-    this.camera = new Camera();
+    this.cameras = new CameraManager(this);
+    this.camera = this.cameras.main;
   }
 
   public preload(): void {}
@@ -321,7 +354,10 @@ export class Scene {
     // The cost of an unused subsystem is one AND, not a virtual call.
     const active = this._active;
 
-    if ((active & Subsystem.Camera) !== 0) this.camera.update(dt);
+    if ((active & Subsystem.Camera) !== 0) {
+      // 追従対象の座標をカメラへ渡すため、カメラを先に更新します。
+      this.cameras.update(dt, this._followId, this._followX, this._followY);
+    }
     this.input.update();
     if ((active & Subsystem.Tweens) !== 0) this._tweens!.update(dt);
     if ((active & Subsystem.Anims) !== 0) this._anim!.update(dt);
@@ -346,8 +382,11 @@ export class Scene {
       const sw = this.engine?.scale?.width ?? 800;
       const sh = this.engine?.scale?.height ?? 600;
       const maps = this._tilemaps;
+      // 複数カメラでは最も広い可視範囲を使います。
+      // すべてのカメラで描画するため、1 台だけカリングすると消えてしまうためです。
+      const main = this.cameras.main;
       for (let i = 0; i < maps.length; i++) {
-        maps[i].updateCulling(this.camera, sw, sh);
+        maps[i].updateCulling(main, sw, sh);
       }
     }
   }

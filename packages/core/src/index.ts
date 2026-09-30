@@ -8,6 +8,7 @@ export * from './scene/Scene';
 export * from './scene/SceneManager';
 export * from './scene/Plugin';
 export * from './scene/Camera';
+export * from './scene/CameraManager';
 export * from './scene/SubsystemMask';
 export * from './events/EventEmitter';
 export * from './events/DataRegistry';
