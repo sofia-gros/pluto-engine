@@ -160,16 +160,16 @@ export class Sprite {
 
 ## 5. ハードウェア・インスタンシング描画パイプライン
 
-10万体のスプライトを描画する際、スプライトごとに描画コマンドを発行するとGPUドライバが過負荷で停止します。
-PlutoEngine では、**単一のクアッドメッシュ（4頂点）**に対し、アリーナの座標・スケール配列を頂点アトリビュートとしてバインドし、`drawArraysInstanced` または WebGPU の `drawIndexed(6, count)` を1回だけ呼び出します。
+数十万体のスプライトを描画する際、スプライトごとに描画コマンドを発行すると GPU ドライバや IPC が過負荷で停止します。
+PlutoEngine では、**単一のクアッドメッシュ（4頂点）**に対し、アリーナの座標・スケール配列を頂点アトリビュートとしてバインドし、WebGL2 の `drawArraysInstanced` または WebGPU の `drawIndexed(6, count)` を 1 回だけ呼び出します。
 
 ```typescript
-// 1回のAPIコールで10万個のインスタンスを瞬時に描画
-device.setupInstancedAttributes(gpuBuffers);
+// 1回のAPIコールで最大30万個のインスタンスを一括描画
+device.setupInstancedAttributes(gpuBuffers, renderCount);
 device.drawInstanced(renderCount);
 ```
 
-CPU側でのパッキング処理も、有効なスプライト（`active[i] === 1`）のみを連続バッファへコピーするゼロアロケーション走査で行われます。
+CPU 側でのパッキング処理も、有効なスプライト（`active[i] === 1`）のみを連続バッファへコピーするゼロアロケーション走査で行われます。特に WebGPU バックエンドでは、パッキングループ内の関数呼び出しを排除してインライン配列アクセス化し、GPU `writeBuffer` の転送サイズを `renderCount` に厳密に合わせて最適化することで、ブラウザの IPC 過負荷クラッシュを防ぎ、30万体でも安定して動作します。
 
 ---
 

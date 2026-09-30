@@ -30,7 +30,7 @@ export class GameScene extends Scene {
 
 ## GPU Texture2DArray へのアップロード
 
-ロードされた画像テクスチャは、`WebGL2Device.uploadTexture()` を通じて GPU の `Texture2DArray` にまとめてアップロードされます。
+ロードされた画像テクスチャは、`device.uploadTexture()` を通じて GPU の `Texture2DArray` にまとめてアップロードされます。
 
 - 実行時は、SoAアリーナの中に「UV座標のオフセット」と「テクスチャレイヤーID」の整数のみが保存されます。
 - 文字列によるアセットの検索（例: `getTexture("player")`）は初期化時のみ許可され、実行時は高速な数値IDアクセスのみが行われます。
