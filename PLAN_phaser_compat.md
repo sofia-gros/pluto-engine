@@ -347,14 +347,25 @@ FPS 低下 5% 未満、B/frame 増加 50 未満の両方を満たしています
 - `TextureUploadOptions.frames?: { x, y, w, h }[]` を追加。
   指定すると `frameWidth` / `frameHeight` による自動計算を飛ばします
 - `WebGL2Device` と `WebGPUDevice` の両方を同じ規則に揃えました
-- `TextureAsset.frameNames?: Map<string, number>` を追加。
-  名前でコマを引けるようにするためです
-- `TextureManager.addAtlas(key, source, frames, frameNames)` を追加
+- `TextureManager.addAtlas(key, source, frames)` を追加。
+  `frames` の配列順がそのままフレーム番号になります
 
-#### `Sprite.setFrame` の名前解決
+#### フレームの指定は数値のみ（`setFrame` の仕様）
 
-`setFrame('hero_idle_0')` が 0 番へ落ちるだけだった挙動を、名前解決できるようにしました。
-`frameNames` が無い，一律グリッドのスプライトシートでは従来どおり 0 へフォールバックします（挙動互換）。
+`Sprite.setFrame()` はフレームを**番号（数値）**で受けます。文字列は渡しても 0 番へ落ちます。
+一方 `AnimationManager.play()` は**文字列キー**を受け取ります（Phaser と同じ分離です）。
+
+```typescript
+sprite.setTextureByKey(scene, 'sheet', 0);   // フレーム番号
+sprite.play('walk');                          // アニメーションのキー
+```
+
+`AnimationConfig.frames` も `number[]` で、`_applyFrame()` は `frames[frameNum]` と
+直接添字で参照します。アニメーションのフレームを文字列で引く経路は持っていません。
+
+アトラスの名前表 (`ParsedAtlas.frameNames`) は**エンジンが消費しません**。
+`this.load.get(key).frameNames` から「TexturePacker のどの名がどの番号になるか」を
+調べる補助情報としてのみ公開しています。
 
 #### 追加した Loader API
 

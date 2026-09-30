@@ -197,19 +197,10 @@ describe('TextureManager.addAtlas', () => {
     canvas.width = 128;
     canvas.height = 64;
 
-    const names = new Map<string, number>([
-      ['a', 0],
-      ['b', 1],
+    const asset = textures.addAtlas('atlas', canvas, [
+      { x: 0, y: 0, w: 32, h: 64 },
+      { x: 32, y: 0, w: 32, h: 64 },
     ]);
-    const asset = textures.addAtlas(
-      'atlas',
-      canvas,
-      [
-        { x: 0, y: 0, w: 32, h: 64 },
-        { x: 32, y: 0, w: 32, h: 64 },
-      ],
-      names,
-    );
 
     expect(asset.key).toBe('atlas');
     expect(asset.frames).toHaveLength(2);
@@ -218,108 +209,182 @@ describe('TextureManager.addAtlas', () => {
     expect(asset.frames![0].uvW).toBeCloseTo(0.25, 5);
     expect(asset.frames![0].uvH).toBeCloseTo(1, 5);
     expect(asset.frames![1].uvX).toBeCloseTo(0.25, 5);
-    expect(asset.frameNames).toBe(names);
   });
 
-  it('名前表を省略すると null になる', () => {
+  it('フレーム 1 枚だけでも登録できる', () => {
     const textures = new TextureManager();
     const canvas = document.createElement('canvas');
     canvas.width = 16;
     canvas.height = 16;
     const asset = textures.addAtlas('plain', canvas, [{ x: 0, y: 0, w: 16, h: 16 }]);
-    expect(asset.frameNames).toBeNull();
+    expect(asset.frames).toHaveLength(1);
+    expect(asset.frames![0].uvW).toBeCloseTo(1, 5);
   });
 });
 
-describe('Sprite.setFrame の名前解決', () => {
-  it('アトラスのフレーム名で UV を引ける', () => {
+describe('Sprite.setFrame はフレーム番号 (数値) で指定する', () => {
+  it('アトラスのフレーム番号で UV を引ける', () => {
     const scene = new Scene({ maxInstances: 100 });
-    const textures = scene.textures;
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
 
-    const names = new Map<string, number>([
-      ['left', 0],
-      ['right', 1],
+    scene.textures.addAtlas('hero', canvas, [
+      { x: 0, y: 0, w: 32, h: 64 },
+      { x: 32, y: 0, w: 32, h: 64 },
     ]);
-    textures.addAtlas(
-      'hero',
-      canvas,
-      [
-        { x: 0, y: 0, w: 32, h: 64 },
-        { x: 32, y: 0, w: 32, h: 64 },
-      ],
-      names,
-    );
 
     const sprite = scene.add.sprite(0, 0);
-    sprite.setTextureByKey(scene, 'hero', 'right');
     const i = sprite.index;
 
-    expect(scene.arena.uvX[i]).toBeCloseTo(0.25, 5);
+    sprite.setTextureByKey(scene, 'hero', 1);
     expect(scene.arena.srcFrame[i]).toBe(1);
+    expect(scene.arena.uvX[i]).toBeCloseTo(0.25, 5);
+    expect(scene.arena.uvW[i]).toBeCloseTo(0.25, 5);
 
-    sprite.setFrame('left');
-    expect(scene.arena.uvX[i]).toBeCloseTo(0, 5);
+    sprite.setFrame(0);
     expect(scene.arena.srcFrame[i]).toBe(0);
+    expect(scene.arena.uvX[i]).toBeCloseTo(0, 5);
   });
 
-  it('未知の名前は 0 番へフォールバックする', () => {
+  it('均一グリッドのスプライトシートでも番号で引ける', () => {
     const scene = new Scene({ maxInstances: 100 });
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    scene.textures.addAtlas(
-      'pack',
-      canvas,
-      [
-        { x: 0, y: 0, w: 32, h: 64 },
-        { x: 32, y: 0, w: 32, h: 64 },
-      ],
-      new Map([['known', 1]]),
-    );
-
-    const sprite = scene.add.sprite(0, 0);
-    sprite.setTextureByKey(scene, 'pack', 'known');
-    sprite.setFrame('unknown');
-    expect(scene.arena.srcFrame[sprite.index]).toBe(0);
-  });
-
-  it('名前表が無いスプライトシートでは文字列は 0 のまま', () => {
-    const scene = new Scene({ maxInstances: 100 });
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
+    canvas.width = 128;
     canvas.height = 64;
     scene.textures.addSpritesheet('grid', canvas, { frameWidth: 32, frameHeight: 64 });
 
     const sprite = scene.add.sprite(0, 0);
-    sprite.setTextureByKey(scene, 'grid', 'anything');
-    // frameNames が無いので 0 番 (従来挙動の維持)
-    expect(scene.arena.srcFrame[sprite.index]).toBe(0);
+    const i = sprite.index;
+
+    // 4 コマ (2x2) あります
+    sprite.setTextureByKey(scene, 'grid', 2);
+    expect(scene.arena.srcFrame[i]).toBe(2);
+    sprite.setFrame(3);
+    expect(scene.arena.srcFrame[i]).toBe(3);
   });
 
-  it('数値はそのまま添字として扱われる', () => {
+  it('文字列を渡すと 0 番になる (フレームは数値のみが仕様)', () => {
     const scene = new Scene({ maxInstances: 100 });
     const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 64;
-    scene.textures.addAtlas(
-      'num',
-      canvas,
-      [
-        { x: 0, y: 0, w: 32, h: 64 },
-        { x: 32, y: 0, w: 32, h: 64 },
-        { x: 64, y: 0, w: 32, h: 64 },
-      ],
-      new Map([['two', 2]]),
-    );
+    scene.textures.addAtlas('num', canvas, [
+      { x: 0, y: 0, w: 32, h: 64 },
+      { x: 32, y: 0, w: 32, h: 64 },
+      { x: 64, y: 0, w: 32, h: 64 },
+    ]);
 
     const sprite = scene.add.sprite(0, 0);
-    sprite.setTextureByKey(scene, 'num', 1);
+    const i = sprite.index;
+    sprite.setTextureByKey(scene, 'num', 2);
+    expect(scene.arena.srcFrame[i]).toBe(2);
+
+    // 文字列は解決しません。0 番へフォールバックします。
+    sprite.setFrame('two' as unknown as number);
+    expect(scene.arena.srcFrame[i]).toBe(0);
+  });
+
+  it('範囲外の番号は無視され、直前の UV を保つ', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    scene.textures.addAtlas('one', canvas, [{ x: 0, y: 0, w: 32, h: 64 }]);
+
+    const sprite = scene.add.sprite(0, 0);
+    const i = sprite.index;
+    sprite.setTextureByKey(scene, 'one', 0);
+    const uvW = scene.arena.uvW[i];
+
+    sprite.setFrame(99);
+    expect(scene.arena.srcFrame[i]).toBe(0);
+    expect(scene.arena.uvW[i]).toBe(uvW);
+
+    sprite.setFrame(-1);
+    expect(scene.arena.srcFrame[i]).toBe(0);
+  });
+});
+
+describe('anim.play は文字列キーで行う', () => {
+  it('キーでアニメーションを再生し、フレーム番号を適用する', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+
+    scene.anim.create({ key: 'walk', frames: [0, 1, 2, 3], frameRate: 10 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 0);
+    const i = sprite.index;
+
+    // 文字列キーで再生します
+    sprite.play('walk');
+    expect(scene.anim.hasKey('walk')).toBe(true);
+    expect(scene.arena.srcFrame[i]).toBe(0);
+
+    // 1 コマ分 (100ms) 進めると次のフレームへ
+    scene.sysUpdate(100);
+    expect(scene.arena.srcFrame[i]).toBe(1);
+
+    scene.sysUpdate(100);
+    expect(scene.arena.srcFrame[i]).toBe(2);
+  });
+
+  it('未知のキーでは何も起きない', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+    scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 1);
+    expect(() => sprite.play('no_such_anim')).not.toThrow();
+    // 再生中のスロットが増えないこと
+    expect(scene.anim.active.filter((v) => v === 1).length).toBe(0);
+  });
+
+  it('再生が終わるとスロットが解放される', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+    // 2 コマ × frameRate 10 = 1 コマ 100ms
+    scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 0);
+    sprite.play('walk');
+    expect(scene.anim.active.filter((v) => v === 1).length).toBe(1);
+
+    // update() は 1 回の呼び出しで 1 コマだけ進むので、2 フレーム分回します。
+    scene.sysUpdate(100);
     expect(scene.arena.srcFrame[sprite.index]).toBe(1);
-    sprite.setFrame(2);
-    expect(scene.arena.srcFrame[sprite.index]).toBe(2);
+    scene.sysUpdate(100);
+    expect(scene.anim.active.filter((v) => v === 1).length).toBe(0);
+  });
+
+  it('AnimationManager.stop で ID を指定して停止できる', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    scene.textures.addSpritesheet('sheet', canvas, { frameWidth: 32, frameHeight: 64 });
+    // 無限ループなので自然には終わりません
+    scene.anim.create({ key: 'walk', frames: [0, 1], frameRate: 10, repeat: -1 });
+
+    const sprite = scene.add.sprite(0, 0);
+    sprite.setTextureByKey(scene, 'sheet', 0);
+    sprite.play('walk');
+    expect(scene.anim.active.filter((v) => v === 1).length).toBe(1);
+
+    scene.anim.stop(sprite.id);
+    expect(scene.anim.active.filter((v) => v === 1).length).toBe(0);
   });
 });
 

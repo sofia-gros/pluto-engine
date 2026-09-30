@@ -135,7 +135,6 @@ export class TextureManager {
       frameWidth: options.frameWidth || width,
       frameHeight: options.frameHeight || height,
       frames: buildFrames(width, height, options),
-      frameNames: null,
       ...({ _source: source } as any),
     };
     this.textures.set(key, asset);
@@ -146,28 +145,19 @@ export class TextureManager {
    * アトラス (TexturePacker 形式) を登録・GPU転送します。
    *
    * 均一グリッドではないため、フレーム UV は呼び出し側が矩形一覧で渡します。
-   * 名前でコマを引けるように frameNames も一緒に登録します。
+   * 配列順がそのままフレーム番号になるため、
+   * 描画時は `setFrame(番号)` で指定します。
    *
    * @param key テクスチャキー
    * @param source 画像
-   * @param frames フレーム矩形 (ピクセル)
-   * @param frameNames フレーム名 → 添字
+   * @param frames フレーム矩形 (ピクセル)。配列順 = フレーム番号
    */
   public addAtlas(
     key: string,
     source: HTMLImageElement | HTMLCanvasElement | ImageBitmap | ImageData,
     frames: { x: number; y: number; w: number; h: number }[],
-    frameNames?: Map<string, number>,
   ): TextureAsset {
-    const asset = this.addSpritesheet(key, source, { frames });
-    if (this.device === null) {
-      asset.frameNames = frameNames ?? null;
-      return asset;
-    }
-    // デバイス側が作ったアセットへ名前表を後付けします。
-    const live = this.get(key) ?? asset;
-    live.frameNames = frameNames ?? null;
-    return live;
+    return this.addSpritesheet(key, source, { frames });
   }
 
   /**

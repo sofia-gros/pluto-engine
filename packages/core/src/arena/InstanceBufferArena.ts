@@ -26,11 +26,6 @@ export interface SpriteAssetLike {
   key?: string;
   /** スプライトシート内のフレーム UV */
   frames?: { uvX: number; uvY: number; uvW: number; uvH: number }[];
-  /**
-   * フレーム名 → 添字の対応表。
-   * TexturePacker のアトラスを読んだ場合だけ値が入ります。
-   */
-  frameNames?: Map<string, number> | null;
   /** ラッパー構造で保持されている場合の互換フィールド */
   textureAsset?: SpriteAssetLike;
 }

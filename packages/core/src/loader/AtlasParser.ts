@@ -9,9 +9,18 @@
 
 /** 解析結果。矩形と名前表の 2 つを持ちます。 */
 export interface ParsedAtlas {
-  /** フレーム矩形 (ピクセル)。配列順がそのまま添字になります。 */
+  /**
+   * フレーム矩形 (ピクセル)。配列順がそのままフレーム番号になります。
+   * `Sprite.setFrame()` にはこの添字を渡します。
+   */
   frames: { x: number; y: number; w: number; h: number }[];
-  /** フレーム名 → 添字の対応表。 */
+  /**
+   * フレーム名 → フレーム番号の対応表。
+   *
+   * エンジンはフレームを整数で参照するため、この表は
+   * 「TexturePacker のどの名がどの番号になるか」を調べるための補助情報です。
+   * `this.load.get(key).frameNames` から参照できます。
+   */
   frameNames: Map<string, number>;
   /** アトラス画像のパス。textureURL が無ければ JSON の meta.image を使います。 */
   imagePath: string | null;

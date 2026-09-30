@@ -406,12 +406,7 @@ export class LoaderManager {
 
     let texAsset: TextureAsset | undefined;
     if (this._textureManager) {
-      texAsset = this._textureManager.addAtlas(
-        item.key,
-        image,
-        parsed.frames,
-        parsed.frameNames,
-      );
+      texAsset = this._textureManager.addAtlas(item.key, image, parsed.frames);
     }
     this._cache.set(item.key, {
       type: 'atlas',
