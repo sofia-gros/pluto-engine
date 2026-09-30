@@ -1,0 +1,100 @@
+name: Verify
+
+# 注意: このワークフローはテストとビルドの検証のみを行います。
+# npm への publish や GitHub Release の作成は行いません。
+# それらは tag upon 時の release.yml の責務です。
+
+on:
+  push:
+    branches:
+      - main
+      - opencode
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests (real browser)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      # テストは vitest の browser mode で実ブラウザを実行します。
+      # WebGL2 が要るため、CI でもソフトウェアラスタライザ (SwiftShader) を使います。
+      - name: Run tests
+        run: bun run test
+
+  build:
+    name: Type check and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build all packages
+        run: bun run build
+
+      - name: Type check demos
+        run: npx tsc --noEmit -p tsconfig.json
+        working-directory: apps/demo
+
+  smoke:
+    name: Real browser smoke test
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Build all packages
+        run: bun run build
+
+      - name: Build demos
+        run: npx vite build
+        working-directory: apps/demo
+
+      # 3 デモすべてについて、実ブラウザで
+      #   ・エラーが出ないこと
+      #   ・実際にピクセルが描画されていること (単色の空白画面でないこと)
+      #   ・ヒープが 1 フレームあたり予算を超えて増加しないこと
+      # を検証します。
+      - name: Run smoke test
+        run: node scripts/smoke-test.mjs

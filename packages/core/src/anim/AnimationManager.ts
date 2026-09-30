@@ -1,24 +1,28 @@
 /**
  * @file AnimationManager.ts
  * @description
- * ゼロアロケーションを目指したデータ指向 (SoA) アニメーションシステム。
- * アリーナ内のエンティティの UV を直接書き換えてパラパラアニメーションを実現します。
+ * ゼロアロケーションのデータ指向 (SoA) アニメーションシステム。
+ *
+ * 設計上の掟: Sprite インスタンスへの参照を一切保持しません。
+ * アリーナ ID だけを.SoA 配列で管理し、UV の書き戻しは
+ * アリーナの密添字へ直接行います。これによりヒープ上の
+ * オブジェクトグラフ (Map<id, Sprite>) を生成しません。
  */
 
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
-import type { Sprite } from '../arena/Sprite';
 
 export interface AnimationConfig {
   key: string;
   frames: number[];
   frameRate?: number;
-  repeat?: number; // -1 for infinite loop
+  repeat?: number; // -1 は無限ループ
 }
 
 interface AnimationData {
   key: string;
   frames: number[];
-  frameDuration: number; // ミリ秒単位
+  /** 1 コマにかかる時間 (秒)。update() が受け取る dt と単位を揃える。 */
+  frameDuration: number;
   repeat: number;
 }
 
@@ -26,8 +30,10 @@ export class AnimationManager {
   public readonly capacity: number;
   private _activeCount = 0;
 
-  // アニメーション定義の保存先
+  // アニメーション定義の保存先 (初期化時のみ確保)
   private _animations: Map<string, AnimationData> = new Map();
+  private _animKeyToIndex: Map<string, number> = new Map();
+  private _nextAnimIndex = 0;
 
   // --- SoA Arrays (再生中の状態) ---
   public readonly active: Uint8Array;
@@ -37,24 +43,22 @@ export class AnimationManager {
   public readonly repeatCount: Int32Array;
   public readonly elapsed: Float32Array;
 
-  // フラット化されたアニメーションデータ (参照を高速化するため)
+  // フラット化されたアニメーションデータ
   public readonly refFramesLength: Int32Array;
+  /**
+   * アニメーション定義テーブルです。refFrameDuration の単位は秒です。
+   */
   public readonly refFrameDuration: Float32Array;
   public readonly refRepeat: Int32Array;
-  // フレーム配列は可変長なので、ポインタとフラット配列で管理
   public readonly refFramesPtr: Int32Array;
   private _flatFrames: Int32Array;
   private _flatFramesCount = 0;
-
-  private _animKeyToIndex: Map<string, number> = new Map();
-  private _nextAnimIndex = 0;
 
   // Free List
   private readonly freeList: Int32Array;
   private freeListHead = 0;
 
   private _arena: InstanceBufferArena;
-  private _spriteMap: Map<number, Sprite> = new Map(); // entityId -> Sprite の逆引きキャッシュ (uv更新用)
 
   constructor(arena: InstanceBufferArena, maxAnims = 10000) {
     this._arena = arena;
@@ -72,7 +76,7 @@ export class AnimationManager {
     this.refRepeat = new Int32Array(maxAnims);
     this.refFramesPtr = new Int32Array(maxAnims);
 
-    // 仮に全アニメーション合計で最大10万フレーム分の定義を許容
+    // 定義は初期化時に確定し、実行中に増やさない
     this._flatFrames = new Int32Array(100000);
 
     this.freeList = new Int32Array(maxAnims);
@@ -82,7 +86,7 @@ export class AnimationManager {
   }
 
   /**
-   * アニメーションを定義します。配列を渡すことで複数同時定義が可能（JSONからのインポートに最適）。
+   * アニメーションを定義します。配列を渡すことで複数同時定義が可能です。
    */
   public create(configs: AnimationConfig | AnimationConfig[]): void {
     const arr = Array.isArray(configs) ? configs : [configs];
@@ -92,7 +96,9 @@ export class AnimationManager {
       const data: AnimationData = {
         key: config.key,
         frames: config.frames,
-        frameDuration: 1000 / frameRate,
+        // 旧実装はミリ秒で保持していたため dt(秒) に対して 1000 倍遅く進んでいた。
+        // 秒に統一して update() の dt と単位を揃える。
+        frameDuration: 1 / frameRate,
         repeat: config.repeat ?? 0,
       };
 
@@ -113,22 +119,36 @@ export class AnimationManager {
   }
 
   /**
-   * 指定したスプライトでアニメーションを再生します。
+   * 定義済みアニメーションのキー一覧を返します。
    */
-  public play(sprite: Sprite, key: string): void {
+  public hasKey(key: string): boolean {
+    return this._animKeyToIndex.has(key);
+  }
+
+  /**
+   * アリーナ ID を指定してアニメーションを再生します。
+   * @param id アリーナの ID
+   * @param key アニメーションキー
+   * @param ignoreIfPlaying true の場合、既に別のアニメーションを再生中なら何もしない
+   */
+  public play(id: number, key: string, ignoreIfPlaying = false): void {
     const animIndex = this._animKeyToIndex.get(key);
     if (animIndex === undefined) {
       console.warn(`Animation key not found: ${key}`);
       return;
     }
 
-    // すでに再生中のものがあれば上書き、なければ新規確保
+    // 再生中のスロットを探す (上限 maxAnims の走査で GC は発生しない)
     let playId = -1;
     for (let i = 0; i < this.capacity; i++) {
-      if (this.active[i] === 1 && this.entityId[i] === sprite.id) {
+      if (this.active[i] === 1 && this.entityId[i] === id) {
         playId = i;
         break;
       }
+    }
+
+    if (playId !== -1 && ignoreIfPlaying) {
+      return;
     }
 
     if (playId === -1) {
@@ -136,10 +156,7 @@ export class AnimationManager {
       playId = this.freeList[this.freeListHead++];
       this.active[playId] = 1;
       this._activeCount++;
-      this.entityId[playId] = sprite.id;
-
-      // uv更新のためにスプライト参照をキャッシュ
-      this._spriteMap.set(sprite.id, sprite);
+      this.entityId[playId] = id;
     }
 
     this.animId[playId] = animIndex;
@@ -149,8 +166,7 @@ export class AnimationManager {
 
     // 初期フレームを即座に適用
     const ptr = this.refFramesPtr[animIndex];
-    const frameNum = this._flatFrames[ptr];
-    sprite.setFrame(frameNum);
+    this._applyFrame(id, this._flatFrames[ptr]);
   }
 
   private free(id: number): void {
@@ -158,8 +174,28 @@ export class AnimationManager {
     this.active[id] = 0;
     this._activeCount--;
     this.freeList[--this.freeListHead] = id;
+  }
 
-    this._spriteMap.delete(this.entityId[id]);
+  /**
+   * アリーナ ID とシート内のコマ番号から UV を直接書き換えます。
+   * Sprite オブジェクトを生成しないため、参照を一切保持せずに済みます。
+   */
+  private _applyFrame(id: number, frameNum: number): void {
+    const idx = this._arena.idToIndex[id];
+    if (idx < 0) return;
+
+    const asset = this._arena.assetRef[idx];
+    const frames = asset?.frames;
+    if (!frames || frames.length === 0) return;
+    if (frameNum < 0 || frameNum >= frames.length) return;
+
+    const f = frames[frameNum];
+    this._arena.uvX[idx] = f.uvX;
+    this._arena.uvY[idx] = f.uvY;
+    this._arena.uvW[idx] = f.uvW;
+    this._arena.uvH[idx] = f.uvH;
+    this._arena.srcFrame[idx] = frameNum;
+    this._arena.dirtyUv = true;
   }
 
   public update(dt: number): void {
@@ -170,7 +206,7 @@ export class AnimationManager {
 
       const eId = this.entityId[i];
       if (eId < 0 || this._arena.idToIndex[eId] < 0) {
-        // エンティティが死んでいればアニメーションも終了
+        // エンティティが破棄されたのでアニメーションも終了
         this.free(i);
         continue;
       }
@@ -180,7 +216,6 @@ export class AnimationManager {
 
       this.elapsed[i] += dt;
 
-      // フレームが切り替わるかチェック
       if (this.elapsed[i] >= duration) {
         this.elapsed[i] -= duration;
 
@@ -189,32 +224,36 @@ export class AnimationManager {
 
         let isEnded = false;
 
-        // アニメーションの末尾に達したか
         if (this.currentFrameIdx[i] >= len) {
           const maxRepeat = this.refRepeat[aId];
           if (maxRepeat === -1) {
-            // 無限ループ
             this.currentFrameIdx[i] = 0;
           } else if (this.repeatCount[i] < maxRepeat) {
-            // リピート回数内
             this.repeatCount[i]++;
             this.currentFrameIdx[i] = 0;
           } else {
-            // 終了
             isEnded = true;
           }
         }
 
         if (!isEnded) {
           const ptr = this.refFramesPtr[aId] + this.currentFrameIdx[i];
-          const frameNum = this._flatFrames[ptr];
-          const sprite = this._spriteMap.get(eId);
-          if (sprite) {
-            sprite.setFrame(frameNum);
-          }
+          this._applyFrame(eId, this._flatFrames[ptr]);
         } else {
           this.free(i);
         }
+      }
+    }
+  }
+
+  /**
+   * 特定のアリーナ ID の再生を停止します。
+   */
+  public stop(id: number): void {
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.entityId[i] === id) {
+        this.free(i);
+        return;
       }
     }
   }
@@ -223,7 +262,6 @@ export class AnimationManager {
     this._activeCount = 0;
     this.freeListHead = 0;
     this.active.fill(0);
-    this._spriteMap.clear();
     for (let i = 0; i < this.capacity; i++) {
       this.freeList[i] = i;
     }

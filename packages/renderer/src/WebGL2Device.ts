@@ -20,27 +20,36 @@ layout(location = 2) in float posX;
 layout(location = 3) in float posY;
 layout(location = 4) in float scale;
 layout(location = 5) in float facing;
-layout(location = 6) in float uvX;
-layout(location = 7) in float uvY;
-layout(location = 8) in float uvW;
-layout(location = 9) in float uvH;
-layout(location = 10) in float layerDepth;
-layout(location = 11) in float frameIdx;
-layout(location = 12) in vec4 tint;
+layout(location = 6) in float rotation;
+layout(location = 7) in float layerDepth;
+layout(location = 8) in float uvX;
+layout(location = 9) in float uvY;
+layout(location = 10) in float uvW;
+layout(location = 11) in float uvH;
+layout(location = 12) in float frameIdx;
+layout(location = 13) in vec4 tint;
+// 1.0 のインスタンスは SDF テキスト。0.0 は通常のスプライト。
+layout(location = 14) in float isText;
 
 uniform mat4 projectionMatrix;
 
 out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
+out float vIsText;
 
 void main() {
-    vec2 scaledPos = vec2(vertexPos.x * scale * facing, vertexPos.y * scale);
-    vec2 worldPos = scaledPos + vec2(posX, posY);
+    // 頂点を中心に scale してから rotation  만큼 回す
+    vec2 scaled = vertexPos * scale;
+    float c = cos(rotation);
+    float s = sin(rotation);
+    vec2 rotated = vec2(scaled.x * c - scaled.y * s, scaled.x * s + scaled.y * c);
+    vec2 worldPos = vec2(rotated.x * facing, rotated.y) + vec2(posX, posY);
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
     vUV = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
     vLayer = frameIdx;
     vTint = tint;
+    vIsText = isText;
 }
 `;
 
@@ -52,16 +61,29 @@ const SPRITE_FRAG_GLSL = `#version 300 es
 precision highp float;
 
 uniform highp sampler2DArray textureArray;
+// SDF の輪郭位置。0.5 がグリフの縁に対応します。
+uniform float sdfThreshold;
+// 輪郭をぼかす幅 (0.0 はハードエッジ)
+uniform float sdfSmoothing;
 
 in vec2 vUV;
 in float vLayer;
 in vec4 vTint;
+// 1.0 のインスタンスは SDF テキストとして扱います。
+in float vIsText;
 
 out vec4 fragColor;
 
 void main() {
     vec4 texColor = texture(textureArray, vec3(vUV, vLayer));
-    fragColor = texColor * vTint;
+    // 通常のスプライトはテクスチャの色をそのまま使います。
+    // テキスト (isText = 1) だけ距離場を閾値で切り、輪郭を滑らかにします。
+    if (vIsText > 0.5) {
+        float alpha = smoothstep(sdfThreshold - sdfSmoothing, sdfThreshold + sdfSmoothing, texColor.r);
+        fragColor = vec4(vTint.rgb, vTint.a * alpha);
+    } else {
+        fragColor = texColor * vTint;
+    }
 }
 `;
 
@@ -70,6 +92,8 @@ export class WebGL2Device implements GraphicsDevice {
   private currentPipeline: WebGLProgram | null = null;
 
   private spritePipeline: PipelineInfo | null = null;
+  /** setupInstancedAttributes で使うバッファ表。クロージャを new しないため保持します。 */
+  private _boundBuffers: Record<string, BufferInfo> = {};
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
 
@@ -81,8 +105,18 @@ export class WebGL2Device implements GraphicsDevice {
   private textures: Map<string, TextureAsset> = new Map();
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
-    const gl = (canvas.getContext('webgl2') ||
-      canvas.getContext('experimental-webgl2')) as WebGL2RenderingContext | null;
+    // preserveDrawingBuffer は既定で無効です。このままだと
+    // 合成後の描画バッファが破棄されるため、.canvas へ drawImage しても
+    // 透明な 0 が返り、描画の有無を自動テストで判定できません。
+    // URL に ?preserveDrawingBuffer を付けたときだけ有効化します
+    // (通常の実行では性能に影響しません)。
+    const params =
+      typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    const attributes: WebGLContextAttributes = {
+      preserveDrawingBuffer: params?.has('preserveDrawingBuffer') ?? false,
+    };
+    const gl = (canvas.getContext('webgl2', attributes) ||
+      canvas.getContext('experimental-webgl2', attributes)) as WebGL2RenderingContext | null;
     if (!gl) {
       throw new Error('WebGL2 is not supported');
     }
@@ -253,11 +287,30 @@ export class WebGL2Device implements GraphicsDevice {
     return { buffer, size };
   }
 
-  updateBuffer(bufferInfo: BufferInfo, data: Float32Array | Uint32Array | Uint8Array): void {
+  /**
+   * SoA 配列を GPU へ転送します。
+   *
+   * `TypedArray.prototype.subarray()` は呼び出しごとに新しいビューオブジェクトを
+   * ヒープへ確保するため、毎フレーム呼ぶとゼロアロケーションの掟に反します。
+   * WebGL2 の bufferSubData は srcOffset / length を受け取れるため、
+   * 配列全体と範囲だけを渡し、ビュー生成を完全に排除します。
+   */
+  updateBuffer(
+    bufferInfo: BufferInfo,
+    data: Float32Array | Uint32Array | Uint8Array,
+    srcOffset = 0,
+    length?: number,
+  ): void {
     if (!this.gl) throw new Error('Device not initialized');
     const buffer = bufferInfo.buffer as WebGLBuffer;
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
-    this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, data);
+    this.gl.bufferSubData(
+      this.gl.ARRAY_BUFFER,
+      0,
+      data,
+      srcOffset,
+      length ?? data.length - srcOffset,
+    );
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
   }
 
@@ -268,7 +321,7 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
-  bindShaders(): void {
+  bindShaders(sdfThreshold = 0.5, sdfSmoothing = 0.08): void {
     if (this.spritePipeline && this.gl) {
       this.bindPipeline(this.spritePipeline);
       // Texture2DArray をバインド
@@ -279,6 +332,11 @@ export class WebGL2Device implements GraphicsDevice {
       if (loc !== null) {
         this.gl.uniform1i(loc, 0);
       }
+      // SDF テキスト用の閾値。uniform を忘れると未定義値になりグリフが消えます。
+      const t = this.gl.getUniformLocation(program, 'sdfThreshold');
+      if (t !== null) this.gl.uniform1f(t, sdfThreshold);
+      const s = this.gl.getUniformLocation(program, 'sdfSmoothing');
+      if (s !== null) this.gl.uniform1f(s, sdfSmoothing);
     }
   }
 
@@ -293,46 +351,54 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.enableVertexAttribArray(1);
     this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
 
-    const bindInstancedAttr = (loc: number, bufName: string, size: number) => {
-      const b = buffers[bufName];
-      if (b && this.gl) {
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-        this.gl.enableVertexAttribArray(loc);
-        this.gl.vertexAttribPointer(loc, size, this.gl.FLOAT, false, 0, 0);
-        this.gl.vertexAttribDivisor(loc, 1);
-      }
-    };
+    this._boundBuffers = buffers;
+    this._bindAttr(2, 'posX');
+    this._bindAttr(3, 'posY');
+    this._bindAttr(4, 'scale');
+    this._bindAttr(6, 'rotation');
+    this._bindAttr(7, 'depth');
 
-    const setDef1f = (loc: number, bufName: string, def: number) => {
-      if (buffers[bufName]) {
-        bindInstancedAttr(loc, bufName, 1);
-      } else if (this.gl) {
-        this.gl.disableVertexAttribArray(loc);
-        this.gl.vertexAttrib1f(loc, def);
-      }
-    };
-
-    bindInstancedAttr(2, 'posX', 1);
-    bindInstancedAttr(3, 'posY', 1);
-    bindInstancedAttr(4, 'scale', 1);
-
-    setDef1f(5, 'facing', 1.0);
-    setDef1f(6, 'uvX', 0.0);
-    setDef1f(7, 'uvY', 0.0);
-    setDef1f(8, 'uvW', 1.0);
-    setDef1f(9, 'uvH', 1.0);
-    setDef1f(10, 'layerDepth', 0.0);
-    setDef1f(11, 'frameIdx', 0.0);
+    this._setDefault(5, 'facing', 1.0);
+    this._setDefault(8, 'uvX', 0.0);
+    this._setDefault(9, 'uvY', 0.0);
+    this._setDefault(10, 'uvW', 1.0);
+    this._setDefault(11, 'uvH', 1.0);
+    this._setDefault(12, 'frameIdx', 0.0);
 
     if (buffers['tint']) {
       const b = buffers['tint'];
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-      this.gl.enableVertexAttribArray(12);
-      this.gl.vertexAttribPointer(12, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
-      this.gl.vertexAttribDivisor(12, 1);
+      this.gl.enableVertexAttribArray(13);
+      this.gl.vertexAttribPointer(13, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
+      this.gl.vertexAttribDivisor(13, 1);
     } else {
-      this.gl.disableVertexAttribArray(12);
-      this.gl.vertexAttrib4f(12, 1.0, 1.0, 1.0, 1.0);
+      this.gl.disableVertexAttribArray(13);
+      this.gl.vertexAttrib4f(13, 1.0, 1.0, 1.0, 1.0);
+    }
+
+    // 14: isText (SDF テキストか否か)
+    this._bindAttr(14, 'isText');
+  }
+
+  /** 単一スカラー属性をインスタンス属性としてバインドします。 */
+  private _bindAttr(loc: number, bufName: string): void {
+    if (!this.gl) return;
+    const b = this._boundBuffers[bufName];
+    if (b) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
+      this.gl.enableVertexAttribArray(loc);
+      this.gl.vertexAttribPointer(loc, 1, this.gl.FLOAT, false, 0, 0);
+      this.gl.vertexAttribDivisor(loc, 1);
+    }
+  }
+
+  /** バッファが無い属性は定数へバインドします (無効化しません)。 */
+  private _setDefault(loc: number, bufName: string, def: number): void {
+    if (this._boundBuffers[bufName]) {
+      this._bindAttr(loc, bufName);
+    } else if (this.gl) {
+      this.gl.disableVertexAttribArray(loc);
+      this.gl.vertexAttrib1f(loc, def);
     }
   }
 

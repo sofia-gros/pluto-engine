@@ -17,10 +17,13 @@
       "name": "pluto-engine-demo",
       "version": "0.1.0",
       "dependencies": {
+        "@pluto-engine/ai": "workspace:*",
+        "@pluto-engine/audio": "workspace:*",
         "@pluto-engine/core": "workspace:*",
         "@pluto-engine/morton": "workspace:*",
         "@pluto-engine/poisson": "workspace:*",
         "@pluto-engine/renderer": "workspace:*",
+        "@pluto-engine/sdf-collider": "workspace:*",
         "@pluto-engine/xpbd": "workspace:*",
         "chart.js": "^4.5.1",
       },
@@ -40,7 +43,7 @@
     },
     "packages/ai": {
       "name": "@pluto-engine/ai",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -52,7 +55,7 @@
     },
     "packages/audio": {
       "name": "@pluto-engine/audio",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -61,9 +64,21 @@
         "typescript": "^5.6.0",
       },
     },
+    "packages/continuum": {
+      "name": "@pluto-engine/continuum",
+      "version": "1.1.0",
+      "dependencies": {
+        "@pluto-engine/core": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "^8.2.0",
+        "typescript": "^5.6.0",
+        "vitest": "^2.1.1",
+      },
+    },
     "packages/core": {
       "name": "@pluto-engine/core",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/renderer": "workspace:*",
       },
@@ -74,7 +89,7 @@
     },
     "packages/morton": {
       "name": "@pluto-engine/morton",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -86,9 +101,10 @@
     },
     "packages/pluto": {
       "name": "pluto-engine",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/ai": "workspace:*",
+        "@pluto-engine/continuum": "workspace:*",
         "@pluto-engine/core": "workspace:*",
         "@pluto-engine/morton": "workspace:*",
         "@pluto-engine/poisson": "workspace:*",
@@ -105,7 +121,7 @@
     },
     "packages/poisson": {
       "name": "@pluto-engine/poisson",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -117,7 +133,7 @@
     },
     "packages/renderer": {
       "name": "@pluto-engine/renderer",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -134,7 +150,7 @@
     },
     "packages/sdf-collider": {
       "name": "@pluto-engine/sdf-collider",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -146,7 +162,7 @@
     },
     "packages/verlet-ik": {
       "name": "@pluto-engine/verlet-ik",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -158,7 +174,7 @@
     },
     "packages/vite-plugin-wgsl": {
       "name": "@pluto-engine/vite-plugin-wgsl",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "devDependencies": {
         "tsup": "^8.0.0",
         "typescript": "^5.0.0",
@@ -170,7 +186,7 @@
     },
     "packages/xpbd": {
       "name": "@pluto-engine/xpbd",
-      "version": "1.0.8",
+      "version": "1.1.0",
       "dependencies": {
         "@pluto-engine/core": "workspace:*",
       },
@@ -345,6 +361,8 @@
     "@pluto-engine/ai": ["@pluto-engine/ai@workspace:packages/ai"],
 
     "@pluto-engine/audio": ["@pluto-engine/audio@workspace:packages/audio"],
+
+    "@pluto-engine/continuum": ["@pluto-engine/continuum@workspace:packages/continuum"],
 
     "@pluto-engine/core": ["@pluto-engine/core@workspace:packages/core"],
 

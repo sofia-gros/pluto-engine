@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@pluto-engine/ai": "workspace:*",
+    "@pluto-engine/continuum": "workspace:*",
     "@pluto-engine/core": "workspace:*",
     "@pluto-engine/morton": "workspace:*",
     "@pluto-engine/poisson": "workspace:*",

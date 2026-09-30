@@ -46,6 +46,44 @@ export class MainScene extends Scene {
 エンティティを生成するためのファクトリです。
 - `this.add.sprite(x, y, texture)`
 - `this.add.text(x, y, text, style)`
+- `this.add.tilemap(mapData, tileSize)`
+- `this.add.container(x, y, children)` — 複数のスプライトをまとめて動かす親を作ります
+
+### ゼロコスト・サブシステム
+
+`tweens` / `anim` / `particles` / `physics` は**初回の参照時にだけ生成**され、
+その瞬間にサブシステムのビットが立ちます。生成される前から
+更新ループに現れないため、使っていない機能のコストはゼロです。
+
+```typescript
+// まだ作られていない。ビットも立っていない。
+console.log(scene.hasSubsystem(Subsystem.Tweens)); // false
+
+// 初めて参照した瞬間に生成され、ビットが立つ。
+scene.tweens.add(/* ... */);
+console.log(scene.hasSubsystem(Subsystem.Tweens)); // true
+```
+
+定義は `@pluto-engine/core` の `Subsystem` から import できます。
+`scene.activeSubsystems` で現在有効なビットをまとめて取得できます。
+
+### `this.events` (EventEmitter)
+シーン内イベントバスです。emit 中も安全に購読を解除できます。
+```typescript
+const dispose = this.events.on('player-died', () => { /* ... */ });
+this.events.emit('player-died', payload);
+dispose();
+```
+
+### `this.registry` (DataRegistry)
+シーンを跨いで値を保持するデータストアです。
+数値は `Float64Array` へ遅延確保されるため、毎フレームの文字列検索が発生しません。
+```typescript
+this.registry.setFloat('progress', 'stage', 3);
+this.registry.addFloat('score', 'total', 120);
+const stage = this.registry.getFloat('progress', 'stage'); // 3
+```
+`SceneManager` に登録されたシーンは同一のストアを共有します。
 
 ### `this.load` (LoaderManager)
 アセットを非同期でロードするためのマネージャーです。プリロードフェーズで使用します。

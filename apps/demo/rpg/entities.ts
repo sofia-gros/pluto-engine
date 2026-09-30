@@ -7,6 +7,7 @@
  */
 
 import type { Scene, Sprite } from '@pluto-engine/core';
+import { MonsterAction, type MonsterUtilityAI } from './ai';
 import { rpgAudio } from './audio';
 import type { RPGWorld } from './world';
 
@@ -107,6 +108,9 @@ export class Player {
   public world: RPGWorld;
   public sprite: Sprite;
   public slashSprite: Sprite;
+
+  /** 移動の書き込み先。毎フレーム new しないため共有します。 */
+  private static readonly _moveOut = new Float32Array(2);
 
   public x = 22 * 32 + 16;
   public y = 24 * 32 + 16;
@@ -221,17 +225,18 @@ export class Player {
 
       if (nx !== 0) this.facing = nx > 0 ? 1 : -1;
 
-      const nextX = this.x + nx * speed * dt;
-      const nextY = this.y + ny * speed * dt;
-
-      // X 方向の衝突判定
-      if (!this.world.isBlocked(nextX, this.y, this.radius)) {
-        this.x = nextX;
-      }
-      // Y 方向の衝突判定
-      if (!this.world.isBlocked(this.x, nextY, this.radius)) {
-        this.y = nextY;
-      }
+      // SDF の法線へ移動を射影し、壁に沿って滑らかに滑ります。
+      // X/Y 軸分離の AABB 判定では角で移動が止まってしまいます。
+      this.world.slideMove(
+        this.x,
+        this.y,
+        this.radius,
+        nx * speed * dt,
+        ny * speed * dt,
+        Player._moveOut,
+      );
+      this.x = Player._moveOut[0];
+      this.y = Player._moveOut[1];
     }
 
     this.sprite.x = this.x;
@@ -487,9 +492,14 @@ export class Monster {
   public sprite: Sprite;
   public facing = 1;
 
-  // AI Timers (Phaser-style State Machine)
-  public state: 'idle' | 'aggro' | 'attack' | 'dead' = 'idle';
+  // Utility AI 用のインデックスと参照。
+  // 遷移グラフは持たず、SoA で採点された結果を行動として使います。
+  public aiIndex = 0;
+  public aiRef: MonsterUtilityAI | null = null;
+
+  /** 攻撃間隔 (秒) */
   public actionTimer = 0;
+  /** 索敵の開始距離。Utility AI の giveUpRange と対になる値です */
   public aggroRange = 260;
   public isBoss = false;
 
@@ -565,61 +575,70 @@ export class Monster {
 
     this.actionTimer -= dt;
 
-    if (dist < this.aggroRange) {
-      this.state = 'aggro';
-      this.facing = dx > 0 ? 1 : -1;
+    // 行動は SoA Utility AI が決めています。
+    // 遷移グラフを個体に持たせないため、個体追加が他へ影響しません。
+    const action =
+      this.aiRef !== null ? this.aiRef.actionOf(this.aiIndex) : MonsterAction.Idle;
 
-      if (this.type === 'skeleton' && dist < 160) {
-        // スケルトンは距離を取って射撃
-        const nx = -dx / dist;
-        const ny = -dy / dist;
-        const nextX = this.x + nx * this.speed * dt;
-        const nextY = this.y + ny * this.speed * dt;
-        if (!world.isBlocked(nextX, nextY, this.radius)) {
-          this.x = nextX;
-          this.y = nextY;
-        }
-      } else {
-        // 接近
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const nextX = this.x + nx * this.speed * dt;
-        const nextY = this.y + ny * this.speed * dt;
-        if (!world.isBlocked(nextX, this.y, this.radius)) this.x = nextX;
-        if (!world.isBlocked(this.x, nextY, this.radius)) this.y = nextY;
-      }
+    const invDist = dist > 1e-4 ? 1.0 / dist : 0;
+    const nx = dx * invDist;
+    const ny = dy * invDist;
 
-      // 遠距離攻撃
-      if (this.type === 'skeleton' && this.actionTimer <= 0) {
-        this.actionTimer = 2.0;
-        const spd = 200;
-        return {
-          shoot: {
-            x: this.x,
-            y: this.y,
-            vx: (dx / dist) * spd,
-            vy: (dy / dist) * spd,
-            damage: this.atk,
-          },
-        };
-      }
+    // 移動は選択された行動に応じます
+    let moveX = 0;
+    let moveY = 0;
+    switch (action) {
+      case MonsterAction.Chase:
+        moveX = nx;
+        moveY = ny;
+        break;
+      case MonsterAction.Retreat:
+        // プレイヤーから離れる
+        moveX = -nx;
+        moveY = -ny;
+        break;
+      case MonsterAction.KeepDistance:
+        // 近づきすぎない (スケルトン・ボスの射撃陣形)
+        moveX = -nx;
+        moveY = -ny;
+        break;
+      case MonsterAction.Attack:
+        // 攻撃行動では足止め
+        moveX = 0;
+        moveY = 0;
+        break;
+      case MonsterAction.Idle:
+      default:
+        moveX = 0;
+        moveY = 0;
+        break;
+    }
 
-      // ボスの範囲攻撃
-      if (this.isBoss && this.actionTimer <= 0) {
-        this.actionTimer = 2.5;
-        const spd = 180;
-        return {
-          shoot: {
-            x: this.x,
-            y: this.y,
-            vx: (dx / dist) * spd,
-            vy: (dy / dist) * spd,
-            damage: this.atk,
-          },
-        };
-      }
-    } else {
-      this.state = 'idle';
+    if (moveX !== 0 || moveY !== 0) {
+      this.facing = moveX > 0 ? 1 : -1;
+      const nextX = this.x + moveX * this.speed * dt;
+      const nextY = this.y + moveY * this.speed * dt;
+      if (!world.isBlocked(nextX, this.y, this.radius)) this.x = nextX;
+      if (!world.isBlocked(this.x, nextY, this.radius)) this.y = nextY;
+    }
+
+      // 距離に関係なく発射します
+    if (
+      (this.type === 'skeleton' || this.isBoss) &&
+      this.actionTimer <= 0 &&
+      dist > 1e-4
+    ) {
+      this.actionTimer = this.isBoss ? 2.5 : 2.0;
+      const spd = this.isBoss ? 180 : 200;
+      return {
+        shoot: {
+          x: this.x,
+          y: this.y,
+          vx: nx * spd,
+          vy: ny * spd,
+          damage: this.atk,
+        },
+      };
     }
 
     this.sprite.x = this.x;
@@ -638,7 +657,8 @@ export class Monster {
     this.y += knockY * factor;
 
     if (this.hp <= 0) {
-      this.state = 'dead';
+      // FSM を廃したので state フラグは持ちません。
+      // 死亡は hp <= 0 だけで表現されます。
       this.sprite.destroy();
       return true; // 死亡
     }

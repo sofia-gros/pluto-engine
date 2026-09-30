@@ -14,7 +14,9 @@
     "@pluto-engine/poisson": "workspace:*",
     "@pluto-engine/renderer": "workspace:*",
     "@pluto-engine/xpbd": "workspace:*",
-    "chart.js": "^4.5.1"
+    "chart.js": "^4.5.1",
+    "@pluto-engine/sdf-collider": "workspace:*",
+    "@pluto-engine/ai": "workspace:*"
   },
   "devDependencies": {
     "@pluto-engine/vite-plugin-wgsl": "workspace:*",

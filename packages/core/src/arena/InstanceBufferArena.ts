@@ -4,7 +4,36 @@
  * ゼロアロケーションのための SoA (Structure of Arrays) アリーナ。
  * Sparse Set (Swap-Remove) パターンを導入し、アクティブなエンティティが常に 0〜activeCount-1 に密(Dense)に配置されるようにします。
  * また、Dirty Flag を用いて変更があった属性のみをGPUに転送します。
+ *
+ * 設計上の掟:
+ *  - コンストラクタ以外ではヒープメモリを一切確保しません。
+ *  - 親子関係はネストした木ではなく
+ *    SoA の parentId 配列で表します。
+ *  - computeWorldTransforms() が
+ *    ローカル座標をワールド座標へ畳み込みます。
  */
+
+/**
+ * スプライトが参照するテクスチャアセットの最小インターフェース。
+ * 実体は TextureManager / LoaderManager が保持する TextureAsset。
+ */
+export interface SpriteAssetLike {
+  /** GPU Texture2DArray のレイヤーインデックス */
+  layerIndex?: number;
+  width?: number;
+  height?: number;
+  /** スプライトシート内のフレーム UV */
+  frames?: { uvX: number; uvY: number; uvW: number; uvH: number }[];
+  /** ラッパー構造で保持されている場合の互換フィールド */
+  textureAsset?: SpriteAssetLike;
+}
+
+/**
+ * アリーナがアニメーション再生を委譲するための最小インターフェース (AnimationManager が実装)。
+ */
+export interface AnimPlayTarget {
+  play(id: number, key: string, ignoreIfPlaying?: boolean): void;
+}
 
 export class InstanceBufferArena {
   public readonly capacity: number;
@@ -16,18 +45,47 @@ export class InstanceBufferArena {
   public readonly rotation: Float32Array;
   public readonly scale: Float32Array;
   public readonly facing: Float32Array;
+  public readonly depth: Float32Array;
   public readonly uvX: Float32Array;
   public readonly uvY: Float32Array;
   public readonly uvW: Float32Array;
   public readonly uvH: Float32Array;
   public readonly frameIdx: Float32Array;
   public readonly tint: Uint32Array;
+  /**
+   * 1.0 のインスタンスは SDF テキストとして描画します。
+   * 0.0 は通常のスプライトです。
+   * 頂点属性 14 として渡し、フラグメントシェーダーで描画方式を分岐させます。
+   */
+  public readonly isText: Float32Array;
 
-  // --- Hierarchy ---
+  /**
+   * `frameIdx` は GPU のテクスチャーアレイ・レイヤーIDを保持する。
+   * 同一レイヤー内での「どのコマか」は `srcFrame` が担当する (2バイトで済むため Uint16Array)。
+   */
+  public readonly srcFrame: Uint16Array;
+
+  /**
+   * SoA 内の「参照」を保持する密配列。
+   * Sprite インスタンス側 (Flyweight) にアセット参照を持たせ aesthetically 32Byte を守るために、
+   * 参照はここへ集約する。Flyweight パターンの純度を保つための「SoA 版フィールド」。
+   */
+  public readonly assetRef: (SpriteAssetLike | null)[];
+
+  // --- Hierarchy (SoA Scene Graph) ---
+  /** 親の Sprite ID。-1 ならルート。 */
   public readonly parentId: Int32Array;
+  /** 親から見たローカル位置 (parentId >= 0 のときだけ使用) */
   public readonly localX: Float32Array;
   public readonly localY: Float32Array;
   public readonly localRotation: Float32Array;
+  /** computeWorldTransforms() の出力 (親から見た変換を畳み込んだワールド座標) */
+  public readonly worldX: Float32Array;
+  public readonly worldY: Float32Array;
+  public readonly worldRotation: Float32Array;
+  /** メモ化による階層解決の訪問スタンプ (フレーム毎に単調増加) */
+  private readonly _resolvedStamp: Int32Array;
+  private _stamp = 0;
 
   // --- Interaction ---
   public readonly interactive: Uint8Array;
@@ -42,14 +100,33 @@ export class InstanceBufferArena {
 
   // --- Dirty Flags (属性ごとの変更検知) ---
   public dirtyPos = true;
+  public dirtyRotation = true;
   public dirtyScale = true;
   public dirtyUv = true;
   public dirtyFrameIdx = true;
   public dirtyTint = true;
+  public dirtyDepth = true;
+  public dirtyHierarchy = true;
 
   // --- Free List (IDの再利用管理) ---
   private readonly freeList: Int32Array;
   private freeListHead = 0;
+
+  /** アニメーション再生の委譲先。Scene 構築時に差し込まれる。 */
+  public animTracker: AnimPlayTarget | null = null;
+
+  /**
+   * 親子関係を持つエンティティが 1 体でも存在するかどうか。
+   * false の間はワールド変換の解決を丸ごと省略できます。
+   * ゲームが直接 posX を書き換える運用にも影響しないため、このフラグで経路を分けます。
+   */
+  public hasHierarchy = false;
+
+  /**
+   * SDF テキストのインスタンスが 1 つでも存在するかどうか。
+   * false の間は isText バッファの転送を丸ごと省略できます。
+   */
+  public hasText = false;
 
   constructor(maxInstances: number) {
     this.capacity = maxInstances;
@@ -60,17 +137,27 @@ export class InstanceBufferArena {
     this.rotation = new Float32Array(maxInstances);
     this.scale = new Float32Array(maxInstances);
     this.facing = new Float32Array(maxInstances);
+    this.depth = new Float32Array(maxInstances);
     this.uvX = new Float32Array(maxInstances);
     this.uvY = new Float32Array(maxInstances);
     this.uvW = new Float32Array(maxInstances);
     this.uvH = new Float32Array(maxInstances);
     this.frameIdx = new Float32Array(maxInstances);
     this.tint = new Uint32Array(maxInstances);
+    this.isText = new Float32Array(maxInstances);
+    this.srcFrame = new Uint16Array(maxInstances);
+
+    // 参照を保持する密配列は new Array を1度だけ行う。.push() は使わない。
+    this.assetRef = new Array<SpriteAssetLike | null>(maxInstances).fill(null);
 
     this.parentId = new Int32Array(maxInstances).fill(-1);
     this.localX = new Float32Array(maxInstances);
     this.localY = new Float32Array(maxInstances);
     this.localRotation = new Float32Array(maxInstances);
+    this.worldX = new Float32Array(maxInstances);
+    this.worldY = new Float32Array(maxInstances);
+    this.worldRotation = new Float32Array(maxInstances);
+    this._resolvedStamp = new Int32Array(maxInstances);
 
     this.interactive = new Uint8Array(maxInstances);
     this.hitWidth = new Float32Array(maxInstances);
@@ -101,21 +188,26 @@ export class InstanceBufferArena {
     this.rotation[idx] = 0.0;
     this.scale[idx] = 1.0;
     this.facing[idx] = 1.0;
+    this.depth[idx] = 0.0;
+    this.frameIdx[idx] = 0.0;
+    this.srcFrame[idx] = 0;
     this.tint[idx] = 0xffffffff;
+    this.isText[idx] = 0.0;
+    this.assetRef[idx] = null;
     this.parentId[idx] = -1;
     this.localX[idx] = 0.0;
     this.localY[idx] = 0.0;
     this.localRotation[idx] = 0.0;
+    this.worldX[idx] = 0.0;
+    this.worldY[idx] = 0.0;
+    this.worldRotation[idx] = 0.0;
+    this._resolvedStamp[idx] = 0;
     this.interactive[idx] = 0;
     this.hitWidth[idx] = 0.0;
     this.hitHeight[idx] = 0.0;
 
     // Allocate時に全属性が変更されるためDirtyフラグを立てる
-    this.dirtyPos = true;
-    this.dirtyScale = true;
-    this.dirtyUv = true;
-    this.dirtyFrameIdx = true;
-    this.dirtyTint = true;
+    this.markAllDirty();
 
     return id;
   }
@@ -137,16 +229,24 @@ export class InstanceBufferArena {
       this.rotation[idx] = this.rotation[lastIdx];
       this.scale[idx] = this.scale[lastIdx];
       this.facing[idx] = this.facing[lastIdx];
+      this.depth[idx] = this.depth[lastIdx];
       this.uvX[idx] = this.uvX[lastIdx];
       this.uvY[idx] = this.uvY[lastIdx];
       this.uvW[idx] = this.uvW[lastIdx];
       this.uvH[idx] = this.uvH[lastIdx];
       this.frameIdx[idx] = this.frameIdx[lastIdx];
       this.tint[idx] = this.tint[lastIdx];
+      this.isText[idx] = this.isText[lastIdx];
+      this.srcFrame[idx] = this.srcFrame[lastIdx];
+      this.assetRef[idx] = this.assetRef[lastIdx];
       this.parentId[idx] = this.parentId[lastIdx];
       this.localX[idx] = this.localX[lastIdx];
       this.localY[idx] = this.localY[lastIdx];
       this.localRotation[idx] = this.localRotation[lastIdx];
+      this.worldX[idx] = this.worldX[lastIdx];
+      this.worldY[idx] = this.worldY[lastIdx];
+      this.worldRotation[idx] = this.worldRotation[lastIdx];
+      this._resolvedStamp[idx] = this._resolvedStamp[lastIdx];
       this.interactive[idx] = this.interactive[lastIdx];
       this.hitWidth[idx] = this.hitWidth[lastIdx];
       this.hitHeight[idx] = this.hitHeight[lastIdx];
@@ -159,14 +259,127 @@ export class InstanceBufferArena {
     this.indexToId[lastIdx] = -1;
     this._activeCount--;
 
+    // 参照を明示的に解放し、TextureAsset を後から破棄できるようにする
+    this.assetRef[idx] = null;
+
     // データ配列がずれるためDirtyフラグを立てる
+    this.markAllDirty();
+
+    this.freeList[--this.freeListHead] = id;
+  }
+
+  /**
+   * 全 Dirty Flag を立てます。allocate / free のようにデータ順序が変わる操作後に呼びます。
+   */
+  public markAllDirty(): void {
     this.dirtyPos = true;
+    this.dirtyRotation = true;
     this.dirtyScale = true;
     this.dirtyUv = true;
     this.dirtyFrameIdx = true;
     this.dirtyTint = true;
+    this.dirtyDepth = true;
+    this.dirtyHierarchy = true;
+  }
 
-    this.freeList[--this.freeListHead] = id;
+  /**
+   * SoA シーングラフの変換を 1 パスで解決します。
+   * ネストしたオブジェクト木は作りません。
+   * インデックス配列と再帰で解決します。
+   * 親を先に解決したかどうかはスタンプで判定します。
+   * ヒープ割り当ては発生しません。
+   * 再帰の深さは階層と同じで、浅くなります。
+   */
+  public computeWorldTransforms(): void {
+    this._stamp++;
+
+    // まずルートをすべて確定させる (親なし = ワールド = ローカル)
+    for (let i = 0; i < this._activeCount; i++) {
+      if (this.parentId[i] < 0) {
+        this.worldX[i] = this.posX[i];
+        this.worldY[i] = this.posY[i];
+        this.worldRotation[i] = this.rotation[i];
+        this._resolvedStamp[i] = this._stamp;
+      }
+    }
+
+    // 親子在親より後に現れていても、メモ化により親を先に解決してから合成する
+    for (let i = 0; i < this._activeCount; i++) {
+      if (this._resolvedStamp[i] === this._stamp) continue;
+      this._resolveWorld(i, 0);
+    }
+  }
+
+  /**
+   * 単一エンティティのワールド変換を解決します。
+   * 循環参照が存在する場合に備えて深さ上限を設けて無限再帰を防ぎます。
+   */
+  private _resolveWorld(idx: number, depth: number): void {
+    if (this._resolvedStamp[idx] === this._stamp) return;
+    // 循環参照 (depth === capacity) 時は親を無視してローカル座標をそのまま使う
+    if (depth >= this.capacity) {
+      this.worldX[idx] = this.posX[idx];
+      this.worldY[idx] = this.posY[idx];
+      this.worldRotation[idx] = this.rotation[idx];
+      this._resolvedStamp[idx] = this._stamp;
+      return;
+    }
+
+    const parentId = this.parentId[idx];
+    const parentIdx = this.idToIndex[parentId];
+    if (parentId < 0 || parentIdx < 0) {
+      this.worldX[idx] = this.posX[idx];
+      this.worldY[idx] = this.posY[idx];
+      this.worldRotation[idx] = this.rotation[idx];
+      this._resolvedStamp[idx] = this._stamp;
+      return;
+    }
+
+    this._resolveWorld(parentIdx, depth + 1);
+
+    // 親のワールド回転でローカル平行移動を回転させ、ワールド回転を加算する。
+    // スケールは意図的に継承しない (亲子で同一スケールを前提とする)。
+    const pRot = this.worldRotation[parentIdx];
+    const cos = Math.cos(pRot);
+    const sin = Math.sin(pRot);
+    const lx = this.localX[idx];
+    const ly = this.localY[idx];
+
+    this.worldX[idx] = this.worldX[parentIdx] + lx * cos - ly * sin;
+    this.worldY[idx] = this.worldY[parentIdx] + lx * sin + ly * cos;
+    this.worldRotation[idx] = pRot + this.localRotation[idx];
+    this._resolvedStamp[idx] = this._stamp;
+  }
+
+  /**
+   * ワールド座標に対してポインタの当たり判定 (AABB) を行います。
+   * 結果を `out` へ上から (後方インデックスから) 書き込むため、out[0] が常に手前のエンティティです。
+   * 階層を使っていない場合は posX / posY をそのまま判定座標として使います。
+   * @returns 書き込んだヒット数
+   */
+  public hitTest(px: number, py: number, out: Int32Array): number {
+    let count = 0;
+    const max = out.length;
+    const useWorld = this.hasHierarchy;
+    // 手前のエンティティを優先するため降順に走査する
+    for (let i = this._activeCount - 1; i >= 0; i--) {
+      if (this.interactive[i] === 0) continue;
+
+      const cx = useWorld ? this.worldX[i] : this.posX[i];
+      const cy = useWorld ? this.worldY[i] : this.posY[i];
+      const halfW = this.hitWidth[i] * 0.5;
+      const halfH = this.hitHeight[i] * 0.5;
+
+      if (px < cx - halfW || px > cx + halfW) continue;
+      if (py < cy - halfH || py > cy + halfH) continue;
+
+      if (count < max) {
+        out[count] = this.indexToId[i];
+        count++;
+        if (count >= max) break;
+      }
+    }
+    return count;
   }
 
   public get activeCount(): number {
@@ -179,8 +392,9 @@ export class InstanceBufferArena {
     this.idToIndex.fill(-1);
     this.indexToId.fill(-1);
     this.parentId.fill(-1);
-
+    this.hasHierarchy = false;
     for (let i = 0; i < this.capacity; i++) {
+      this.assetRef[i] = null;
       this.freeList[i] = i;
     }
   }

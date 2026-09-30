@@ -4,9 +4,13 @@
  * 2D クラシックRPGのワールドマップ構築・障害物管理。
  * 町（Plaza / Castle）、平原（Meadows / Forest）、ダンジョン（Ruins / Cavern）の
  * 3エリアをシームレスにつなぎ、AABBコリジョン判定を提供します。
+ *
+ * さらに 地形から SDF (符号付き距離場) を生成し、
+ * 壁の法線に沿って滑らかに移動できる経路 (角に引っかからない移動) も提供します。
  */
 
 import type { Scene, Sprite } from '@pluto-engine/core';
+import { SDFCollider } from '@pluto-engine/sdf-collider';
 
 export enum TileType {
   DEEP_WATER = 0,
@@ -38,6 +42,11 @@ export class RPGWorld {
   public readonly mapWidth = 90;
   public readonly mapHeight = 90;
   public readonly tileSize = 32;
+
+  /** 地形から生成した符号付き距離場。buildSDF() で構築します。 */
+  public sdf: SDFCollider | null = null;
+  /** slideMove() が使う作業バッファ。毎フレーム new しません。 */
+  private readonly _sdfScratch = new Float32Array(3);
 
   public readonly worldWidth: number;
   public readonly worldHeight: number;
@@ -349,6 +358,135 @@ export class RPGWorld {
       if (Math.abs(x - p.x) < hw && Math.abs(y - p.y) < hh) {
         return true;
       }
+    }
+
+    return false;
+  }
+
+  /**
+   * 地形とプロップから符号付き距離場を生成します。
+   * 一度だけ呼べばよく、以後は slideMove() が O(1) で判定します。
+   */
+  public buildSDF(): void {
+    // タイル 1 枚を 1 セルとする。壁の角でも十分な滑らかさを得られます。
+    const sdf = new SDFCollider(this.mapWidth, this.mapHeight, this.tileSize);
+
+    sdf.generate((wx, wy) => {
+      const tx = Math.floor(wx / this.tileSize);
+      const ty = Math.floor(wy / this.tileSize);
+      if (tx < 0 || tx >= this.mapWidth || ty < 0 || ty >= this.mapHeight) {
+        // マップ外は壁として扱う
+        return true;
+      }
+      return this.solidMap[ty * this.mapWidth + tx] === 1;
+    });
+
+    // プロップ障害物も距離場へ加算する (最も近い距離を優先)
+    for (let i = 0; i < this.props.length; i++) {
+      const p = this.props[i];
+      if (!p.solid) continue;
+      this._stampPropIntoSDF(sdf, p.x, p.y, p.width * 0.5, p.height * 0.5);
+    }
+
+    this.sdf = sdf;
+  }
+
+  /**
+   * 矩形の壁を 1 つのセルとして距離場へ書き込みます。
+   * セル単位の近似になるため、确な形状より角の滑らかさが取捨選択されます。
+   */
+  private _stampPropIntoSDF(
+    sdf: SDFCollider,
+    cx: number,
+    cy: number,
+    halfW: number,
+    halfH: number,
+  ): void {
+    const left = Math.max(0, Math.floor((cx - halfW) / this.tileSize));
+    const right = Math.min(
+      this.mapWidth - 1,
+      Math.floor((cx + halfW) / this.tileSize),
+    );
+    const top = Math.max(0, Math.floor((cy - halfH) / this.tileSize));
+    const bottom = Math.min(this.mapHeight - 1, Math.floor((cy + halfH) / this.tileSize));
+
+    for (let ty = top; ty <= bottom; ty++) {
+      for (let tx = left; tx <= right; tx++) {
+        sdf.setDistance(tx, ty, -this.tileSize);
+      }
+    }
+  }
+
+  /**
+   * 壁の法線に沿って滑らかに移動します。
+   *
+    * 素朴な X/Y 軸分離 AABB 判定では、角に斜めから当たると
+    * 安全な方向が残らず移動が止まってしまいます。
+    * ここでは移動ベクトルを SDF の法線へ射影することで、
+    * 壁に接触したまま滑れるようにします。
+   *
+   * @param out 長さ 2 以上の Float32Array [x, y]
+   * @returns 実際に移動したか
+   */
+  public slideMove(
+    x: number,
+    y: number,
+    radius: number,
+    dx: number,
+    dy: number,
+    out: Float32Array,
+  ): boolean {
+    out[0] = x;
+    out[1] = y;
+
+    // まず unobstructed ならそのまま移動する
+    if (!this.isBlocked(x + dx, y + dy, radius)) {
+      out[0] = x + dx;
+      out[1] = y + dy;
+      return true;
+    }
+
+    const sdf = this.sdf;
+    if (!sdf) {
+      // SDF が未構築なら X/Y 分離の従来 fallback を使う
+      if (!this.isBlocked(x + dx, y, radius)) out[0] = x + dx;
+      if (!this.isBlocked(out[0], y + dy, radius)) out[1] = y + dy;
+      return out[0] !== x || out[1] !== y;
+    }
+
+    // まず埋れている場合は外へ押し出す
+    sdf.evaluate(x, y, this._sdfScratch);
+    if (this._sdfScratch[0] < radius) {
+      const push = radius - this._sdfScratch[0];
+      x += this._sdfScratch[1] * push;
+      y += this._sdfScratch[2] * push;
+    }
+
+    // 移動ベクトルを法線方向の成分を落とす (射影onto 壁面)
+    const nx = this._sdfScratch[1];
+    const ny = this._sdfScratch[2];
+    const dot = dx * nx + dy * ny;
+    const sx = dx - nx * dot;
+    const sy = dy - ny * dot;
+
+    const tryX = x + sx;
+    const tryY = y + sy;
+    if (!this.isBlocked(tryX, tryY, radius)) {
+      out[0] = tryX;
+      out[1] = tryY;
+      return true;
+    }
+
+    // 斜めでは動けなければ軸成分だけ試す (壁沿いの滑走)
+    if (!this.isBlocked(x + sx, y, radius)) {
+      out[0] = x + sx;
+      out[1] = y;
+      return true;
+    }
+    if (!this.isBlocked(x, y + sy, radius)) {
+      out[0] = x;
+      out[1] = y + sy;
+      return true;
     }
 
     return false;

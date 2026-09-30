@@ -1,4 +1,5 @@
 import { PlutoEngine, Scene } from '@pluto-engine/core';
+import { ContinuumCrowds } from '@pluto-engine/continuum';
 import {
   Chart,
   LineController,
@@ -52,6 +53,16 @@ export interface SteeringDissectionEntry {
   sampleCount: number;
 }
 
+/**
+ * ベンチマーク用のフロー場。
+ * アルゴリズムの実体は `@pluto-engine/continuum` の ContinuumCrowds です。
+ * ここではワールド座標とグリッド座標の変換だけを担当します。
+ */
+/**
+ * ベンチマーク用のフロー場。
+ * アルゴリズムの実体は `@pluto-engine/continuum` の ContinuumCrowds です。
+ * ここではワールド座標とグリッド座標の変換だけを担当します。
+ */
 class BenchmarkFlowGrid {
   cols: number;
   rows: number;
@@ -60,17 +71,20 @@ class BenchmarkFlowGrid {
   width: number;
   height: number;
   size: number;
-  dirX: Float32Array;
-  dirY: Float32Array;
+
   density: Float32Array;
   pressure: Float32Array;
-
-  // 事前計算済み統合ステアリングベクトルグリッド (128x128 = 16,384 要素)
   precomputedVx: Float32Array;
   precomputedVy: Float32Array;
 
+  /** 目標方向グリッド (ベンチマークの要素計測から参照されます) */
+  readonly dirX: Float32Array;
+  readonly dirY: Float32Array;
+
   originX = 0;
   originY = 0;
+
+  private readonly crowd: ContinuumCrowds;
 
   constructor(cols = 128, rows = 128, cellSize = 20) {
     this.cols = cols;
@@ -80,12 +94,18 @@ class BenchmarkFlowGrid {
     this.width = cols * cellSize;
     this.height = rows * cellSize;
     this.size = cols * rows;
+
+    this.crowd = new ContinuumCrowds(cols, rows, cellSize, {
+      targetDensity: 3.5,
+      pressureStiffness: 1.5,
+    });
+    this.density = this.crowd.density;
+    this.pressure = this.crowd.pressure;
+    this.precomputedVx = this.crowd.fieldVx;
+    this.precomputedVy = this.crowd.fieldVy;
+
     this.dirX = new Float32Array(this.size);
     this.dirY = new Float32Array(this.size);
-    this.density = new Float32Array(this.size);
-    this.pressure = new Float32Array(this.size);
-    this.precomputedVx = new Float32Array(this.size);
-    this.precomputedVy = new Float32Array(this.size);
   }
 
   updatePlayerCenter(px: number, py: number) {
@@ -96,15 +116,17 @@ class BenchmarkFlowGrid {
     for (let r = 0; r < this.rows; r++) {
       const cy = (r + 0.5) * this.cellSize;
       const dy = cy - halfH;
-      const rowIdx = r * this.cols;
+      const row = r * this.cols;
       for (let c = 0; c < this.cols; c++) {
         const cx = (c + 0.5) * this.cellSize;
         const dx = cx - halfW;
         const dist = Math.hypot(dx, dy) + 0.001;
-        const idx = rowIdx + c;
-        this.dirX[idx] = -dx / dist;
-        this.dirY[idx] = -dy / dist;
+        this.dirX[row + c] = -dx / dist;
+        this.dirY[row + c] = -dy / dist;
       }
+    }
+    for (let i = 0; i < this.size; i++) {
+      this.crowd.setTargetDirectionRaw(i, this.dirX[i], this.dirY[i]);
     }
   }
 
@@ -123,51 +145,15 @@ class BenchmarkFlowGrid {
   }
 
   solvePoissonUIC(iterations = 1) {
-    const cols = this.cols;
-    const rows = this.rows;
-    const p = this.pressure;
-    const d = this.density;
-    const nextP = new Float32Array(this.size);
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let r = 1; r < rows - 1; r++) {
-        const rowIdx = r * cols;
-        for (let c = 1; c < cols - 1; c++) {
-          const idx = rowIdx + c;
-          let pNew = (p[idx - 1] + p[idx + 1] + p[idx - cols] + p[idx + cols] + d[idx]) * 0.25;
-          if (pNew < 0) pNew = 0;
-          nextP[idx] = pNew;
-        }
-      }
-      p.set(nextP);
-    }
+    this.crowd.computeDivergence();
+    this.crowd.solvePressure(iterations);
   }
 
   /**
-   * 16,384 個のグリッドセルに対して統合速度場 (Flow Velocity Field) を1フレームに1回だけ一括事前計算
+   * 16,384 セルに対して統合速度場を 1 フレームに 1 回だけ一括事前計算します。
    */
   precomputeVelocityField(speed = 80) {
-    const cols = this.cols;
-    const rows = this.rows;
-    const p = this.pressure;
-    const dX = this.dirX;
-    const dY = this.dirY;
-    const pVx = this.precomputedVx;
-    const pVy = this.precomputedVy;
-
-    for (let r = 1; r < rows - 1; r++) {
-      const rowIdx = r * cols;
-      for (let c = 1; c < cols - 1; c++) {
-        const idx = rowIdx + c;
-        const gradX = (p[idx + 1] - p[idx - 1]) * 0.1;
-        const gradY = (p[idx + cols] - p[idx - cols]) * 0.1;
-        const svx = dX[idx] - gradX;
-        const svy = dY[idx] - gradY;
-        const d2 = svx * svx + svy * svy;
-        const invLen = speed / (Math.sqrt(d2) + 0.001);
-        pVx[idx] = svx * invLen;
-        pVy[idx] = svy * invLen;
-      }
-    }
+    this.crowd.bakeVelocityField(speed, 0.7, false);
   }
 }
 
@@ -256,8 +242,7 @@ class BenchmarkScene extends Scene {
     const cs = this.flow.cellSize;
     const invCs = this.flow.invCellSize;
     const dX = this.flow.dirX,
-      dY = this.flow.dirY;
-    const pressure = this.flow.pressure;
+      dY = this.flow.dirY;    const pressure = this.flow.pressure;
     const cols = this.flow.cols;
 
     // 1. Math.floor によるグリッド座標変換
