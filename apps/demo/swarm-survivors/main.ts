@@ -4,6 +4,8 @@ import { MortonPlugin } from '@pluto-engine/morton';
 import { ContinuumFlowGrid, Player, SwarmSystem } from './gameLogic.js';
 import { InteractiveSkillTreeUI, SaveManager, SkillTreeGraph } from './tree.js';
 
+import { anims } from './anims.js';
+
 class GameScene extends Scene {
   private player!: Player;
   private swarm!: SwarmSystem;
@@ -25,7 +27,24 @@ class GameScene extends Scene {
     this.registerPlugin(new MortonPlugin(64));
   }
 
+  preload() {
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    this.load.spritesheet('chars', base + 'assets/spritesheet.png', {
+      frameWidth: 64,
+      frameHeight: 64
+    });
+  }
+
   create() {
+    for (const [key, frames] of Object.entries(anims)) {
+      this.anims.create({
+        key: key,
+        frames: frames,
+        frameRate: 10,
+        repeat: -1
+      });
+    }
+
     this.saveData = SaveManager.load();
     this.treeGraph = new SkillTreeGraph();
     this.treeUI = new InteractiveSkillTreeUI(this.treeGraph, this.saveData, () => {

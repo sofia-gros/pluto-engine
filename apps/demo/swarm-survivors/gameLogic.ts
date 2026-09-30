@@ -40,7 +40,8 @@ export class Player {
   lightningTimer = 0;
 
   constructor(scene: Scene, x: number, y: number) {
-    this.sprite = scene.add.sprite(x, y, 'player');
+    this.sprite = scene.add.sprite(x, y, 'chars');
+    this.sprite.play('walking_front');
     this.sprite.scale = 28;
     this.skills.set('magic_wand', 1);
   }
@@ -89,8 +90,21 @@ export class Player {
     this.vy = inputDir.y * speed;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
-    if (inputDir.x > 0.1) this.sprite.setFlipX(false);
-    else if (inputDir.x < -0.1) this.sprite.setFlipX(true);
+    
+    if (inputDir.x > 0.1) {
+      this.sprite.setFlipX(false);
+      this.sprite.play('walking_side', true);
+    } else if (inputDir.x < -0.1) {
+      this.sprite.setFlipX(true);
+      this.sprite.play('walking_side', true);
+    } else if (inputDir.y < -0.1) {
+      this.sprite.play('walking_back', true);
+    } else if (inputDir.y > 0.1) {
+      this.sprite.play('walking_front', true);
+    } else {
+      // If stopped
+      this.sprite.play('idle_front', true);
+    }
 
     const atkMult = 1 + (stats.bulletDmg || 0);
     const cdFactor = Math.max(0.4, 1 - (stats.cooldown || 0));
@@ -136,7 +150,7 @@ export class Player {
           const oy = this.y + Math.sin(ang) * orbDist;
           swarm.applyAreaDamage(
             ox,
-            oy,
+             oy,
             14 * areaScale,
             (10 + orbitLvl * 4) * atkMult,
             6 * knockMult,
@@ -396,12 +410,21 @@ export class SwarmSystem {
     atk = 22,
     scale = 20,
   ) {
-    const sprite = this.scene.add.sprite(x, y, 'enemy');
+    const sprite = this.scene.add.sprite(x, y, 'chars');
     sprite.scale = scale;
     const id = sprite.id;
     if (id === -1) return;
 
-    sprite.setTint(type);
+    if (type === 1) {
+       sprite.play('walking_other_side');
+    } else if (type === 2) {
+       sprite.play('walking_back');
+    } else if (type === 3) {
+       sprite.play('walking_front');
+       sprite.setTintFill(0xffcccc);
+    } else {
+       sprite.play('walking_front');
+    }
     sprite.setFlipX(false);
 
     this.vx[id] = 0;
@@ -421,7 +444,13 @@ export class SwarmSystem {
     this.dy[i] = y;
     this.dtype[i] = type;
     this.dval[i] = val;
-    const sprite = this.scene.add.sprite(x, y, 'drop');
+    const sprite = this.scene.add.sprite(x, y, 'chars');
+    sprite.setFrame(1);
+    if (type === 1) {
+       sprite.setTintFill(0xffff00);
+    } else {
+       sprite.setTintFill(0x00aaff);
+    }
     sprite.scale = 14;
     this.dsprite[i] = sprite;
   }
@@ -436,7 +465,9 @@ export class SwarmSystem {
     this.pdmg[i] = dmg;
     this.plife[i] = 1.5;
     this.ppierce[i] = pierce;
-    const sprite = this.scene.add.sprite(x, y, 'projectile');
+    const sprite = this.scene.add.sprite(x, y, 'chars');
+    sprite.setFrame(0);
+    sprite.setTintFill(0xff6666);
     sprite.scale = 12;
     this.psprite[i] = sprite;
   }
