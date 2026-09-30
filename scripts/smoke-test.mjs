@@ -39,7 +39,8 @@ function startServer(root) {
       urlPath = urlPath.replace(/^\/pluto-engine\/demos/, '');
       if (urlPath.endsWith('/')) urlPath += 'index.html';
 
-      const filePath = join(root, normalize(urlPath).replace(/^(\.\.[/\\])+/, ''));
+      const relativePath = urlPath.replace(/^\/+/, '');
+      const filePath = join(root, normalize(relativePath).replace(/^(\.\.[/\\])+/, ''));
       if (!existsSync(filePath)) {
         res.writeHead(404);
         res.end('not found');

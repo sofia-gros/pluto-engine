@@ -444,14 +444,16 @@ export class WebGPUDevice implements GraphicsDevice {
    * ゼロアロケーションの掟を守るため、書き込み先は
    * 確保済みのバッファを再利用します。
    */
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>): void {
+  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void {
     if (!this.device) {
       throw new Error('Device not initialized');
     }
     const anyBuf = buffers['posX'];
     if (!anyBuf) return;
 
-    const bytes = anyBuf.size;
+    const capacity = anyBuf.size / 4;
+    const STRIDE_BYTES = 64;
+    const bytes = capacity * STRIDE_BYTES;
     if (this._instanceStaging === null || this._instanceStaging.byteLength < bytes) {
       this._instanceStaging = new Float32Array(Math.ceil(bytes / 4));
       this._stagingU8 = new Uint8Array(this._instanceStaging.buffer);
@@ -469,59 +471,64 @@ export class WebGPUDevice implements GraphicsDevice {
     // 12 個の float (48 バイト) + tint 4 バイト = 52 バイトを
     // 16 バイト境界へ切り詰めた 64 バイトのストライドを使います。
     const FLOATS_PER_INSTANCE = 16;
-    const STRIDE_BYTES = 64;
-    const count = Math.floor(bytes / STRIDE_BYTES);
+    const count = activeCount ?? capacity;
+    
+    // アロケーションと関数呼び出しのオーバーヘッドを避けるため、
+    // 配列の参照を事前に解決しておく
+    const attrArrays: (Float32Array | null)[] = [];
+    const attrOffsets: number[] = [];
+    for (let a = 0; a < INSTANCE_ATTRS.length; a++) {
+      const buf = buffers[INSTANCE_ATTRS[a].name];
+      const src = buf ? this._sources.get(buf) : null;
+      if (src && src.data instanceof Float32Array) {
+        attrArrays.push(src.data);
+        attrOffsets.push(src.srcOffset);
+      } else {
+        attrArrays.push(null);
+        attrOffsets.push(0);
+      }
+    }
+
+    const tintBuf = buffers['tint'];
+    const tintSrc = tintBuf ? this._sources.get(tintBuf) : null;
+    const tintData = (tintSrc && tintSrc.data instanceof Uint32Array) ? tintSrc.data : null;
+    const tintOffset = tintSrc ? tintSrc.srcOffset : 0;
+
     const isTextBuf = buffers['isText'];
+    const isTextSrc = isTextBuf ? this._sources.get(isTextBuf) : null;
+    const isTextData = (isTextSrc && isTextSrc.data instanceof Float32Array) ? isTextSrc.data : null;
+    const isTextOffset = isTextSrc ? isTextSrc.srcOffset : 0;
 
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_INSTANCE;
-      for (let a = 0; a < INSTANCE_ATTRS.length; a++) {
-        staging[base + a] = this._readF32(buffers[INSTANCE_ATTRS[a].name], i);
+      
+      // 11属性
+      for (let a = 0; a < 11; a++) {
+        const arr = attrArrays[a];
+        staging[base + a] = arr ? arr[attrOffsets[a] + i] : 0;
       }
-      // tint は 44 バイト目から RGBA バイトとして書きます
-      const tv = this._readU32(buffers['tint'], i);
+      
+      // tint は 44 バイト目 (base + 11 float) に RGBA バイトとして書き込む
+      const tv = tintData ? tintData[tintOffset + i] : 0xffffffff;
       let o = (base + 11) * 4;
       u8[o] = tv & 0xff;
       u8[o + 1] = (tv >> 8) & 0xff;
       u8[o + 2] = (tv >> 16) & 0xff;
       u8[o + 3] = (tv >>> 24) & 0xff;
-      // isText は 48 バイト目。バッファが無い場合は 0 (通常スプライト) です。
-      staging[base + 12] = isTextBuf ? this._readF32(isTextBuf, i) : 0;
+
+      // isText は 48 バイト目 (base + 12 float) に float として書き込む
+      staging[base + 12] = isTextData ? isTextData[isTextOffset + i] : 0;
     }
 
-    this.device.queue.writeBuffer(this._instanceBuffer as GPUBuffer, 0, staging.buffer as ArrayBuffer, 0, bytes);
+    this.device.queue.writeBuffer(this._instanceBuffer as GPUBuffer, 0, staging.buffer as ArrayBuffer, 0, count * STRIDE_BYTES);
     this.hasVertexBuffers = true;
   }
 
   /** 転送元から i 番目の値を float として読み戻します */
-  private _readF32(buf: BufferInfo | undefined, index: number): number {
-    if (!buf) return 0;
-    const src = this._sources.get(buf);
-    if (!src) return 0;
-    const d = src.data;
-    if (d instanceof Float32Array) {
-      const i = src.srcOffset + index;
-      return i < src.srcOffset + src.count ? d[i] : 0;
-    }
-    if (d instanceof Uint32Array) {
-      const i = src.srcOffset + index;
-      return i < src.srcOffset + src.count ? d[i] : 0;
-    }
-    return 0;
-  }
+  // private _readF32(buf: BufferInfo | undefined, index: number): number { ... }
 
   /** 転送元から i 番目の値を uint32 (tint) として読み戻します */
-  private _readU32(buf: BufferInfo | undefined, index: number): number {
-    if (!buf) return 0xffffffff;
-    const src = this._sources.get(buf);
-    if (!src) return 0xffffffff;
-    const d = src.data;
-    if (d instanceof Uint32Array) {
-      const i = src.srcOffset + index;
-      return i < src.srcOffset + src.count ? d[i] : 0xffffffff;
-    }
-    return 0xffffffff;
-  }
+  // private _readU32(buf: BufferInfo | undefined, index: number): number { ... }
 
   drawInstanced(activeCount: number): void {
     if (!this.device || !this.context || !this.pipeline || !this.bindGroup) return;

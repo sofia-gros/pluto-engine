@@ -102,7 +102,7 @@ export interface GraphicsDevice {
   /**
    * インスタンシング描画用の頂点属性を設定します。
    */
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>): void;
+  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void;
 
   /**
    * インスタンスを描画します。

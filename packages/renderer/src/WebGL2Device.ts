@@ -481,7 +481,8 @@ export class WebGL2Device implements GraphicsDevice {
     }
   }
 
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>): void {
+  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void {
+    void activeCount;
     if (!this.gl || !this.spritePipeline) return;
 
     // 0: vertexPos, 1: vertexUV

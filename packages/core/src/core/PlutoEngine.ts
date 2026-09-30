@@ -283,7 +283,7 @@ export class PlutoEngine {
         return;
       }
 
-      this.device.setupInstancedAttributes(this.gpuBuffers);
+      this.device.setupInstancedAttributes(this.gpuBuffers, renderCount);
 
       for (let ci = 0; ci < camCount; ci++) {
         this._writeProjection(this._activeCameras[ci], w, h);
