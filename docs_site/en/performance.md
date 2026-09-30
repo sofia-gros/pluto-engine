@@ -147,7 +147,7 @@ Performance comparison when rendering and simulating 300,000 entities.
 | Backend | Max Entities Reached | Measured FPS | Notes |
 | :--- | :--- | :--- | :--- |
 | **CPU (Headless/ANGLE)** | 300,000 | 23 FPS | Pure CPU simulation limit without GPU rendering overhead |
-| **WebGL2** | 300,000 | 12 FPS | 1-draw-call batch rendering via Texture2DArray |
+| **WebGL2** | 300,000 | 17 FPS | 1-draw-call batch rendering via Texture2DArray |
 | **WebGPU** | 300,000 | 10 FPS | Inline packing and optimized dynamically sized writeBuffer |
 
 * Note: Measured on NVIDIA GeForce RTX 4060.
