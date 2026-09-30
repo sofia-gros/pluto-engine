@@ -1,7 +1,11 @@
 {
   "name": "pluto-engine-monorepo",
   "private": true,
-  "workspaces": ["packages/*", "apps/*", "docs_site"],
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "docs_site"
+  ],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
     "build:all": "bun scripts/build-all.mjs",
@@ -21,5 +25,5 @@
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },
-  "version": "1.1.0"
+  "version": "1.2.0"
 }
