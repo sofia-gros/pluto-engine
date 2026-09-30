@@ -390,7 +390,16 @@ for (const target of TARGETS) {
                   for (let i = 0; i < px.length; i += 4) {
                     if (px[i] > 8 || px[i + 1] > 8 || px[i + 2] > 8) n++;
                   }
-                  glProbe = { nonEmpty: n, glError: gl.getError() };
+                  glProbe = {
+                    nonEmpty: n,
+                    // 37442 = CONTEXT_LOST_WEBGL。
+                    // これが立つと描画命令がすべて無効になり、
+                    // ループは 60 FPS で動き続けるため FPS で見抜けません。
+                    glError: gl.getError(),
+                    contextLost:
+                      e?.device?.isContextLost?.() === true ||
+                      gl.isContextLost?.() === true,
+                  };
                 }
               } catch (err) {
                 glProbe = { error: String(err) };
@@ -435,12 +444,22 @@ for (const target of TARGETS) {
 
     // 描画の实证: 1 ピクセル以上塗られていることと、
     // 単色の空白画面でないこと (色数が 2 種類以上) を要求します。
-    // ここを判定に含めない>rta と、何も描画していないデモが PASS になります。
+    // ここを判定に含めないと、何も描画していないデモが PASS になります。
     const rendered = painted && !painted.error && painted.nonEmpty > 0 && painted.colors >= 2;
     if (!rendered) {
       console.error(
         `  [${target.name}] canvas is not actually rendering: ${JSON.stringify(painted)}`,
       );
+      if (painted?.glProbe?.contextLost === true) {
+        // コンテキスト喪失は FPS で見抜けません。ループは 60 FPS で
+        // 動き続ける一方で、描画命令はすべて無効になっているためです。
+        console.error(
+          `  [${target.name}] WebGL context was lost (glError=${painted.glProbe.glError}). ` +
+            `A frequent cause is GPU memory exhaustion: the texture array is ` +
+            `allocated in one shot and is 1 GB at the default size ` +
+            `(2048 x 2048 x 64 layers).`,
+        );
+      }
     }
     // FPS はヘッドレス環境では一向に安定しないため、
     // 「描画が 1 フレームでも進んだ」ことを最低条件に据えます。

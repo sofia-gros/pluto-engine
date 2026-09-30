@@ -109,10 +109,23 @@ export class WebGL2Device implements GraphicsDevice {
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
 
-  public readonly textureWidth = 2048;
-  public readonly textureHeight = 2048;
-  public readonly maxLayers = 64;
+  /**
+   * テクスチャ配列のサイズ設定。
+   *
+   * 3D テクスチャの領域は width * height * 4 * layers バイトを
+   * 丸ごと確保します。2048 x 2048 x 64 は **1 GB** になるため、
+   * メモリが限られた環境 (CI ランナー / ソフトウェアラスタライザ) では
+   * 確保に失敗して WebGL コンテキストごと失効します。
+   * 実測で CI 上で `CONTEXT_LOST_WEBGL` が出たため、
+   * 初期化時に確保結果を確認し、段階的に小さくして再試行します。
+   */
+  public textureWidth = 2048;
+  public textureHeight = 2048;
+  public maxLayers = 64;
   private currentLayerCount = 1; // Layer 0 は白色単色ピクセル
+
+  /** コンテキスト喪失を検出したら true。失効中の描画はスキップします。 */
+  private contextLost = false;
 
   private textures: Map<string, TextureAsset> = new Map();
 
@@ -134,12 +147,95 @@ export class WebGL2Device implements GraphicsDevice {
     }
     this.gl = gl;
 
+    // コンテキスト喪失を検出します。
+    // 喪失中は一切描画せず、黙って 60 FPS を走り続けます
+    // (CI で実際に発生しました。描画が死んでいても
+    //  ループは動くため、FPS だけでは検出できません)。
+    canvas.addEventListener('webglcontextlost', (e) => {
+      // preventDefault しないと restored が発火しません。
+      e.preventDefault();
+      this.contextLost = true;
+      console.error(
+        '[WebGL2Device] WebGL context lost. ' +
+          'The texture array is allocated in one shot, so a 1 GB shortfall ' +
+          'will kill the context. Check the GPU memory budget.',
+      );
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      console.warn('[WebGL2Device] WebGL context restored. Rebuilding the texture array.');
+      this.currentLayerCount = 1;
+      this.textures.clear();
+      this.initTextureArray();
+    });
+
     // ブレンド設定 (透過PNG対応)
     this.gl.enable(this.gl.BLEND);
     this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
 
     // Texture2DArray の初期化 (Layer 0 に白ピクセルを格納)
     this.initTextureArray();
+  }
+
+  /** コンテキストが失効していないか */
+  public isContextLost(): boolean {
+    return this.contextLost;
+  }
+
+  /**
+   * テクスチャ配列を確保します。
+   *
+   * 大きな領域から順に試し、`texImage3D` が GL エラーを返したら
+   * 半分に落として再試行します。どの段階で成功したかを
+   * `textureWidth` / `textureHeight` に反映します
+   * (UV の正規化がこの値を使うため、必ず実際の値に揃える必要があります)。
+   *
+   * @returns 確保に成功したら true。すべて失敗したら false
+   */
+  private allocateTextureArray(): boolean {
+    if (!this.gl) return false;
+
+    let w = this.textureWidth;
+    let h = this.textureHeight;
+
+    while (w >= 64 && h >= 64) {
+      // 過去のエラーを先に消化して、今回の判定を偽陽性にしないようにします。
+      // getError() は 1 回しかエラーを返さないため、ループで空になるまで回します。
+      while (this.gl.getError() !== this.gl.NO_ERROR) {
+        /* 溜まっているエラーを捨てる */
+      }
+
+      this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
+      this.gl.texImage3D(
+        this.gl.TEXTURE_2D_ARRAY,
+        0,
+        this.gl.RGBA,
+        w,
+        h,
+        this.maxLayers,
+        0,
+        this.gl.RGBA,
+        this.gl.UNSIGNED_BYTE,
+        null,
+      );
+
+      const err = this.gl.getError();
+      if (err === this.gl.NO_ERROR) {
+        this.textureWidth = w;
+        this.textureHeight = h;
+        return true;
+      }
+
+      // コンテキスト喪失なら、これ以上縮小しても意味がありません。
+      if (err === this.gl.CONTEXT_LOST_WEBGL) {
+        this.contextLost = true;
+        return false;
+      }
+
+      w = Math.max(64, w >> 1);
+      h = Math.max(64, h >> 1);
+    }
+    return false;
   }
 
   private initTextureArray(): void {
@@ -153,19 +249,14 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
     this.gl.texParameteri(this.gl.TEXTURE_2D_ARRAY, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
 
-    // 2048x2048 x 64レイヤー の 3D テクスチャ領域を GPU 側に事前確保
-    this.gl.texImage3D(
-      this.gl.TEXTURE_2D_ARRAY,
-      0,
-      this.gl.RGBA,
-      this.textureWidth,
-      this.textureHeight,
-      this.maxLayers,
-      0,
-      this.gl.RGBA,
-      this.gl.UNSIGNED_BYTE,
-      null,
-    );
+    if (!this.allocateTextureArray()) {
+      throw new Error(
+        'Failed to allocate the texture array: ' +
+          `${this.maxLayers} layers could not be allocated ` +
+          `(contextLost=${this.contextLost}). ` +
+          'GPU memory is insufficient. Reduce the texture array size or layer count.',
+      );
+    }
 
     // Layer 0: 単色・未テクスチャ用 1x1 白ピクセルを書き込み
     const whitePixel = new Uint8Array([255, 255, 255, 255]);
@@ -342,6 +433,9 @@ export class WebGL2Device implements GraphicsDevice {
 
   clear(r: number, g: number, b: number, a: number): void {
     if (!this.gl) return;
+    // コンテキスト喪失中の clear / draw はすべて無効命令になります。
+    // 無駄な GPU 通信を避けて黙ります。
+    if (this.contextLost) return;
     this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
     this.gl.clearColor(r, g, b, a);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
