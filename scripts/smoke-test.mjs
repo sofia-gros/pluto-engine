@@ -323,10 +323,20 @@ let backendInfo = null;
 for (const target of TARGETS) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const errors = [];
+  const allConsole = [];
+  const browserLog = [];
   page.on('console', (m) => {
+    allConsole.push(`[${m.type()}] ${m.text()}`);
     if (m.type() === 'error') errors.push(`console: ${m.text()}`);
   });
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  // コンテキスト喪失は pageerror にも console error にもならないため、
+  // Chromium 側の WebGL / GPU 診断を直接購読します。
+  const logSession = await page.context().newCDPSession(page);
+  await logSession.send('Log.enable').catch(() => {});
+  logSession.on('Log.entryAdded', (e) => {
+    browserLog.push(`[${e.entry.source}/${e.entry.level}] ${e.entry.text}`);
+  });
 
   try {
     await page.goto(`http://localhost:${PORT}${withPixelRead(target.path)}`, {
@@ -458,6 +468,12 @@ for (const target of TARGETS) {
             `A frequent cause is GPU memory exhaustion: the texture array is ` +
             `allocated in one shot and is 1 GB at the default size ` +
             `(2048 x 2048 x 64 layers).`,
+        );
+        console.error(
+          `  [${target.name}] page console:\n    ${allConsole.join('\n    ') || '(empty)'}`,
+        );
+        console.error(
+          `  [${target.name}] browser log:\n    ${browserLog.join('\n    ') || '(empty)'}`,
         );
       }
     }
