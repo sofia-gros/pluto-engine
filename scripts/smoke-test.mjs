@@ -77,6 +77,7 @@ const TARGETS = [
     canvas: '#game-canvas',
     ready: 'canvas',
     heapBudget: 2048,
+    minFrames: 10,
   },
   {
     name: 'rpg',
@@ -84,12 +85,22 @@ const TARGETS = [
     canvas: '#game-canvas',
     ready: 'canvas',
     heapBudget: 2048,
+    minFrames: 10,
   },
   {
     name: 'benchmark',
     path: '/benchmark/index.html',
     canvas: 'canvas',
     ready: 'canvas',
+    // benchmark は 300,000 体まで増やす負荷試験です。
+    // ソフトウェアラスタライザ (CI) では 1 フレームあたり数百 ms かかり、
+    // 1200ms の計測窓で 10 フレームに達しません。
+    //
+    // なお以前はこの FPS 判定が「描画が生きているか」の実測になっておらず、
+    // WebGL コンテキストを失った状態 (描画が全滅) でも 37 FPS 出て
+    // 合格していました。フレーム数の判定は「ループが生きているか」だけを
+    // 見る項目であり、速度のゲートではありません。速度は出力 merely 参考値です。
+    minFrames: 2,
   },
 ];
 
@@ -477,9 +488,16 @@ for (const target of TARGETS) {
         );
       }
     }
-    // FPS はヘッドレス環境では一向に安定しないため、
-    // 「描画が 1 フレームでも進んだ」ことを最低条件に据えます。
-    const fpsOk = m.frames > 10;
+    // フレーム数は「ループが生きているか」の判定であり、速度のゲートではありません。
+    // 最低ラインはデモごとに定義します (benchmark は 300,000 体の負荷試験なので低い)。
+    const minFrames = target.minFrames ?? 10;
+    const fpsOk = m.frames >= minFrames;
+    if (!fpsOk) {
+      console.error(
+        `  [${target.name}] the render loop did not advance: ` +
+          `${m.frames} frames in ${m.elapsed.toFixed(0)}ms (required >= ${minFrames})`,
+      );
+    }
 
     // ゼロアロケーション SLA。計測ハーネス自身のノイズを吸収するため、
     // 数百 B/frame 未満であれば許容します。
