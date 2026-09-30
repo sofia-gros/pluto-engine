@@ -99,7 +99,7 @@ const TARGETS = [
  * 何も読み取れず、「描画が起きているか」を判定できません。
  */
 function withPixelRead(path) {
-  return path + (path.includes('?') ? '&' : '?') + 'preserveDrawingBuffer';
+  return path + (path.includes('?') ? '&' : '?') + 'preserveDrawingBuffer&debug';
 }
 
 /** 指定 ms のあいだに描画が数フレーム進んだかを rAF で計測する */
@@ -368,11 +368,51 @@ for (const target of TARGETS) {
                   }
                 }
               }
+              // 「canvas が空」だった場合に原因を切り分けるため、
+              // エンジンの内部状態も同時に取得します。
+              //   - drawTimeMs > 0 なら描画命令自体はissuedされている
+              //     (空なのは 2D への readback 経路の問題)
+              //   - drawTimeMs === 0 なら描画自体が走っていない
+              //     (実バグ。テクスチャ未転送や draw skip の疑い)
+              const e = window.__pluto;
+              let glProbe = null;
+              try {
+                const gl = e?.device?.gl;
+                if (gl) {
+                  // 現在のバックバッファを直接読みます。
+                  // 2D 合成を経由しないため、preserveDrawingBuffer の
+                  // 挙動差 (OS / GPU 依存) の影響を受けません。
+                  const w = c.width;
+                  const h = c.height;
+                  const px = new Uint8Array(w * h * 4);
+                  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+                  let n = 0;
+                  for (let i = 0; i < px.length; i += 4) {
+                    if (px[i] > 8 || px[i + 1] > 8 || px[i + 2] > 8) n++;
+                  }
+                  glProbe = { nonEmpty: n, glError: gl.getError() };
+                }
+              } catch (err) {
+                glProbe = { error: String(err) };
+              }
+
               resolve({
                 width: tmp.width,
                 height: tmp.height,
                 nonEmpty,
                 colors: distinct.size,
+                glProbe,
+                engine: e
+                  ? {
+                      drawTimeMs: e.drawTimeMs,
+                      renderTimeMs: e.renderTimeMs,
+                      packTimeMs: e.packTimeMs,
+                      uploadTimeMs: e.uploadTimeMs,
+                      updateTimeMs: e.updateTimeMs,
+                      activeCount: e.scene?.activeScene?.arena?.activeCount ?? null,
+                      fps: e.loop?.measuredFps ?? null,
+                    }
+                  : null,
               });
             } catch (e) {
               resolve({ error: String(e) });
@@ -402,7 +442,6 @@ for (const target of TARGETS) {
         `  [${target.name}] canvas is not actually rendering: ${JSON.stringify(painted)}`,
       );
     }
-
     // FPS はヘッドレス環境では一向に安定しないため、
     // 「描画が 1 フレームでも進んだ」ことを最低条件に据えます。
     const fpsOk = m.frames > 10;
