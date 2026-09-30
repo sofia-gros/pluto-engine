@@ -8,15 +8,15 @@
 ## フェーズ 1: 基盤アーキテクチャ (Core Foundation)
 エンジンの最も低レイヤーにあたる、メモリ管理とゲームループを構築します。このフェーズでは描画は行わず、データの健全性とループの正確性のみを担保します。
 
-- [ ] **Step 1.1: `InstanceBufferArena` の実装**
+- [x] **Step 1.1: `InstanceBufferArena` の実装**
   - `Float32Array` 等を用いた SoA (Structure of Arrays) のメモリプール実装。
   - 動的リサイズを避け、初期化時に確保したバッファ上での効率的な allocate / free 機構の作成。
-- [ ] **Step 1.2: Flyweight オブジェクトの実装**
+- [x] **Step 1.2: Flyweight オブジェクトの実装**
   - `Sprite` などのクラスが、Step 1.1 のアリーナの「インデックス番号」のみを保持し、ゲッター/セッターを通じて直接 TypedArray にアクセスする機構。
-- [ ] **Step 1.3: `GameLoop` と TimeStep 管理**
+- [x] **Step 1.3: `GameLoop` と TimeStep 管理**
   - `requestAnimationFrame` をフックし、可変 `dt` と固定 `fixedDeltaTime`（アキュムレータ）を分離したループの構築。
   - 目標FPSの可変設定と、パニック時（Spiral of Death）の安全処理。
-- [ ] **Step 1.4: `InputManager` の実装**
+- [x] **Step 1.4: `InputManager` の実装**
   - Ebitengine スタイルの同期クエリ（`isKeyJustPressed`等）の実現と、フレームごとの状態ラッチ。
 
 ---
@@ -24,15 +24,15 @@
 ## フェーズ 2: 数学・物理・インテリジェンス (Math, Physics & AI Solvers)
 ブラウザAPI（WebGLやDOM）に依存しない純粋な TypeScript アルゴリズム群を実装します。将来的にWasm化可能なように設計しますが、基本は Pure TS で構築しエコシステムの利便性を保ちます。
 
-- [ ] **Step 2.1: 2D Morton 空間ハッシュ (`@pluto-engine/morton`)**
+- [x] **Step 2.1: 2D Morton 空間ハッシュ (`@pluto-engine/morton`)**
   - アクション、STG、RPGのすべての近傍探索を加速するビット演算空間ハッシュ。
-- [ ] **Step 2.2: 2D-SDF コライダー (`@pluto-engine/sdf-collider`)**
+- [x] **Step 2.2: 2D-SDF コライダー (`@pluto-engine/sdf-collider`)**
   - タイルマップ等の地形を符号付き距離場 (SDF) として保持し、どんな数万の群集やプレイヤーも「角に引っかからず滑らかに滑る」 $O(1)$ の衝突判定を実装。
-- [ ] **Step 2.3: XPBD 剛体緩和ソルバ (`@pluto-engine/xpbd`)**
+- [x] **Step 2.3: XPBD 剛体緩和ソルバ (`@pluto-engine/xpbd`)**
   - 位置ベース動力学によるめり込み反発アルゴリズム。
-- [ ] **Step 2.4: Continuum Crowds & Poisson UIC (`@pluto-engine/poisson`, `continuum`)**
+- [x] **Step 2.4: Continuum Crowds & Poisson UIC (`@pluto-engine/poisson`, `continuum`)**
   - 流体力学的な群集シミュレーション。グリッドベースの密度スプラッティングと、ヤコビ反復法を用いた圧力ポアソン方程式ソルバの実装。
-- [ ] **Step 2.5: SoA ユーティリティ AI (`@pluto-engine/ai`)**
+- [x] **Step 2.5: SoA ユーティリティ AI (`@pluto-engine/ai`)**
   - FSM（状態遷移）の複雑さを排除し、SoAアーキテクチャ上で数万体のNPCの行動（接近、逃走、補給など）を軽量に意思決定するシステム。
 
 ---
@@ -40,11 +40,11 @@
 ## フェーズ 3: 統一シングルパス・レンダラ (WebGL2 / WebGPU Unified Renderer)
 フェーズ1で構築した SoA バッファを、直接 GPU へ送り込んで描画するバックエンドを実装します。ゲームロジックはすべてCPU側に留め、GPUは「送られてきたインスタンス配列を爆速で描画する」ことに専念させます（汎用エンジンとしての制約）。
 
-- [ ] **Step 3.1: 描画デバイス抽象化層 (`GraphicsDevice`) の初期化**
+- [x] **Step 3.1: 描画デバイス抽象化層 (`GraphicsDevice`) の初期化**
   - WebGPUと WebGL2 を隠蔽する抽象レイヤーの実装。
-- [ ] **Step 3.2: 共有バッファのGPU転送パイプライン**
+- [x] **Step 3.2: 共有バッファのGPU転送パイプライン**
   - 毎フレーム `InstanceBufferArena` のスライスをそのまま GPU へストリーミングする仕組み。
-- [ ] **Step 3.3: 統合シェーダーと SDF レンダリング**
+- [x] **Step 3.3: 統合シェーダーと SDF レンダリング**
   - テクスチャアトラスバッチングに加え、UIやフォントをどんな解像度でもボケずに描画するための SDF シェーダーの実装。
 
 ---
@@ -52,9 +52,91 @@
 ## フェーズ 4: 表現力とファサード統合 (Facade & Integration)
 開発者が簡単に使える Phaser ライクなAPIを提供し、実際のデモアプリを構築します。
 
-- [ ] **Step 4.1: Scene クラスとプラグインシステムの統合**
+- [x] **Step 4.1: Scene クラスとプラグインシステムの統合**
   - `this.add.sprite()` などの基本APIと、ユーザーが物理エンジン（XPBD、Verlet、またはMatter.js等）を自由に抜き差しできるプラグインアーキテクチャの構築。
-- [ ] **Step 4.2: 軽量物理モジュール `@pluto-engine/verlet-ik` の構築**
+- [x] **Step 4.2: 軽量物理モジュール `@pluto-engine/verlet-ik` の構築**
   - マントや触手の演出に特化した軽量な Verlet積分モジュールをパッケージとして分離・実装し、プラガブルな設計を検証。
-- [ ] **Step 4.3: デモアプリ (`apps/demo`) の実装**
+- [x] **Step 4.3: デモアプリ (`apps/demo`) の実装**
   - 構築した全機能を用いたゲームロジックを実装し、実ブラウザ上でのプロファイリング（GCゼロ、目標FPSの維持）を検証。
+ * 構築した全機能を用いたゲームロジックを実装し、実ブラウザ上でのプロファイリング（GCゼロ、目標FPSの維持）を検証。
+
+---
+
+## 実装状況 (2026-09-30)
+
+全 14 ステップ（Step 1.1 〜 Step 4.3）を実装し、検証まで完了しています。
+
+### 検証の結果
+
+| 項目 | 結果 |
+| --- | --- |
+| ユニットテスト | 29 ファイル / 275 テスト 全通過（Vitest Browser Mode + Playwright Chromium） |
+| 3 デモの実ブラウザ描画 | 3 デモすべてで実ピクセルを確認（空白画面でないことを検証） |
+| フレームレート | swarm-survivors 約 60 FPS / rpg 約 60 FPS / benchmark 約 38 FPS |
+| ヒープ増加 | swarm-survivors 約 33 B/frame、rpg 約 34 B/frame（予算 2048 B/frame 以内） |
+| コンソールエラー | 0 件 |
+
+検証スクリプトは `scripts/smoke-test.mjs`、CI 定義は `.github/workflows/verify.yml` です。
+`verify.yml` はテストとビルドの検証のみを行い、npm への publish や
+GitHub Release の作成は行いません（tag upon 時の `release.yml` の責務です）。
+
+### 実装中に発見・修正した不具合
+
+自動テストだけでは見つからない不具合が実機検証で判明したため、記録しておきます。
+
+1. **描画の实证を合格条件に含めていなかった**
+   `scripts/smoke-test.mjs` が「コンソールエラーなし」と「フレーム進行」のみを合格条件にしており、
+   収集していたピクセル数を判定に使っていませんでした。この結果、
+   `swarm-survivors` が**何も描画していない**状態でも PASS になっていました。
+   加えて WebGL の `preserveDrawingBuffer` が無効だと、
+   `canvas` への `drawImage` が空しか返さないため、判定そのものが不安定でした。
+   現在は `?preserveDrawingBuffer` を付けて、実ピクセル数と色数を合格条件に含めています。
+
+2. **アリーナのクリア順序による NaN 汚染（swarm-survivors が完全描画されなかった原因）**
+   `restartGame()` が `arena.clear()` を**新しい Player の生成より後**に実行していたため、
+   プレイヤーのハンドルが宙吊りになりました。その状態で `player.x` を読むと
+   `posX[-1]`（未確保）になり `undefined` を返し、生成座標がすべて NaN になりました。
+   NaN はやがて空間ハッシュを通じてアリーナ全体へ伝播し、
+   カメラ座標も NaN となって**スプライトが 1 枚も描画されない**状態になっていました。
+   対策: `arena.clear()` を必ず Player 生成より前に実行します。
+
+3. **プレイヤーが自分自身へ接触ダメージを受けて即死していた**
+   敵の衝突判定が `i < arena.activeCount` を回しており、プレイヤーが
+   アリーナ上のインスタンスを 1 つ占めているため、毎フレーム自分に
+   3 ダメージを与えて 0.23 秒で死亡していました。
+   対策: ループ内でプレイヤーのインデックスを除外します。
+
+4. **自機の弾がプレイヤーを解放していた**
+   弾の衝突・範囲ダメージ・最近傍探索が、敵であることを確認せずに
+   アリーナ上の全インスタンスを対象にしていました。プレイヤーの HP は
+   SoA 上で 0 のままなので、接触した弾が `kill()` を呼び、
+   プレイヤーのハンドルが宙吊りになって NaN が再発していました。
+   対策: `SwarmSystem.playerId` を毎フレーム取り直し、敵対象の走査から除外します。
+
+5. **アイテム吸引のゼロ長除算**
+   アイテムがプレイヤーと完全に重なると `dist` が 0 になり `0/0` で NaN が発生しました。
+   対策: 方向が決まらない場合は微小量 (`1e-4`) を足して有限値に収めます。
+
+6. **ID と密添字の混在**
+   `vx` / `vy` / `hp` などの敵属性はアリーナの **ID** で管理していたのに対し、
+   更新パスは**密添字**でループしていました。`free()` は swap-remove を行うため、
+   解放が 1 度でも起きると両者が乖離し、誤った個体を操作します。
+   対策: 位置系（`posX` / `posY` / `scale` / `facing`）は密添字、
+   敵属性は ID と明記し、`indexToId` / `idToIndex` で明示的に変換します。
+
+7. **WebGL コンテキストの読み取り方式**
+   上記 1 の関連です。`preserveDrawingBuffer` は URL パラメータ
+   (`?preserveDrawingBuffer`) を付けたときだけ有効化する実装にし、
+   通常の実行では性能に影響しない構成にしています。
+
+### 未検証の領域
+
+- **WebGPU の実ランタイム描画**
+  開発環境の Chromium は `navigator.gpu` が未定義のため、
+  WebGPU バックエンドの実機描画は確認できていません。
+  型検査とフォールバック動作（WebGL2 への自動降格）のみ検証済みです。
+  WGSL シェーダには SDF 分岐を実装済みですが、実機での描画確認は未了です。
+- **MSDF（マルチチャネル SDF）**
+  現在は単一チャンネルの SDF を実装しています。
+  隣接する複数グリフの角の形状を保つには MSDF が必要ですが、
+  一般的なフォントサイズでは単一 SDF でも実用的な品質になります。
