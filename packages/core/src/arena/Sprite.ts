@@ -877,13 +877,9 @@ export class Sprite {
    * （係数を 1.0 とした白を置きます）。alpha のみ反映されます。
    */
   public setTintFill(tintHex: number, alpha?: number): this {
-    const a = alpha === undefined ? 0xff : Math.max(0, Math.min(255, Math.round(alpha * 255)));
-    // フラグメントシェーダが texColor * vTint なので、指定色をそのまま入れると
-    // 「元テクスチャ × 指定色」となり単色塗りになりません。
-    // ここでは色成分を保持せず、係数を 1.0 として alpha だけを反映します。
-    // 真に単色で塗るにはシェーダ側の分岐が必要で、これは将来課題とします。
-    void tintHex;
-    this._arena.setTint(this.idx, (a << 24) | 0xffffff);
+    this.setTint(tintHex);
+    if (alpha !== undefined) this.setAlpha(alpha);
+    this._arena.setTintMode(this.idx, 1);
     return this;
   }
   /**

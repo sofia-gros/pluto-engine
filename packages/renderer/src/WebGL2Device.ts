@@ -33,7 +33,7 @@ uniform mat4 projectionMatrix;
 out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
-out float vIsText;
+out float vSpriteFlags;
 out float vVisible;
 
 void main() {
@@ -62,7 +62,7 @@ void main() {
     vUV = vertexUV * iUv.zw + iUv.xy;
     vLayer = iFlags.x;
     vTint = iTint;
-    vIsText = iFlags.w;
+    vSpriteFlags = iFlags.w;
     vVisible = iFlags.z;
 }
 `;
@@ -84,7 +84,7 @@ in vec2 vUV;
 in float vLayer;
 in vec4 vTint;
 // 1.0 のインスタンスは SDF テキストとして扱います。
-in float vIsText;
+in float vSpriteFlags;
 // 0.0 のインスタンスは描画しません (setVisible(false))。
 in float vVisible;
 
@@ -98,9 +98,15 @@ void main() {
     vec4 texColor = texture(textureArray, vec3(vUV, vLayer));
     // 通常のスプライトはテクスチャの色をそのまま使います。
     // テキスト (isText = 1) だけ距離場を閾値で切り、輪郭を滑らかにします。
-    if (vIsText > 0.5) {
+    uint flags = uint(vSpriteFlags + 0.5);
+    bool isText = (flags & 1u) != 0u;
+    bool isFill = (flags & 2u) != 0u;
+
+    if (isText) {
         float alpha = smoothstep(sdfThreshold - sdfSmoothing, sdfThreshold + sdfSmoothing, texColor.r);
         fragColor = vec4(vTint.rgb, vTint.a * alpha);
+    } else if (isFill) {
+        fragColor = vec4(vTint.rgb, vTint.a * texColor.a);
     } else {
         fragColor = texColor * vTint;
     }

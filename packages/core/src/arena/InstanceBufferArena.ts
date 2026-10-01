@@ -531,7 +531,7 @@ export class InstanceBufferArena {
     this.packedFlags[tBase + FlagsLane.FrameIdx] = 0.0;
     this.packedFlags[tBase + FlagsLane.Facing] = 1.0;
     this.packedFlags[tBase + FlagsLane.Visible] = 1.0;
-    this.packedFlags[tBase + FlagsLane.IsText] = 0.0;
+    this.packedFlags[tBase + FlagsLane.SpriteFlags] = (this.isText[idx] !== 0 ? 1 : 0) | (this.tintMode[idx] << 1);
     this.packedShape[tBase + ShapeLane.Rotation] = 0.0;
     this.packedShape[tBase + ShapeLane.FrameWidth] = DEFAULT_FRAME_SIZE;
     this.packedShape[tBase + ShapeLane.FrameHeight] = DEFAULT_FRAME_SIZE;
@@ -572,8 +572,8 @@ export class InstanceBufferArena {
     this.indexToId[lastIdx] = -1;
     this._activeCount--;
 
-    // 参照を明示的に解放し、TextureAsset を後から破棄できるようにする
-    this.assetRef[idx] = null;
+    // ???????????TextureAsset ??????????????
+    this.assetRef[lastIdx] = null;
 
     // データ配列がずれるためDirtyフラグを立てる
     this.markAllDirty();
@@ -905,15 +905,6 @@ export class InstanceBufferArena {
     this.dirtyFlagsGroup = true;
   }
 
-  /** `isText` を書き込みます。 */
-  public setIsText(i: number, v: number): void {
-    this.isText[i] = v;
-    this.packedFlags[i * 4 + FlagsLane.IsText] = v;
-    if (v !== 0) this.hasText = true;
-    this.dirtyIsText = true;
-    this.dirtyFlagsGroup = true;
-  }
-
   /** `tint` を書き込みます。 */
   public setTint(i: number, v: number): void {
     this.tint[i] = v;
@@ -970,6 +961,22 @@ export class InstanceBufferArena {
    */
   public setTintMode(i: number, v: number): void {
     this.tintMode[i] = v;
+    this._updateSpriteFlags(i);
+  }
+
+  /** `isText` を設定します。 */
+  public setIsText(i: number, v: number): void {
+    this.isText[i] = v;
+    if (v !== 0) this.hasText = true;
+    this.dirtyIsText = true;
+    this._updateSpriteFlags(i);
+  }
+
+  private _updateSpriteFlags(i: number): void {
+    const isTextBit = this.isText[i] !== 0 ? 1 : 0;
+    const tintBit = this.tintMode[i] << 1;
+    this.packedFlags[i * 4 + FlagsLane.SpriteFlags] = isTextBit | tintBit;
+    this.dirtyFlagsGroup = true;
   }
 
   /**
@@ -1117,7 +1124,7 @@ export class InstanceBufferArena {
     this.packedFlags[base + FlagsLane.FrameIdx] = frameIdx;
     this.packedFlags[base + FlagsLane.Facing] = facing;
     this.packedFlags[base + FlagsLane.Visible] = visible;
-    this.packedFlags[base + FlagsLane.IsText] = isText;
+    this.packedFlags[base + FlagsLane.SpriteFlags] = (isText !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
     if (isText !== 0) this.hasText = true;
     this.dirtyFrameIdx = true;
     this.dirtyScale = true;
@@ -1272,7 +1279,7 @@ export class InstanceBufferArena {
       // ミラー側も同じ既定値へ戻します。
       const base = i * 4;
       this.packedFlags[base + FlagsLane.Visible] = 1.0;
-      this.packedFlags[base + FlagsLane.IsText] = 0.0;
+      this.packedFlags[base + FlagsLane.SpriteFlags] = (this.isText[i] !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
       this.packedOrigin[base + OriginLane.OriginX] = 0.5;
       this.packedOrigin[base + OriginLane.OriginY] = 0.5;
       this.packedOrigin[base + OriginLane.ScrollFactorX] = 1.0;

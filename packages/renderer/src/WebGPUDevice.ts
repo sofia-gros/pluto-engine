@@ -70,7 +70,7 @@ struct VertexOutput {
   @location(0) uv    : vec2<f32>,
   @location(1) layer : f32,
   @location(2) tint  : vec4<f32>,
-  @location(3) isText : f32,
+  @location(3) spriteFlags : f32,
 };
 
 @vertex
@@ -100,7 +100,7 @@ fn vs_main(input : VertexInput) -> VertexOutput {
   out.uv = input.vertexUV * input.iUv.zw + input.iUv.xy;
   out.layer = input.iFlags.x;
   out.tint = input.iTint;
-  out.isText = input.iFlags.w;
+  out.spriteFlags = input.iFlags.w;
   return out;
 }
 
@@ -109,13 +109,20 @@ fn fs_main(input : VertexOutput) -> @location(0) vec4<f32> {
   let texColor = textureSample(textureArray, textureSampler, input.uv, i32(input.layer));
   // SDF テキストだけ距離場を閾値で切り、滑らかな縁を生成します。
   // 通常のスプライトはテクスチャの色をそのまま使います。
-  if (input.isText > 0.5) {
+  let flags = u32(input.spriteFlags + 0.5);
+  let isText = (flags & 1u) != 0u;
+  let isFill = (flags & 2u) != 0u;
+
+  if (isText) {
     let alpha = smoothstep(
       uniforms.sdfThreshold - uniforms.sdfSmoothing,
       uniforms.sdfThreshold + uniforms.sdfSmoothing,
       texColor.r,
     );
     return vec4<f32>(input.tint.rgb, input.tint.a * alpha);
+  }
+  if (isFill) {
+    return vec4<f32>(input.tint.rgb, input.tint.a * texColor.a);
   }
   return texColor * input.tint;
 }

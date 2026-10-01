@@ -138,7 +138,7 @@ describe('InstanceLayout', () => {
     expect(FlagsLane.FrameIdx).toBe(0);
     expect(FlagsLane.Facing).toBe(1);
     expect(FlagsLane.Visible).toBe(2);
-    expect(FlagsLane.IsText).toBe(3);
+    expect(FlagsLane.SpriteFlags).toBe(3);
   });
 
   it('パッキングによって WebGL2 頂点属性が 15 から 7 に減っている', () => {

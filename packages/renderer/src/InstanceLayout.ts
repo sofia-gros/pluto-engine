@@ -100,7 +100,7 @@ export const enum FlagsLane {
   FrameIdx = 0,
   Facing = 1,
   Visible = 2,
-  IsText = 3,
+  SpriteFlags = 3,
 }
 
 /** `packedOrigin` 内でのレーン位置 */

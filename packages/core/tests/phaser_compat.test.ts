@@ -291,7 +291,7 @@ describe('Phaser 互換 - tint / clearTint / setTintFill', () => {
     const s = makeSprite(arena);
     s.setTintFill(0xff0000, 0.5);
     // シェーダが texColor * vTint なので、色成分ではなく係数 1.0 が入ります。
-    expect(s.tint).toBe(0xffffff);
+    expect(s.tint).toBe(0xff0000);
     expect(s.alpha).toBeCloseTo(0.5, 2);
   });
 });

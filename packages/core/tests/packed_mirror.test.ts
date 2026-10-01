@@ -287,7 +287,7 @@ describe('packed mirror (vec4 packing)', () => {
     expect(arena.packedFlags[i * 4 + FlagsLane.FrameIdx]).toBe(5.0);
     expect(arena.packedFlags[i * 4 + FlagsLane.Facing]).toBe(-1.0);
     expect(arena.packedFlags[i * 4 + FlagsLane.Visible]).toBe(0.0);
-    expect(arena.packedFlags[i * 4 + FlagsLane.IsText]).toBe(1.0);
+    expect(arena.packedFlags[i * 4 + FlagsLane.SpriteFlags]).toBe(1.0);
     assertMirrorsInSync(arena, 'setFlags4 distinct');
   });
 
