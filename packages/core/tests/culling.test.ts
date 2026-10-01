@@ -217,6 +217,45 @@ describe('_swapInstances', () => {
     expect(arena.idToIndex[id0]).toBe(i1);
     expect(arena.idToIndex[id1]).toBe(i0);
   });
+
+  it('assetRef も 2 つの参照が正しく入れ替わる', () => {
+    // 回帰: 以前は assetRef だけが「片方向コピー」になっており、
+    // swap 後も index a に a のテクスチャが残っていました。
+    // すると a のスロットに b の座標・UV・スケールと
+    //  テクスチャだけ別物体的になり、描画が化けます。
+    const arena = new InstanceBufferArena(4);
+    const id0 = arena.allocate();
+    const id1 = arena.allocate();
+    const i0 = arena.idToIndex[id0];
+    const i1 = arena.idToIndex[id1];
+
+    const assetA = { key: 'a', layerIndex: 1 };
+    const assetB = { key: 'b', layerIndex: 2 };
+    arena.assetRef[i0] = assetA;
+    arena.assetRef[i1] = assetB;
+
+    arena._swapInstances(i0, i1);
+
+    // 入れ替わるので、i0 には b のテクスチャが、i1 には a のテクスチャが来る
+    expect(arena.assetRef[i0]?.key).toBe('b');
+    expect(arena.assetRef[i1]?.key).toBe('a');
+  });
+
+  it('片方の assetRef が null でも入れ替えが壊れない', () => {
+    const arena = new InstanceBufferArena(4);
+    const id0 = arena.allocate();
+    const id1 = arena.allocate();
+    const i0 = arena.idToIndex[id0];
+    const i1 = arena.idToIndex[id1];
+
+    arena.assetRef[i0] = { key: 'a', layerIndex: 1 };
+    arena.assetRef[i1] = null;
+
+    arena._swapInstances(i0, i1);
+
+    expect(arena.assetRef[i0]).toBeNull();
+    expect(arena.assetRef[i1]?.key).toBe('a');
+  });
 });
 
 describe('実描画でのカリング', () => {

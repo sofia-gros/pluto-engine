@@ -612,10 +612,13 @@ export class InstanceBufferArena {
     swapU32(this.tint, a, b);
     swapF32(this.visible, a, b);
     swapU16(this.srcFrame, a, b);
-    // assetRef は TextureAsset 参照を持つ配列です
-    // 参照を 1 度だけ退避してから両方を入れ替えます
+    // assetRef は TextureAsset 参照を持つ配列です。
+    // ここも 2 つの参照を退避して丸ごと入れ替えます。
+    // 代入 1 つだけだと「片方向コピー」になり、a のスロットが
+    // b の座標・UV・スケールを持つ一方でテクスチャだけ a のまま残り、描画が化けます。
     {
       const t = this.assetRef[a];
+      this.assetRef[a] = this.assetRef[b];
       this.assetRef[b] = t;
     }
     swapI32(this.parentId, a, b);
