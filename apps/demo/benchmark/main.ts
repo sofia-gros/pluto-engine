@@ -210,7 +210,8 @@ class BenchmarkScene extends Scene {
         this.py + Math.sin(angle) * radius,
         'enemy',
       );
-      sprite.scale = 10 + Math.random() * 10;
+      const size = 10 + Math.random() * 10;
+      sprite.setDisplaySize(size, size);
     }
   }
 

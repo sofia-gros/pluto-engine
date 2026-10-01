@@ -250,7 +250,8 @@ export class RPGWorld {
         const idx = y * W + x;
         const tType = this.tiles[idx];
         const spr = this.scene.add.sprite(x * this.tileSize + 16, y * this.tileSize + 16);
-        spr.scale = this.tileSize + 0.5; // シーム防止
+        const tSize = this.tileSize + 0.5;
+        spr.setDisplaySize(tSize, tSize); // シーム防止
 
         switch (tType) {
           case TileType.GRASS:
@@ -299,7 +300,8 @@ export class RPGWorld {
     // プロップの描画スプライト配置
     for (const prop of this.props) {
       const spr = this.scene.add.sprite(prop.x, prop.y);
-      spr.scale = Math.max(prop.width, prop.height);
+      const pSize = Math.max(prop.width, prop.height);
+      spr.setDisplaySize(pSize, pSize);
       prop.sprite = spr;
 
       switch (prop.type) {

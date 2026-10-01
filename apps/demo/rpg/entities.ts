@@ -186,12 +186,12 @@ export class Player {
 
     // プレイヤーの本体スプライト
     this.sprite = scene.add.sprite(this.x, this.y);
-    this.sprite.scale = 26;
+    this.sprite.setDisplaySize(26, 26);
     this.sprite.setTint(0x38bdf8); // 勇者スカイブルー
 
     // 剣の斬撃エフェクトスプライト
     this.slashSprite = scene.add.sprite(-1000, -1000);
-    this.slashSprite.scale = 36;
+    this.slashSprite.setDisplaySize(36, 36);
     this.slashSprite.setTint(0xfef08a);
   }
 
@@ -410,7 +410,7 @@ export class TownNPC {
     this.dialogs = dialogs;
 
     this.sprite = scene.add.sprite(x, y);
-    this.sprite.scale = 26;
+    this.sprite.setDisplaySize(26, 26);
 
     switch (type) {
       case 'elder':
@@ -520,7 +520,7 @@ export class Monster {
         this.radius = 12;
         this.expReward = 15;
         this.goldReward = 8;
-        this.sprite.scale = 22;
+        this.sprite.setDisplaySize(22, 22);
         this.sprite.setTint(0x22c55e); // スライムグリーン
         break;
       case 'goblin':
@@ -531,7 +531,7 @@ export class Monster {
         this.radius = 14;
         this.expReward = 35;
         this.goldReward = 20;
-        this.sprite.scale = 26;
+        this.sprite.setDisplaySize(26, 26);
         this.sprite.setTint(0xd97706); // ゴブリンオレンジ
         break;
       case 'skeleton':
@@ -542,7 +542,7 @@ export class Monster {
         this.radius = 15;
         this.expReward = 60;
         this.goldReward = 40;
-        this.sprite.scale = 28;
+        this.sprite.setDisplaySize(28, 28);
         this.sprite.setTint(0xe2e8f0); // スケルトンホワイト
         break;
       case 'boss':
@@ -555,7 +555,7 @@ export class Monster {
         this.aggroRange = 500;
         this.expReward = 800;
         this.goldReward = 600;
-        this.sprite.scale = 64;
+        this.sprite.setDisplaySize(64, 64);
         this.sprite.setTint(0xdc2626); // ドラゴン真紅
         break;
     }
@@ -695,7 +695,8 @@ export class RPGProjectile {
     this.isEnemy = isEnemy;
 
     this.sprite = scene.add.sprite(x, y);
-    this.sprite.scale = isEnemy ? 14 : 18;
+    const size = isEnemy ? 14 : 18;
+    this.sprite.setDisplaySize(size, size);
     this.sprite.setTint(isEnemy ? 0x9333ea : 0xf97316); // 敵弾: 紫, 味方弾: 火炎オレンジ
   }
 
@@ -741,7 +742,7 @@ export class RPGLoot {
     this.value = value;
 
     this.sprite = scene.add.sprite(x, y);
-    this.sprite.scale = 16;
+    this.sprite.setDisplaySize(16, 16);
 
     switch (type) {
       case 'coin':

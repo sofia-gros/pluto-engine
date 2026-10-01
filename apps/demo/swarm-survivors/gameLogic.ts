@@ -42,7 +42,7 @@ export class Player {
   constructor(scene: Scene, x: number, y: number) {
     this.sprite = scene.add.sprite(x, y, 'chars');
     this.sprite.play('walking_front');
-    this.sprite.scale = 28;
+    this.sprite.setDisplaySize(28, 28);
     this.skills.set('magic_wand', 1);
   }
 
@@ -411,7 +411,7 @@ export class SwarmSystem {
     scale = 20,
   ) {
     const sprite = this.scene.add.sprite(x, y, 'chars');
-    sprite.scale = scale;
+    sprite.setDisplaySize(scale, scale);
     const id = sprite.id;
     if (id === -1) return;
 
@@ -451,7 +451,7 @@ export class SwarmSystem {
     } else {
        sprite.setTintFill(0x00aaff);
     }
-    sprite.scale = 14;
+    sprite.setDisplaySize(14, 14);
     this.dsprite[i] = sprite;
   }
 
@@ -468,7 +468,7 @@ export class SwarmSystem {
     const sprite = this.scene.add.sprite(x, y, 'chars');
     sprite.setFrame(0);
     sprite.setTintFill(0xff6666);
-    sprite.scale = 12;
+    sprite.setDisplaySize(12, 12);
     this.psprite[i] = sprite;
   }
 
@@ -521,7 +521,7 @@ export class SwarmSystem {
         if (ei < 0) continue;
         const dx = this.scene.arena.posX[ei] - projX;
         const dy = this.scene.arena.posY[ei] - projY;
-        const hitRadius = this.scene.arena.scale[ei] * 0.5 + 6;
+        const hitRadius = this.scene.arena.frameWidth[ei] * this.scene.arena.scaleX[ei] * 0.5 + 6;
         if (dx * dx + dy * dy < hitRadius * hitRadius) {
           this.hp[e] -= dmg;
           const kForce = 8 * (1.0 - this.knockResist[e]);
@@ -591,7 +591,10 @@ export class SwarmSystem {
     const posX = this.scene.arena.posX;
     const posY = this.scene.arena.posY;
     const facing = this.scene.arena.facing;
-    const scale = this.scene.arena.scale;
+    // 判定半径はフレームのピクセル寸法 x スケール倍率で導出します。
+    // scale は倍率でありピクセル数ではない点に注意。
+    const frameW = this.scene.arena.frameWidth;
+    const scaleX = this.scene.arena.scaleX;
     const vx = this.vx;
     const vy = this.vy;
     const spd = this.spd;
@@ -692,7 +695,7 @@ export class SwarmSystem {
         const pdx = ex - px;
         const pdy = ey - py;
         const pDist2 = pdx * pdx + pdy * pdy;
-        const reach = pRadius + scale[i] * 0.42;
+        const reach = pRadius + frameW[i] * scaleX[i] * 0.42;
 
         if (pDist2 < reach * reach) {
           player.takeDamage(this.atkPower[id] * dt, stats);
@@ -721,7 +724,7 @@ export class SwarmSystem {
     let pairCount = 0;
 
     for (let i = 0; i < activeCount && pairCount * 2 < pairs.length - 2; i++) {
-      const eRadius = scale[i] * 0.42;
+      const eRadius = frameW[i] * scaleX[i] * 0.42;
       const count = this.scene.spatialHash.query(posX[i], posY[i], eRadius * 2, scratch);
       for (let j = 0; j < count; j++) {
         const otherId = scratch[j];
@@ -741,7 +744,7 @@ export class SwarmSystem {
       particles.count = activeCount;
       // 半径は SoA から読み戻すため、ここへ写す (毎フレームの割り当ては無い)
       for (let i = 0; i < activeCount; i++) {
-        particles.radii[i] = scale[i] * 0.42;
+        particles.radii[i] = frameW[i] * scaleX[i] * 0.42;
         // プレイヤーは群集の押し出し対象ではありません。
         // 動かすと操作感が悪く、かつ毎フレーム位置が上書きされます。
         particles.invMasses[i] = i === pIdx ? 0.0 : 1.0;
