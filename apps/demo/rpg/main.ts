@@ -7,6 +7,7 @@
  */
 
 import { PlutoEngine, Scene } from '@pluto-engine/core';
+import { MonsterUtilityAI } from './ai';
 import { rpgAudio } from './audio';
 import {
   FloatingText,
@@ -18,11 +19,11 @@ import {
   TownNPC,
 } from './entities';
 import { RPGUIManager } from './ui';
-import { MonsterUtilityAI } from './ai';
 import { RPGWorld } from './world';
 
 class RPGScene extends Scene {
-  public world!: RPGWorld;
+  /** ゲーム固有のワールド情報。Phaser 互換の Scene.world とは別物です。 */
+  public rpgWorld!: RPGWorld;
   public player!: Player;
   public npcs: TownNPC[] = [];
   public monsters: Monster[] = [];
@@ -66,14 +67,14 @@ class RPGScene extends Scene {
 
   create() {
     // 1. ワールド構築 (町・平原・ダンジョンのタイル & プロップ)
-    this.world = new RPGWorld(this);
+    this.rpgWorld = new RPGWorld(this);
 
     // 2. 地形から符号付き距離場を生成する。
     // これによりプレイヤーは壁の角で引っかからず滑らかに滑れるようになります。
-    this.world.buildSDF();
+    this.rpgWorld.buildSDF();
 
     // 3. プレイヤー生成
-    this.player = new Player(this, this.world);
+    this.player = new Player(this, this.rpgWorld);
 
     // 4. 町の NPC 生成
     this.spawnTownNPCs();
@@ -161,7 +162,7 @@ class RPGScene extends Scene {
         y = (68 + Math.random() * 18) * 32;
       }
 
-      if (!this.world.isBlocked(x, y, 14)) {
+      if (!this.rpgWorld.isBlocked(x, y, 14)) {
         this.monsters.push(new Monster(this, i, type, x, y));
       }
     }
@@ -332,7 +333,7 @@ class RPGScene extends Scene {
     }
 
     // 2. 宝箱を開ける (半径 44px)
-    for (const chest of this.world.chests) {
+    for (const chest of this.rpgWorld.chests) {
       if (chest.opened) continue;
       const dist = Math.hypot(chest.x - p.x, chest.y - p.y);
       if (dist < 46) {
@@ -397,7 +398,7 @@ class RPGScene extends Scene {
     }
     if (m.isBoss) {
       this.loots.push(new RPGLoot(this, m.x, m.y, 'gem', 10));
-    // 生存個体だけを先頭に詰めます (ipar 配列の隙間をなくす)
+      // 生存個体だけを先頭に詰めます (ipar 配列の隙間をなくす)
     }
 
     this.ui.updateHUD();
@@ -461,7 +462,7 @@ class RPGScene extends Scene {
 
     // 3. NPC 更新
     for (const npc of this.npcs) {
-      npc.update(dt, this.world);
+      npc.update(dt, this.rpgWorld);
     }
 
     // 4. モンスター AI の一括評価 (SoA Utility AI)
@@ -473,7 +474,7 @@ class RPGScene extends Scene {
       const m = this.monsters[i];
       if (m.hp <= 0) continue;
 
-      const act = m.update(dt, this.player.x, this.player.y, this.world);
+      const act = m.update(dt, this.player.x, this.player.y, this.rpgWorld);
       if (act?.shoot) {
         this.projectiles.push(
           new RPGProjectile(
@@ -506,7 +507,7 @@ class RPGScene extends Scene {
     // 5. 飛び道具更新 & 衝突判定
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
-      const active = p.update(dt, this.world);
+      const active = p.update(dt, this.rpgWorld);
       if (!active) {
         this.projectiles.splice(i, 1);
         continue;
