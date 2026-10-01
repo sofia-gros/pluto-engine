@@ -2,25 +2,25 @@ import { Sprite } from '../arena/Sprite';
 import { Text, type TextStyle } from '../arena/Text';
 import { FontAtlas, type FontAtlasOptions } from '../text/FontAtlas';
 
+import { AnimationManager } from '../anim/AnimationManager';
+import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
 import type { PlutoEngine } from '../core/PlutoEngine';
+import { DataRegistry } from '../events/DataRegistry';
+import { EventEmitter } from '../events/EventEmitter';
 import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';
 import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
-import { TweenManager } from '../tween/TweenManager';
-import { AnimationManager } from '../anim/AnimationManager';
-import type { Plugin } from './Plugin';
-import type { SceneManager } from './SceneManager';
-import { Tilemap } from '../tilemap/Tilemap';
-import { Camera } from './Camera';
-import { CameraManager } from './CameraManager';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
 import { SoundManager } from '../sound/SoundManager';
-import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
+import { Tilemap } from '../tilemap/Tilemap';
+import { TweenManager } from '../tween/TweenManager';
+import type { Camera } from './Camera';
+import { CameraManager } from './CameraManager';
+import type { Plugin } from './Plugin';
+import type { SceneManager } from './SceneManager';
 import { Subsystem } from './SubsystemMask';
-import { EventEmitter } from '../events/EventEmitter';
-import { DataRegistry } from '../events/DataRegistry';
 
 export interface SceneProps {
   id?: string;

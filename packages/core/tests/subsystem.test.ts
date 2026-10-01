@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { DataRegistry } from '../src/events/DataRegistry';
+import { EventEmitter } from '../src/events/EventEmitter';
 import { Scene } from '../src/scene/Scene';
 import { Subsystem, describeSubsystems } from '../src/scene/SubsystemMask';
-import { EventEmitter } from '../src/events/EventEmitter';
-import { DataRegistry } from '../src/events/DataRegistry';
 
 describe('SubsystemMask', () => {
   it('各ビットが単一ビットであり、互いに重ならない', () => {

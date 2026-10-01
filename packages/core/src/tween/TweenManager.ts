@@ -218,10 +218,7 @@ export class TweenManager {
   }
 
   /** チェーン ID → 実行中のステップ。Map は 1 チェーンにつき 1 エントリです。 */
-  private readonly chainQueue = new Map<
-    number,
-    { list: TweenConfig[]; index: number }
-  >();
+  private readonly chainQueue = new Map<number, { list: TweenConfig[]; index: number }>();
 
   private _nextGroupId = 0;
 

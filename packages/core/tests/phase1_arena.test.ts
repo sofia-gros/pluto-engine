@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import { AnimationManager } from '../src/anim/AnimationManager';
 import { InstanceBufferArena } from '../src/arena/InstanceBufferArena';
 import { Sprite } from '../src/arena/Sprite';
 import { Text } from '../src/arena/Text';
-import { AnimationManager } from '../src/anim/AnimationManager';
 
 describe('InstanceBufferArena: SoA Scene Graph', () => {
   test('computeWorldTransforms resolves parent-child composition', () => {
