@@ -322,6 +322,125 @@ describe('Body Flyweight (R-03)', () => {
     // キャッシュ済みなので同じインスタンス
     expect(s.body).toBe(body);
   });
+
+  it('speed と angle が SoA の速度から算出される', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const s = scene.add.sprite(0, 0);
+    const body = scene.getBody(s);
+    body.setVelocity(3, 4);
+    expect(body.speed).toBeCloseTo(5);
+    expect(body.angle).toBeCloseTo(Math.atan2(4, 3));
+
+    body.setVelocityFromAngle(90, 10);
+    expect(body.velocityX).toBeCloseTo(0);
+    expect(body.velocityY).toBeCloseTo(10);
+  });
+
+  it('enable/disable が SoA に反映される', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const s = scene.add.sprite(0, 0);
+    const body = scene.getBody(s);
+    // 既定は有効
+    expect(body.enabled).toBe(true);
+    expect(scene.physics.getEnabled(s.id)).toBe(true);
+
+    body.setVelocity(100, 0);
+    body.disable();
+    expect(scene.physics.getEnabled(s.id)).toBe(false);
+    scene.physics.update(1);
+    // 無効なので積分されない
+    expect(s.x).toBeCloseTo(0);
+
+    body.enable();
+    scene.physics.update(1);
+    expect(s.x).toBeCloseTo(100);
+  });
+
+  it('setFriction が SoA に反映され、加速度 0 のときだけ減衰する', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const s = scene.add.sprite(0, 0);
+    const body = scene.getBody(s);
+    body.setVelocity(100, 0);
+    body.setFriction(0.5);
+    expect(scene.physics.getFriction(s.id)).toBe(0.5);
+
+    scene.physics.update(1);
+    // 100 - 100 * 0.5 = 50
+    expect(body.velocityX).toBeCloseTo(50);
+  });
+
+  it('摩擦は加速度があると効かない（drag と区別される）', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const s = scene.add.sprite(0, 0);
+    const body = scene.getBody(s);
+    body.setVelocity(0, 0);
+    body.setAcceleration(100, 0);
+    body.setFriction(0.9);
+    scene.physics.update(1);
+    // 加速度で立てた速度は摩擦で削られない
+    expect(body.velocityX).toBeCloseTo(100);
+  });
+
+  it('frictionStatic で完全停止する', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const s = scene.add.sprite(0, 0);
+    const body = scene.getBody(s);
+    body.setVelocity(3, 0);
+    body.setFriction(0.5, 2);
+    scene.physics.update(1);
+    // 3 - 1.5 = 1.5 で 2 以下なので 0 に丸められる
+    expect(body.velocityX).toBe(0);
+  });
+
+  it('enable が 0 のエンティティは update の積分から除外される（疎添字のずれも無い）', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const a = scene.add.sprite(0, 0);
+    const b = scene.add.sprite(0, 0);
+    scene.getBody(a).setVelocity(10, 0);
+    scene.getBody(b).setVelocity(20, 0);
+    scene.getBody(b).disable();
+
+    scene.physics.update(1);
+    expect(a.x).toBeCloseTo(10);
+    expect(b.x).toBeCloseTo(0);
+  });
+});
+
+describe('physics.add.group / staticGroup', () => {
+  it('group は Array ベースの Group を返す（SoA を汚さない）', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const a = scene.add.sprite(0, 0);
+    const b = scene.add.sprite(0, 0);
+    const g = scene.physics.add.group([a, b]);
+    expect(g).toBeInstanceOf(Group);
+    expect(g.getLength()).toBe(2);
+    expect(g.contains(a)).toBe(true);
+  });
+
+  it('staticGroup は所属メンバーに immovable を立てる', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const a = scene.add.sprite(0, 0);
+    const b = scene.add.sprite(0, 0);
+    const g = scene.physics.add.staticGroup([a, b]);
+    expect(g.getLength()).toBe(2);
+    expect(scene.physics.getImmovable(a.id)).toBe(true);
+    expect(scene.physics.getImmovable(b.id)).toBe(true);
+  });
+
+  it('staticGroup は後から add したメンバーにも immovable を立てる', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const g = scene.physics.add.staticGroup();
+    const a = scene.add.sprite(0, 0);
+    g.add(a);
+    expect(scene.physics.getImmovable(a.id)).toBe(true);
+  });
+
+  it('group は immovable を立てない（group と staticGroup の差）', () => {
+    const scene = new Scene({ maxInstances: 32 });
+    const a = scene.add.sprite(0, 0);
+    scene.physics.add.group([a]);
+    expect(scene.physics.getImmovable(a.id)).toBe(false);
+  });
 });
 
 describe('World Flyweight (R-03)', () => {

@@ -104,6 +104,39 @@ export class Body {
     this._physics.setBounce(this.entityId, v);
   }
 
+  /** 動摩擦 (0〜1)。加速度が 0 のときだけ作用します */
+  get friction(): number {
+    return this._physics.getFriction(this.entityId);
+  }
+
+  set friction(v: number) {
+    this._physics.setFriction(this.entityId, v, this._physics.getFrictionStatic(this.entityId));
+  }
+
+  /** 静摩擦。速度がこれ以下で完全停止 */
+  get frictionStatic(): number {
+    return this._physics.getFrictionStatic(this.entityId);
+  }
+
+  set frictionStatic(v: number) {
+    this._physics.setFriction(this.entityId, this.friction, v);
+  }
+
+  /**
+   * 速度の大きさ (`Math.hypot(vx, vy)`)。
+   * 書き込みはせず、方向を保ったまま速度設定時に使う読み取り専用の値です。
+   */
+  get speed(): number {
+    const vx = this.velocityX;
+    const vy = this.velocityY;
+    return Math.sqrt(vx * vx + vy * vy);
+  }
+
+  /** 速度ベクトルの向き (ラジアン、`Math.atan2(vy, vx)`) */
+  get angle(): number {
+    return Math.atan2(this.velocityY, this.velocityX);
+  }
+
   /** 質量 */
   get mass(): number {
     return this._physics.getMass(this.entityId);
@@ -144,6 +177,15 @@ export class Body {
 
   set checkCollision(v: boolean) {
     this._physics.setCollideWorldBounds(this.entityId, v);
+  }
+
+  /** 物理演算の対象になっているか */
+  get enabled(): boolean {
+    return this._physics.getEnabled(this.entityId);
+  }
+
+  set enabled(v: boolean) {
+    this._physics.setEnabled(this.entityId, v);
   }
 
   // --- メソッド (Phaser 互換) ---
@@ -198,6 +240,42 @@ export class Body {
   /** 反発係数を設定します。 */
   setBounce(bounce: number): this {
     this._physics.setBounce(this.entityId, bounce);
+    return this;
+  }
+
+  /**
+   * 動摩擦と静摩擦を設定します (Phaser 互換の `setFriction`)。
+   * 動摩擦は**加速度が 0 のときだけ**速度を減衰させます。
+   *
+   * @param value 動摩擦 (0〜1)。0 のときは無効
+   * @param staticValue 静摩擦。速度がこれ以下で完全停止。0 なら停止しない
+   */
+  setFriction(value: number, staticValue = 0): this {
+    this._physics.setFriction(this.entityId, value, staticValue);
+    return this;
+  }
+
+  /**
+   * 速度の大きさと向きから速度を設定します (Phaser 互換の `setVelocityFromAngle`)。
+   *
+   * @param degrees 向き (度)。反時計回りが正
+   * @param speed 速度の大きさ
+   */
+  setVelocityFromAngle(degrees: number, speed: number): this {
+    const rad = (degrees * Math.PI) / 180;
+    this._physics.setVelocity(this.entityId, Math.cos(rad) * speed, Math.sin(rad) * speed);
+    return this;
+  }
+
+  /** 物理演算を有効にします (Phaser 互換の `enable`)。 */
+  enable(): this {
+    this._physics.setEnabled(this.entityId, true);
+    return this;
+  }
+
+  /** 物理演算を停止します (Phaser 互換の `disable`)。 */
+  disable(): this {
+    this._physics.setEnabled(this.entityId, false);
     return this;
   }
 

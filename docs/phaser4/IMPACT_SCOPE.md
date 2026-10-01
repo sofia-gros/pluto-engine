@@ -270,14 +270,32 @@ Phase 2 の実装・テストの中で発見した、Phase 2 とは無関係な�
 
 ### 5.3 チェックリスト
 
-- [ ] SoA 配列 15 種を `ArcadePhysics` に追加
-- [ ] `Body` Flyweight を実装（`setVelocityX/Y` / `setAcceleration` / `setDrag` / `setBounce` / `setMaxVelocity` / `setImmovable` / `setSize` / `setOffset` / `setCircle` / `setCollideWorldBounds` / `setFriction` / `velocity` / `speed` / `angle`）
-- [ ] `World` Flyweight を実装（`setBoundsRectangle` / `setBounds` / `collideWorldBounds` / `bounds` / `getBounds` / `gravityX/Y`）
-- [ ] `ArcadePhysics.update` に acceleration / drag / maxVelocity / friction を統合
-- [ ] `world.bounds` とスプライトの衝突判定を実装
-- [ ] `physics.add.group` / `staticGroup` を `Group` Flyweight 経由で実装
-- [ ] SoA テスト（body の各 field が SoA に反映されること）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] SoA 配列 15 種を `ArcadePhysics` に追加
+- [x] `Body` Flyweight を実装（`setVelocityX/Y` / `setAccelerationX/Y` / `setDrag` / `setBounce` / `setMaxVelocity` / `setImmovable` / `setSize` / `setOffset` / `setCircle` / `setCollideWorldBounds` / `setFriction` / `velocity` / `speed` / `angle`）
+- [x] `World` Flyweight を実装（`setBoundsRectangle` / `setBounds` / `collideWorldBounds` / `bounds` / `getBounds` / `gravityX/Y`）
+- [x] `ArcadePhysics.update` に acceleration / drag / maxVelocity / friction を統合
+- [x] `world.bounds` とスプライトの衝突判定を実装
+- [x] `physics.add.group` / `staticGroup` を `Group` Flyweight 経由で実装
+- [x] SoA テスト（body の各 field が SoA に反映されること）
+- [x] `bun run test` / `bun run lint` 通過
+
+### 5.4 実装中に検出した既存バグ
+
+Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不整合です。
+
+| 場所 | 内容 |
+| --- | --- |
+| `ArcadePhysics.update` | `enable` が 0 のエンティティも積分対象になっていた。判定系 (`processOverlaps` / `processColliders`) と積分が別系統なので、判定だけ残す |
+| `ArcadePhysics._getBufRadius` | `arena` の `scale` を半径として想定していたが、`InstanceBufferArena` に `scale` は存在しない（`scaleX` / `scaleY` が別配列）。そのため SoA アリーナの半径が常にフォールバックの 16 に固定され、AABB 枝刈りが意図より広く通っていた。`frameWidth * scaleX * 0.5` から導出するよう修正 |
+
+### 5.5 設計上の補足（当初計画からの逸脱）
+
+| 項目 | 判断 | 理由 |
+| --- | --- | --- |
+| `friction` の作用条件 | **`drag` と区別し、加速度が 0 のときだけ**減衰させる | Phaser の仕様。両者を同時適用すると「押し続けて滑る」挙動が消える |
+| `frictionStatic` | 速度が閾値以下で 0 に丸める | 完全停止の再現。0 なら丸めないため、閾値未設定時に挙動が変わらない |
+| `enable` の初期値 | `fill(1)`（既定有効） | `allocate` 直後の無設定スプライトが突然止まらないようにする |
+| `staticGroup` の immovable | `Group` に `setOnAddHook` を追加し、追加のたびに適用 | 生成済みメンバーだけでなく `add()` したばかりのメンバーも Phaser 互換で immovable になる |
 
 ---
 
