@@ -159,7 +159,7 @@ describe('ゼロコスト・サブシステム (遅延アクティベーショ�
 });
 
 describe('add.container', () => {
-  it('子を親へ結び、子の座標を相対座標へ変換する', () => {
+  it('子を親へ結び、子の座標をローカル座標へ変換する', () => {
     const scene = new Scene({ maxInstances: 100 });
     const a = scene.add.sprite(110, 120);
     const b = scene.add.sprite(130, 140);
@@ -167,12 +167,33 @@ describe('add.container', () => {
 
     expect(a.parentId).toBe(parent.id);
     expect(b.parentId).toBe(parent.id);
-    // ローカル座標は親基準になります
-    expect(scene.arena.posX[scene.arena.idToIndex[a.id]]).toBe(10);
-    expect(scene.arena.posY[scene.arena.idToIndex[a.id]]).toBe(20);
-    expect(scene.arena.posX[scene.arena.idToIndex[b.id]]).toBe(30);
-    expect(scene.arena.posY[scene.arena.idToIndex[b.id]]).toBe(40);
+
+    const ai = scene.arena.idToIndex[a.id];
+    const bi = scene.arena.idToIndex[b.id];
+
+    // ローカル座標は親基準になります。
+    // 階層が有効なときの描画は localX / localY から解決されるため、
+    // 正本はこちらです (posX は最後のワールド座標を保持します)。
+    expect(scene.arena.localX[ai]).toBe(10);
+    expect(scene.arena.localY[ai]).toBe(20);
+    expect(scene.arena.localX[bi]).toBe(30);
+    expect(scene.arena.localY[bi]).toBe(40);
     expect(scene.arena.hasHierarchy).toBe(true);
+  });
+
+  it('追加前のワールド座標を保つ', () => {
+    const scene = new Scene({ maxInstances: 100 });
+    const a = scene.add.sprite(110, 120);
+    scene.add.container(100, 100, [a]);
+
+    const ai = scene.arena.idToIndex[a.id];
+    scene.arena.computeWorldTransforms();
+    // 親へ入れた後もワールド座標は変わらない
+    expect(scene.arena.worldX[ai]).toBe(110);
+    expect(scene.arena.worldY[ai]).toBe(120);
+    // Sprite の x / y はワールド座標を返す
+    expect(a.x).toBe(110);
+    expect(a.y).toBe(120);
   });
 
   it('ワールド変換は親の移動量だけ加算される', () => {

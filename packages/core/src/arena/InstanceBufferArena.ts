@@ -265,6 +265,36 @@ export class InstanceBufferArena {
   public bodyFactory: ((entityId: number) => Body) | null = null;
 
   /**
+   * 親子関係を設定します (Phaser 互換のコンテナ階層)。
+   *
+   * @param id 子の疎添字 ID
+   * @param parentId 親の疎添字 ID。親なしは `PARENT_NONE` (-1)
+   */
+  public setParentId(id: number, parentId: number): void {
+    const idx = this.idToIndex[id];
+    if (idx < 0) return;
+    this.parentId[idx] = parentId;
+  }
+
+  /**
+   * 親 ID を取得します。親なしなら -1 を返します。
+   */
+  public getParentId(id: number): number {
+    const idx = this.idToIndex[id];
+    if (idx < 0) return -1;
+    return this.parentId[idx];
+  }
+
+  /**
+   * 密添字から疎添字 ID へ変換します (逆引き)。
+   * @returns 範囲外なら -1
+   */
+  public sparseIdOf(denseIndex: number): number {
+    if (denseIndex < 0 || denseIndex >= this._activeCount) return -1;
+    return this.indexToId[denseIndex];
+  }
+
+  /**
    * 親子関係を持つエンティティが 1 体でも存在するかどうか。
    * false の間はワールド変換の解決を丸ごと省略できます。
    * ゲームが直接 posX を書き換える運用にも影響しないため、このフラグで経路を分けます。

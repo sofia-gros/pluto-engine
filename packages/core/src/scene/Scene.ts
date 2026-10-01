@@ -1,3 +1,5 @@
+import { Container } from '../arena/Container';
+import { Group } from '../arena/Group';
 import { Sprite } from '../arena/Sprite';
 import { Text, type TextStyle } from '../arena/Text';
 import { FontAtlas, type FontAtlasOptions } from '../text/FontAtlas';
@@ -68,6 +70,8 @@ export class Scene {
   private _world: World | null = null;
   /** Body ハンドルのキャッシュ。疎添字 ID -> Body。 */
   private readonly _bodyHandles = new Map<number, Body>();
+  /** Container ハンドルのキャッシュ。疎添字 ID -> Container。 */
+  private readonly _containerHandles = new Map<number, Container>();
 
   // --- ゼロコスト・サブシステム ---
   // 各マネージャーは初回の参照時にだけ生成され、その参照で
@@ -252,6 +256,19 @@ export class Scene {
     return b;
   }
 
+  /**
+   * コンテナハンドル (Phaser 互換の `sprite` を `Container` で包む) を取得します。
+   * キャッシュするため、同じ ID なら毎回同じインスタンスを返します。
+   */
+  public getContainer(entityId: number): Container {
+    let c = this._containerHandles.get(entityId);
+    if (c === undefined) {
+      c = new Container(entityId, this.arena);
+      this._containerHandles.set(entityId, c);
+    }
+    return c;
+  }
+
   /** ポインタヒットテストの結果を受け取るバッファ (毎フレーム new しない) */
   public readonly _hitBuffer = new Int32Array(64);
   /** 生成済みフォントアトラス。作成は初期化時のみです。 */
@@ -378,18 +395,17 @@ export class Scene {
       return tm;
     },
     /**
-     * 複数の表示オブジェクトを親の下へまとめます。
+     * 複数の表示オブジェクトを親の下へまとめます (Phaser 互換の `add.container`)。
+     *
      * 親子変換は SoA のシーングラフで解決されます。
+     * 返り値は Container Flyweight で、own property は id と _arena の 2 個だけです。
      */
-    container: (x = 0, y = 0, children: Sprite[] = []): Sprite => {
-      const parent = this.add.sprite(x, y);
+    container: (x = 0, y = 0, children: Sprite[] = []): Container => {
+      const parentSprite = this.add.sprite(x, y);
       this._active |= Subsystem.Sprites;
+      const parent = this.getContainer(parentSprite.id);
       for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        // 子の座標は親基準のローカル座標へ変換します。
-        child.x = child.x - x;
-        child.y = child.y - y;
-        child.setParentId(parent.id);
+        parent.add(children[i].id);
       }
       return parent;
     },
@@ -401,6 +417,17 @@ export class Scene {
      */
     image: (x = 0, y = 0, textureKey?: string, frameKey?: string | number): Sprite => {
       return this.add.sprite(x, y, textureKey, frameKey);
+    },
+    /**
+     * グループを生成します (Phaser 互換の `add.group`)。
+     *
+     * Group は SoA 化せず、使い回し `Array` で実装します (判定 D)。
+     * アリーナは汚さず、「CPU 管理のビュー」として並行して持ちます。
+     */
+    group: (children: Sprite[] = []): Group => {
+      const g = new Group();
+      g.addMultiple(children);
+      return g;
     },
   };
 
@@ -414,6 +441,9 @@ export class Scene {
       Object.assign(this, props);
     }
     this.arena = new ArenaClass(maxInstances);
+    // Sprite.body が Body ハンドルを取得できるようにファクトリを登録します。
+    // 物理サブシステムには触らないので、未初期化でも new は発生しません。
+    this._ensureBodyFactory();
     this.input = new InputManager();
     this.textures = new TextureManager();
     this.load = new LoaderManager(this.textures);

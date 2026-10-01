@@ -91,18 +91,24 @@ export class World {
 
   /**
    * 指定エンティティがワールド境界の内側か外側かを返します。
+   *
+   * 当たり判定矩形の**四隅**で判定するため、当たり判定設定によって
+   * よって外側判定が変わります。
+   *
    * @param out 1 要素のバッファ。0 = 内側、1 = 外側
    */
   isOutsideWorld(entityId: number, out: Float32Array = BOUNDS_OUT): boolean {
     const p = this._physics;
     if (!p.hasBounds) return false;
-    const x = p.getBodyX(entityId) + p.getHalfWidth(entityId);
-    const y = p.getBodyY(entityId) + p.getHalfHeight(entityId);
-    const outside =
-      x < p.boundsX ||
-      y < p.boundsY ||
-      x > p.boundsX + p.boundsWidth ||
-      y > p.boundsY + p.boundsHeight;
+    const cx = p.getBodyX(entityId);
+    const cy = p.getBodyY(entityId);
+    const hw = p.getHalfWidth(entityId);
+    const hh = p.getHalfHeight(entityId);
+    const left = p.boundsX;
+    const top = p.boundsY;
+    const right = p.boundsX + p.boundsWidth;
+    const bottom = p.boundsY + p.boundsHeight;
+    const outside = cx - hw < left || cy - hh < top || cx + hw > right || cy + hh > bottom;
     out[0] = outside ? 1 : 0;
     return outside;
   }

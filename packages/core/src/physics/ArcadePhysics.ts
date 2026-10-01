@@ -559,22 +559,29 @@ export class ArcadePhysics implements Plugin {
       let py = arena.posY[i] + vy * dt;
 
       // 5. ワールド境界の反射
+      // 当たり判定矩形の**中心**が境界を越えたら反射させます。
+      // 中心判定にすることで、境界の外面と.speed の整合が取れます。
       if (hasBounds && this.collideWorldBounds[i] === 1) {
         const b = this.bounce[i];
+        const left = bx0 + this._halfWidth(i);
+        const right = bx1 - this._halfWidth(i);
+        const top = by0 + this._halfHeight(i);
+        const bottom = by1 - this._halfHeight(i);
+
         // 左
-        if (px < bx0) {
-          px = bx0;
+        if (px < left) {
+          px = left;
           if (vx < 0) vx = -vx * b;
-        } else if (px > bx1) {
-          px = bx1;
+        } else if (px > right) {
+          px = right;
           if (vx > 0) vx = -vx * b;
         }
         // 上
-        if (py < by0) {
-          py = by0;
+        if (py < top) {
+          py = top;
           if (vy < 0) vy = -vy * b;
-        } else if (py > by1) {
-          py = by1;
+        } else if (py > bottom) {
+          py = bottom;
           if (vy > 0) vy = -vy * b;
         }
         this.velX[i] = vx;

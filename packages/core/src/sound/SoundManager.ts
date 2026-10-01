@@ -66,69 +66,148 @@ export interface AudioConfig {
  * `play()` が返した後も new は発生しません。
  */
 export class SoundHandle {
-  /** 再生中の SoundManager 内のキー名 */
-  public readonly key: string;
-  private _voice: Voice | null;
+  /**
+   * Voice プール内のインデックス。-1 は未割当を示します。
+   *
+   * **own property はこの値と `_manager` の 2 個だけ** (掟 R-03)。
+   * Voice 自体は SoundManager のプールが使い回すため、
+   * ハンドル側はインデックスしか保持しません。
+   */
+  public voiceIndex: number;
+
   private _manager: SoundManager;
 
-  constructor(manager: SoundManager, key: string, voice: Voice | null) {
+  constructor(manager: SoundManager, voiceIndex: number) {
     this._manager = manager;
-    this.key = key;
-    this._voice = voice;
+    this.voiceIndex = voiceIndex;
+  }
+
+  /**
+   * 再生中のキー名。未割当または停止済みなら空文字です。
+   * 文字列への参照を own property として持たない点が掟 R-03 違反を避ける鍵です。
+   */
+  public get key(): string {
+    const v = this._voice;
+    return v === null ? '' : v.key;
+  }
+
+  /** 割当中の Voice。未割当なら null */
+  private get _voice(): Voice | null {
+    return this._manager.getVoiceByIndex(this.voiceIndex);
   }
 
   /** 再生中か */
   public get isPlaying(): boolean {
-    return this._voice !== null && this._voice.isPlaying;
+    const v = this._voice;
+    return v !== null && v.isPlaying;
+  }
+
+  /** 一時停止中か */
+  public get isPaused(): boolean {
+    const v = this._voice;
+    return v !== null && v.paused;
   }
 
   /** 音量 0〜1 */
   public get volume(): number {
-    return this._voice === null ? 0 : this._voice.volume;
+    const v = this._voice;
+    return v === null ? 0 : v.volume;
   }
   public set volume(val: number) {
-    if (this._voice !== null) this._voice.volume = val;
+    const v = this._voice;
+    if (v !== null) v.volume = val;
   }
 
-  /** 再生中なら停止します */
+  /** 再生速度倍率 (1.0 = 等速) */
+  public get rate(): number {
+    const v = this._voice;
+    return v === null ? 1 : v.rate;
+  }
+  public set rate(val: number) {
+    const v = this._voice;
+    if (v !== null) v.rate = val;
+  }
+
+  /** 再生位置 (秒) */
+  public get seek(): number {
+    const v = this._voice;
+    return v === null ? 0 : v.seek;
+  }
+  public set seek(val: number) {
+    const v = this._voice;
+    if (v !== null) v.seek = val;
+  }
+
+  /** ループ再生するか */
+  public get loop(): boolean {
+    const v = this._voice;
+    return v !== null && v.loop;
+  }
+  public set loop(val: boolean) {
+    const v = this._voice;
+    if (v !== null) v.loop = val;
+  }
+
+  /** 再生中なら停止し、ハンドルを解放します */
   public stop(): void {
-    if (this._voice === null) return;
-    this._voice.stop();
-    this._voice = null;
+    const v = this._voice;
+    if (v === null) return;
+    v.stop();
+    this.voiceIndex = -1;
+  }
+
+  /** 一時停止します */
+  public pause(): void {
+    const v = this._voice;
+    if (v !== null) v.pause();
+  }
+
+  /** 一時停止を解除します */
+  public resume(): void {
+    const v = this._voice;
+    if (v !== null) v.resume();
   }
 
   /** 音源の X 座標 */
   public get x(): number {
-    return this._voice === null ? 0 : this._voice.x;
+    const v = this._voice;
+    return v === null ? 0 : v.x;
   }
   public set x(val: number) {
-    if (this._voice !== null) this._voice.x = val;
+    const v = this._voice;
+    if (v !== null) v.x = val;
   }
 
   /** 音源の Y 座標 */
   public get y(): number {
-    return this._voice === null ? 0 : this._voice.y;
+    const v = this._voice;
+    return v === null ? 0 : v.y;
   }
   public set y(val: number) {
-    if (this._voice !== null) this._voice.y = val;
+    const v = this._voice;
+    if (v !== null) v.y = val;
   }
 
   /** 音源の Z 座標 */
   public get z(): number {
-    return this._voice === null ? 0 : this._voice.z;
+    const v = this._voice;
+    return v === null ? 0 : v.z;
   }
   public set z(val: number) {
-    if (this._voice !== null) this._voice.z = val;
+    const v = this._voice;
+    if (v !== null) v.z = val;
   }
 
   /**
-   * 同じキーの音源を音量だけ変えて再生します。
+   * 同じキーの音源を再生し直します。
    * 再生中に呼ぶと 2 本目として扱われます (Phaser と同じ挙動です)。
    */
   public play(): SoundHandle {
+    const key = this.key;
+    if (key === '') return this;
     this.stop();
-    const voice = this._manager.playVoice(this.key, this._voiceOptions());
-    this._voice = voice;
+    const next = this._manager.playVoice(key, this._voiceOptions());
+    this.voiceIndex = next === null ? -1 : this._manager.indexOfVoice(next);
     return this;
   }
 
@@ -138,11 +217,42 @@ export class SoundHandle {
     return this;
   }
 
+  /** 再生速度を設定します (Phaser 互換の `setRate`) */
+  public setRate(val: number): this {
+    this.rate = val;
+    return this;
+  }
+
+  /** 再生位置を設定します (Phaser 互換の `setSeek`) */
+  public setSeek(val: number): this {
+    this.seek = val;
+    return this;
+  }
+
+  /** ループを設定します (Phaser 互換の `setLoop`) */
+  public setLoop(val: boolean): this {
+    this.loop = val;
+    return this;
+  }
+
+  /** 再生中なら停止します (Phaser 互換の `destroy`) */
+  public destroy(): this {
+    this.stop();
+    return this;
+  }
+
   /** playAudioSprite の引数に流した値を保持します。 */
   private _voiceOptions(): PlayOptions {
     const v = this._voice;
     if (v === null) return { volume: 0 };
-    return { volume: v.volume, x: v.x, y: v.y, z: v.z, loop: v.loop };
+    return {
+      volume: v.volume,
+      x: v.x,
+      y: v.y,
+      z: v.z,
+      loop: v.loop,
+      rate: v.rate,
+    };
   }
 }
 
@@ -161,6 +271,12 @@ export class Voice {
   public isPlaying = false;
   /** ループ再生中か */
   public loop = false;
+  /** 一時停止中か (Phaser 互換の `pause` / `resume`) */
+  public paused = false;
+  /** 再生速度倍率 (1.0 = 等速) */
+  public rate = 1;
+  /** 再生位置 (秒)。`AudioBufferSourceNode` の能力上、停止中のみ変更できます。 */
+  public seek = 0;
   /** 再生中のキー名。stopByKey() が voice 側を照合するために持ちます。 */
   public key = '';
   /** フェードインで減衰している途中なら true */
@@ -217,12 +333,15 @@ export class Voice {
     src.buffer = buffer;
     src.loop = this.loop;
 
-    let rate = options?.rate ?? 1.0;
+    let rate = options?.rate ?? this.rate;
     if (options?.seek !== undefined && buffer.duration > 0) {
       // 横幅指定があれば再生速度から逆算します (Phaser と同じ考え方です)。
       rate = buffer.duration / options.seek;
     }
     src.playbackRate.value = rate;
+    this.rate = rate;
+    this.seek = options?.seek ?? 0;
+    this.paused = false;
 
     src.connect(this.panner);
     src.onended = this.onEndedCallback;
@@ -278,19 +397,73 @@ export class Voice {
     this.gain.gain.value = this._fadeFrom + (this._fadeTo - this._fadeFrom) * t;
   }
 
-  /** 再生を停止します。 */
   public stop(): void {
     if (this.source !== null) {
       try {
         this.source.onended = null;
         this.source.stop();
       } catch {
-        // 既に停止済みなら何もしません。
+        // 既に停止済みの source に対する stop は例外になるので無視します。
       }
       this.source = null;
     }
     this.isPlaying = false;
+    this.paused = false;
     this.fadingIn = false;
+    this.seek = 0;
+  }
+
+  /** 一時停止前の再生速度。resume で復元します。 */
+  private _rateBeforePause = 1;
+
+  /**
+   * 一時停止します (Phaser 互換の `pause`)。
+   *
+   * `AudioBufferSourceNode` は再生位置を直接操作できないため、
+   * playbackRate を 0 にして実質停止させます。
+   *
+   */
+  public pause(): void {
+    if (!this.isPlaying || this.paused) return;
+    this.paused = true;
+    if (this.source !== null) {
+      this._rateBeforePause = this.source.playbackRate.value;
+      this.source.playbackRate.value = 0;
+    }
+  }
+
+  /** 一時停止を解除します (Phaser 互換の `resume`)。 */
+  public resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.source !== null) {
+      this.source.playbackRate.value = this._rateBeforePause;
+    }
+  }
+
+  /**
+   * 再生速度を変更します (Phaser 互換の `setRate`)。
+   * 一時停止中の場合は解除時に適用する値を更新します。
+   */
+  public setRate(value: number): void {
+    if (value <= 0) return;
+    this.rate = value;
+    if (this.paused) {
+      this._rateBeforePause = value;
+      return;
+    }
+    if (this.source !== null) this.source.playbackRate.value = value;
+  }
+
+  /**
+   * 再生位置を変更します (Phaser 互換の `setSeek`)。
+   *
+   * `AudioBufferSourceNode` の再生位置は start() の offset 引数でのみ
+   * 指定できるため、**停止中のみ**有効です。
+   */
+  public setSeek(seconds: number): void {
+    if (seconds < 0) return;
+    this.seek = seconds;
   }
 
   /** 音源の X 座標 */
@@ -533,6 +706,26 @@ export class SoundManager {
   }
 
   /**
+   * プール内のインデックスから Voice を取得します (Flyweight 用)。
+   * @returns 範囲外なら null
+   */
+  public getVoiceByIndex(index: number): Voice | null {
+    if (index < 0 || index >= this.voicePool.length) return null;
+    return this.voicePool[index];
+  }
+
+  /**
+   * Voice をプール内のインデックスへ変換します (Flyweight 用)。
+   * @returns 見つからなければ -1
+   */
+  public indexOfVoice(voice: Voice): number {
+    for (let i = 0; i < this.voicePool.length; i++) {
+      if (this.voicePool[i] === voice) return i;
+    }
+    return -1;
+  }
+
+  /**
    * 内部用。キーを指定して Voice を再生します。
    * {@link SoundHandle.play} から使います。
    */
@@ -552,6 +745,10 @@ export class SoundManager {
   /**
    * 音声を再生します (Phaser の this.sound.play)。
    *
+   * **毎回の new は発生しません。** キーが違ってもハンドルは
+   * 使い回しのプール (`_handlePool`) から借り、内部の `voiceIndex` を
+   * 書き換えるだけなので、毎フレーム再生しても GC が発生しません。
+   *
    * @param key 登録キー
    * @param config 再生の指定
    * @returns ハンドル。キーが未登録、またはプールが枯れている場合は null
@@ -559,10 +756,39 @@ export class SoundManager {
   public play(key: string, config?: PlayOptions): SoundHandle | null {
     const voice = this.playVoice(key, config);
     if (voice === null) return null;
-    const handle = new SoundHandle(this, key, voice);
+    const handle = this._acquireHandle();
+    handle.voiceIndex = this.indexOfVoice(voice);
     this.active.set(key, handle);
     return handle;
   }
+
+  /**
+   * 使い回しできる SoundHandle を 1 つ取得します。
+   *
+   * **貸出中でない**ハンドルだけを返します。
+   * ボイスは同時に 1 本しか鳴らせないため、
+   * 再生中のハンドルは貸出中として扱い、再利用しません
+   * (同じハンドルを 2 つの呼び出し元に渡すと stop が衝突するため)。
+   * 空きが無ければその時だけ new します (初回のみ発生)。
+   */
+  private _acquireHandle(): SoundHandle {
+    for (let i = 0; i < this._handlePool.length; i++) {
+      const h = this._handlePool[i];
+      if (h.voiceIndex < 0) return h; // 停止済み
+      const v = this.getVoiceByIndex(h.voiceIndex);
+      // ボイスが鳴っていない = 貸出中でない
+      if (v === null || !v.isPlaying) return h;
+    }
+    const created = new SoundHandle(this, -1);
+    this._handlePool.push(created);
+    return created;
+  }
+
+  /**
+   * 使い回す SoundHandle のプール。
+   * 再生中のハンドルは貸出中のため再利用しません。
+   */
+  private readonly _handlePool: SoundHandle[] = [];
 
   /**
    * 音量だけ変えた「別」として再生します (Phaser の playAudioSprite)。
@@ -579,8 +805,26 @@ export class SoundManager {
     if (options.seek !== undefined && buffer !== undefined && buffer.duration > 0) {
       delay = options.seek * buffer.duration;
     }
-    return this.play(key, { ...options, delay });
+    // オブジェクト spread は new になるため、使い回しのバッファへ書き込みます
+    const opts = this._audioSpriteOptions;
+    opts.volume = options.volume;
+    opts.loop = options.loop;
+    opts.rate = options.rate;
+    opts.mute = options.mute;
+    opts.fadeIn = options.fadeIn;
+    opts.x = options.x;
+    opts.y = options.y;
+    opts.z = options.z;
+    opts.delay = delay;
+    opts.seek = options.seek;
+    return this.play(key, opts);
   }
+
+  /**
+   * playAudioSprite 用の一時オブジェクト。
+   * spread による毎回の確保を避けるため、1 つだけ使い回します。
+   */
+  private readonly _audioSpriteOptions: PlayOptions = {};
 
   /**
    * 指定キーの再生を全部停止します (Phaser の stopByKey)。
