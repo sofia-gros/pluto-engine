@@ -970,24 +970,12 @@ export class Sprite {
    * 親スプライトの ID を設定します (-1 で親なし)。
    * 親子関係はネストしたオブジェクト木ではなく SoA の `parentId` 配列で表現されます。
    * 親子付けすると x/y/rotation はローカル値として解釈されます。
+   *
+   * 実装は {@link InstanceBufferArena.setParentId} に委譲し、
+   * ローカル座標の初期化と dirty フラグの立て方を 1 か所に集約しています。
    */
   public setParentId(parentId: number): this {
-    const i = this.idx;
-    const parentIdx = parentId >= 0 ? this._arena.idToIndex[parentId] : -1;
-    if (parentId >= 0 && parentIdx < 0) {
-      // 存在しない親 ID の場合は根として扱う
-      this._arena.parentId[i] = -1;
-    } else {
-      this._arena.parentId[i] = parentId;
-    }
-    // ローカル変換を現在の値から初期化する
-    this._arena.localX[i] = this._arena.posX[i];
-    this._arena.localY[i] = this._arena.posY[i];
-    this._arena.localRotation[i] = this._arena.rotation[i];
-    this._arena.dirtyHierarchy = true;
-    // 階層時はワールド座標を基準に描画するため、transform ミラーの再送が必要です。
-    this._arena.dirtyTransformGroup = true;
-    if (parentId >= 0 && parentIdx >= 0) this._arena.hasHierarchy = true;
+    this._arena.setParentId(this.id, parentId);
     return this;
   }
 

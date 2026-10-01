@@ -191,6 +191,23 @@ export class PlutoEngine {
    */
   public packTimeMs = 0;
 
+  /**
+   * カリング（可視判定と先頭への詰め替え）に要した時間 (ms)。
+   *
+   * 描画対象を V 体へ絞ったぶん、転送量と頂点処理が減ります。
+   * `totalInstanceCount` と `renderCount` を合わせて効果を確認できます。
+   */
+  public cullTimeMs = 0;
+
+  /** 登録済みインスタンス総数（カリング前） */
+  public totalInstanceCount = 0;
+
+  /** 実際に描画したインスタンス数（カリング後） */
+  public renderCount = 0;
+
+  /** カメラごとの判定矩形を書き出す使い回しバッファ */
+  private readonly _camRect = new Float32Array(4);
+
   public render() {
     if (!this.device) return;
     const activeScene = this.scene.activeScene;
@@ -198,73 +215,25 @@ export class PlutoEngine {
 
     const arena = activeScene.arena;
 
+    // 階層を毎フレーム解決してから描画します。ワールド座標が
+    // 確定していないとカリングの判定が狂うためです。
+    if (arena.hasHierarchy && arena.dirtyHierarchy) {
+      arena.computeWorldTransforms();
+      arena.dirtyHierarchy = false;
+    }
+
     // Dense Set のため、そのままの状態で GPU へ転送できます。
-    const renderCount = arena.activeCount;
+    // カリングはカメラごとの可視区間求出で行い、転送は 1 回だけです。
+    const totalCount = arena.activeCount;
 
     const tPackStart = performance.now();
     this.packTimeMs = performance.now() - tPackStart;
 
-    if (renderCount > 0) {
-      // packed ミラーをグループ単位で転送します。
-      // ミラーは write-through で更新済みなので、ここは転送だけの処理です。
-      //
-      // 転送量は vec4 × 4 = 16 バイト × 4 枠 = 52 バイト / 体 で最大。
-      // 更新のないグループは丸ごと省略します。
-      if (arena.dirtyTransformGroup) {
-        this.device.updateBuffer(
-          this.gpuBuffers['packedTransform'],
-          arena.packedTransform,
-          0,
-          renderCount * 4,
-        );
-        arena.dirtyTransformGroup = false;
-      }
+    // 描画対象の総数。カメラごとのカリング結果を反映します。
+    let renderCount = totalCount;
 
-      if (arena.dirtyUvGroup) {
-        this.device.updateBuffer(this.gpuBuffers['packedUv'], arena.packedUv, 0, renderCount * 4);
-        arena.dirtyUvGroup = false;
-      }
-
-      if (arena.dirtyFlagsGroup) {
-        this.device.updateBuffer(
-          this.gpuBuffers['packedFlags'],
-          arena.packedFlags,
-          0,
-          renderCount * 4,
-        );
-        arena.dirtyFlagsGroup = false;
-      }
-
-      if (arena.dirtyShapeGroup) {
-        // rotation / frameWidth / frameHeight / depth
-        this.device.updateBuffer(
-          this.gpuBuffers['packedShape'],
-          arena.packedShape,
-          0,
-          renderCount * 4,
-        );
-        arena.dirtyShapeGroup = false;
-      }
-
-      if (arena.dirtyOriginGroup) {
-        // originX / originY / scrollFactorX / scrollFactorY
-        this.device.updateBuffer(
-          this.gpuBuffers['packedOrigin'],
-          arena.packedOrigin,
-          0,
-          renderCount * 4,
-        );
-        arena.dirtyOriginGroup = false;
-      }
-
-      if (arena.dirtyTintGroup) {
-        // packedTint は 1 インスタンス 1 個の uint32 です。
-        this.device.updateBuffer(this.gpuBuffers['packedTint'], arena.packedTint, 0, renderCount);
-        arena.dirtyTintGroup = false;
-      }
-    }
-    const tUploadEnd = performance.now();
-    this.uploadTimeMs = tUploadEnd - tPackStart;
+    this.totalInstanceCount = totalCount;
+    const tFrameStart = performance.now();
 
     this.device.clear(0.01, 0.02, 0.05, 1.0);
     this.device.bindShaders();
@@ -273,51 +242,117 @@ export class PlutoEngine {
     const h = this.canvasElement!.height;
 
     // カメラごとに描画します。
-    // SoA への GPU 転送は上の 1 回だけで済みます。増えるのは
+    // SoA への GPU 転送は 1 回だけで済みます。増えるのは
     // 投影行列の更新とドローコールだけです。
-    if (renderCount > 0) {
+    if (totalCount > 0) {
       const camCount = activeScene.cameras.collectForRender(this._activeCameras);
       if (camCount === 0) {
         // 全カメラが非表示なら描画をスキップします。
-        this.drawTimeMs = performance.now() - tUploadEnd;
+        this.cullTimeMs = 0;
+        this.renderCount = 0;
+        this.drawTimeMs = performance.now() - tFrameStart;
         return;
       }
 
-      // culling を有効にした場合はカメラごとに可視区間を求めます。
-      // 未実装の段階では全スプライト描画の従来どおり (baseInstance = 0) です。
+      // カリングは「先頭から連続した区間」として描画するため、
+      // 可視インスタンスを先頭へ寄せる partitionVisible を使います。
+      // 1 カメラなら全件を一度だけ寄せればよく、転送も 1 回で済みます。
+      const tCullStart = performance.now();
+      let maxVisible = totalCount;
       for (let ci = 0; ci < camCount; ci++) {
         const cam = this._activeCameras[ci];
-        const baseInstance = this._resolveVisibleRange(arena, cam, w, h);
-        const drawCount = renderCount - baseInstance;
-        if (drawCount <= 0) continue;
-
-        this._writeProjection(cam, w, h);
-        this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
-        this.device.setupInstancedAttributes(this.gpuBuffers, drawCount, baseInstance);
-        this.device.drawInstanced(drawCount, baseInstance);
+        const rect = this._cameraRect(cam, w, h, this._camRect);
+        const visible = arena.partitionVisible(rect[0], rect[1], rect[2], rect[3]);
+        if (visible < maxVisible) maxVisible = visible;
+        if (maxVisible === 0) break;
       }
+      this.cullTimeMs = performance.now() - tCullStart;
+      renderCount = maxVisible;
+      this.renderCount = renderCount;
+
+      if (renderCount > 0) {
+        // 並びが変わったため、転送をここで行います
+        const tUploadStart = performance.now();
+        this._uploadDirtyGroups(arena, renderCount);
+        this.uploadTimeMs = performance.now() - tUploadStart;
+
+        for (let ci = 0; ci < camCount; ci++) {
+          const cam = this._activeCameras[ci];
+          this._writeProjection(cam, w, h);
+          this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
+          this.device.setupInstancedAttributes(this.gpuBuffers, renderCount, 0);
+          this.device.drawInstanced(renderCount, 0);
+        }
+      }
+    } else {
+      this.cullTimeMs = 0;
+      this.renderCount = 0;
     }
-    this.drawTimeMs = performance.now() - tUploadEnd;
+    this.drawTimeMs = performance.now() - tFrameStart;
   }
 
   /**
-   * カメラから可視スプライトの開始インデックスを求めます。
-   *
-   * 現在は culling 未実装のため常に 0（先頭から全件）を返します。
-   * Phase 3 で Morton 順の区間探索へ差し替えます。
-   * `renderCount` が描画上限になるため、戻り値は常に 0 以上に収めます。
+   * dirty グループフラグに従って、描画に必要な範囲だけを GPU へ転送します。
    */
-  private _resolveVisibleRange(
-    arena: InstanceBufferArena,
-    cam: Camera,
-    w: number,
-    h: number,
-  ): number {
-    void arena;
-    void cam;
-    void w;
-    void h;
-    return 0;
+  private _uploadDirtyGroups(arena: InstanceBufferArena, renderCount: number): void {
+    if (!this.device) return;
+    if (renderCount <= 0) return;
+
+    if (arena.dirtyTransformGroup) {
+      this.device.updateBuffer(
+        this.gpuBuffers.packedTransform,
+        arena.packedTransform,
+        0,
+        renderCount * 4,
+      );
+      arena.dirtyTransformGroup = false;
+    }
+    if (arena.dirtyUvGroup) {
+      this.device.updateBuffer(this.gpuBuffers.packedUv, arena.packedUv, 0, renderCount * 4);
+      arena.dirtyUvGroup = false;
+    }
+    if (arena.dirtyFlagsGroup) {
+      this.device.updateBuffer(this.gpuBuffers.packedFlags, arena.packedFlags, 0, renderCount * 4);
+      arena.dirtyFlagsGroup = false;
+    }
+    if (arena.dirtyShapeGroup) {
+      this.device.updateBuffer(this.gpuBuffers.packedShape, arena.packedShape, 0, renderCount * 4);
+      arena.dirtyShapeGroup = false;
+    }
+    if (arena.dirtyOriginGroup) {
+      this.device.updateBuffer(
+        this.gpuBuffers.packedOrigin,
+        arena.packedOrigin,
+        0,
+        renderCount * 4,
+      );
+      arena.dirtyOriginGroup = false;
+    }
+    if (arena.dirtyTintGroup) {
+      // packedTint は 1 インスタンス 1 個の uint32 です
+      this.device.updateBuffer(this.gpuBuffers.packedTint, arena.packedTint, 0, renderCount);
+      arena.dirtyTintGroup = false;
+    }
+  }
+
+  /**
+   * カメラから見えるワールド矩形を `out` に書き出します。
+   *
+   * 投影は Y-down で、ズーム倍のした矩形がそのままワールド座標の
+   * 可視範囲になります。位置は補間後の `actualX` / `actualY` を使います
+   * （`_writeProjection` と同じ値を参照しないと 1 フレームずれます）。
+   */
+  private _cameraRect(cam: Camera, w: number, h: number, out: Float32Array): Float32Array {
+    const zoom = cam.zoom > 0 ? cam.zoom : 1;
+    const halfW = w / 2 / zoom;
+    const halfH = h / 2 / zoom;
+    const cx = cam.actualX || 0;
+    const cy = cam.actualY || 0;
+    out[0] = cx - halfW;
+    out[1] = cy - halfH;
+    out[2] = cx + halfW;
+    out[3] = cy + halfH;
+    return out;
   }
 
   /**

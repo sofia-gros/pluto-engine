@@ -68,6 +68,41 @@ export interface SpriteAssetLike {
 /**
  * アリーナがアニメーション再生を委譲するための最小インターフェース (AnimationManager が実装)。
  */
+/** `Float32Array` の 2 要素を交換します（一時変数はスタックに載ります）。 */
+function swapF32(arr: Float32Array, i: number, j: number): void {
+  const t = arr[i];
+  arr[i] = arr[j];
+  arr[j] = t;
+}
+
+/** `Int32Array` の 2 要素を交換します。 */
+function swapI32(arr: Int32Array, i: number, j: number): void {
+  const t = arr[i];
+  arr[i] = arr[j];
+  arr[j] = t;
+}
+
+/** `Uint32Array` の 2 要素を交換します。 */
+function swapU32(arr: Uint32Array, i: number, j: number): void {
+  const t = arr[i];
+  arr[i] = arr[j];
+  arr[j] = t;
+}
+
+/** `Uint16Array` の 2 要素を交換します（frameIdx / tint の内部表現用）。 */
+function swapU16(arr: Uint16Array, i: number, j: number): void {
+  const t = arr[i];
+  arr[i] = arr[j];
+  arr[j] = t;
+}
+
+/** `Uint8Array` の 2 要素を交換します。 */
+function swapU8(arr: Uint8Array, i: number, j: number): void {
+  const t = arr[i];
+  arr[i] = arr[j];
+  arr[j] = t;
+}
+
 export interface AnimPlayTarget {
   play(id: number, key: string, ignoreIfPlaying?: boolean): AnimState | null;
   playReverse(id: number, key: string, ignoreIfPlaying?: boolean): AnimState | null;
@@ -267,13 +302,33 @@ export class InstanceBufferArena {
   /**
    * 親子関係を設定します (Phaser 互換のコンテナ階層)。
    *
+   * ローカル座標 (`localX` / `localY` / `localRotation`) は
+   * **現在のワールド座標から初期化**されます。
+   * これにより、親짓ける前の位置が保たれます。
+   * 階層リゾルバは `localX` を使ってワールド座標を組み立てるため、
+   * ここを省略すると子が原点へ飛んでしまいます。
+   *
    * @param id 子の疎添字 ID
-   * @param parentId 親の疎添字 ID。親なしは `PARENT_NONE` (-1)
+   * @param parentId 親の疎添字 ID。親なしは -1
    */
   public setParentId(id: number, parentId: number): void {
     const idx = this.idToIndex[id];
     if (idx < 0) return;
-    this.parentId[idx] = parentId;
+
+    const parentIdx = parentId >= 0 ? this.idToIndex[parentId] : -1;
+    // 存在しない親 ID の場合は根として扱います
+    this.parentId[idx] = parentId >= 0 && parentIdx >= 0 ? parentId : -1;
+
+    // ローカル変換を現在の値から初期化します
+    this.localX[idx] = this.posX[idx];
+    this.localY[idx] = this.posY[idx];
+    this.localRotation[idx] = this.rotation[idx];
+
+    this.dirtyHierarchy = true;
+    // 階層時はワールド座標を基準に描画するため、transform ミラーの再送が必要です
+    this.dirtyTransformGroup = true;
+    this.dirtyShapeGroup = true;
+    if (this.parentId[idx] >= 0) this.hasHierarchy = true;
   }
 
   /**
@@ -494,6 +549,12 @@ export class InstanceBufferArena {
     return id;
   }
 
+  /**
+   * インスタンスを解放します。
+   *
+   * 末尾以外を解放する場合は末尾との swap-remove で配列を詰めます。
+   * `assetRef` は明示的に解放し、TextureAsset を後から破棄できるようにします。
+   */
   public free(id: number): void {
     const idx = this.idToIndex[id];
     if (idx < 0 || idx >= this._activeCount) {
@@ -502,70 +563,9 @@ export class InstanceBufferArena {
 
     const lastIdx = this._activeCount - 1;
 
-    // Swap with the last active element if it's not the last one
+    // 末尾以外の要素を解放するときは末尾と入れ替えます
     if (idx !== lastIdx) {
-      const lastId = this.indexToId[lastIdx];
-
-      this.posX[idx] = this.posX[lastIdx];
-      this.posY[idx] = this.posY[lastIdx];
-      this.rotation[idx] = this.rotation[lastIdx];
-      this.scaleX[idx] = this.scaleX[lastIdx];
-      this.scaleY[idx] = this.scaleY[lastIdx];
-      this.frameWidth[idx] = this.frameWidth[lastIdx];
-      this.frameHeight[idx] = this.frameHeight[lastIdx];
-      this.facing[idx] = this.facing[lastIdx];
-      this.depth[idx] = this.depth[lastIdx];
-      this.uvX[idx] = this.uvX[lastIdx];
-      this.uvY[idx] = this.uvY[lastIdx];
-      this.uvW[idx] = this.uvW[lastIdx];
-      this.uvH[idx] = this.uvH[lastIdx];
-      this.frameIdx[idx] = this.frameIdx[lastIdx];
-      this.tint[idx] = this.tint[lastIdx];
-      this.isText[idx] = this.isText[lastIdx];
-      this.visible[idx] = this.visible[lastIdx];
-      this.srcFrame[idx] = this.srcFrame[lastIdx];
-      this.assetRef[idx] = this.assetRef[lastIdx];
-      this.parentId[idx] = this.parentId[lastIdx];
-      this.localX[idx] = this.localX[lastIdx];
-      this.localY[idx] = this.localY[lastIdx];
-      this.localRotation[idx] = this.localRotation[lastIdx];
-      this.worldX[idx] = this.worldX[lastIdx];
-      this.worldY[idx] = this.worldY[lastIdx];
-      this.worldRotation[idx] = this.worldRotation[lastIdx];
-      this._resolvedStamp[idx] = this._resolvedStamp[lastIdx];
-      this.interactive[idx] = this.interactive[lastIdx];
-      this.hitWidth[idx] = this.hitWidth[lastIdx];
-      this.hitHeight[idx] = this.hitHeight[lastIdx];
-      this.originX[idx] = this.originX[lastIdx];
-      this.originY[idx] = this.originY[lastIdx];
-      this.scrollFactorX[idx] = this.scrollFactorX[lastIdx];
-      this.scrollFactorY[idx] = this.scrollFactorY[lastIdx];
-      this.active[idx] = this.active[lastIdx];
-      this.tintMode[idx] = this.tintMode[lastIdx];
-      this.blendMode[idx] = this.blendMode[lastIdx];
-      this.nameSlot[idx] = this.nameSlot[lastIdx];
-      this.kind[idx] = this.kind[lastIdx];
-
-      // Packed ミラーも同じ末尾要素で詰め替えます。
-      // SoA とミラーがずれると、末尾要素のスプライトが化けます。
-      const pBase = idx * 4;
-      const lBase = lastIdx * 4;
-      const eBase = idx * 16;
-      const leBase = lastIdx * 16;
-      for (let k = 0; k < 4; k++) {
-        this.packedTransform[pBase + k] = this.packedTransform[lBase + k];
-        this.packedUv[pBase + k] = this.packedUv[lBase + k];
-        this.packedFlags[pBase + k] = this.packedFlags[lBase + k];
-        this.packedShape[pBase + k] = this.packedShape[lBase + k];
-        this.packedOrigin[pBase + k] = this.packedOrigin[lBase + k];
-      }
-      for (let k = 0; k < 16; k++) {
-        this.packedExt[eBase + k] = this.packedExt[leBase + k];
-      }
-      this.packedTint[idx] = this.packedTint[lastIdx];
-
-      this.idToIndex[lastId] = idx;
-      this.indexToId[idx] = lastId;
+      this._swapInstances(idx, lastIdx);
     }
 
     this.idToIndex[id] = -1;
@@ -579,6 +579,145 @@ export class InstanceBufferArena {
     this.markAllDirty();
 
     this.freeList[--this.freeListHead] = id;
+  }
+
+  /**
+   * 密添字 `a` と `b` の 2 インスタンスを丸ごと入れ替えます。
+   *
+   * SoA と `packed*` ミラーの両方を同じ規則で入れ替えるため、ずれが起きません。
+   * `idToIndex` / `indexToId` も追随させます。
+   * 2 つの添字が等しい場合は何もしません。
+   */
+  public _swapInstances(a: number, b: number): void {
+    if (a === b) return;
+
+    // 疎添字 ID 相互の入れ替えなので、ID 自体は動きません
+    const idA = this.indexToId[a];
+    const idB = this.indexToId[b];
+
+    swapF32(this.posX, a, b);
+    swapF32(this.posY, a, b);
+    swapF32(this.rotation, a, b);
+    swapF32(this.scaleX, a, b);
+    swapF32(this.scaleY, a, b);
+    swapF32(this.frameWidth, a, b);
+    swapF32(this.frameHeight, a, b);
+    swapF32(this.facing, a, b);
+    swapF32(this.depth, a, b);
+    swapF32(this.uvX, a, b);
+    swapF32(this.uvY, a, b);
+    swapF32(this.uvW, a, b);
+    swapF32(this.uvH, a, b);
+    swapF32(this.isText, a, b);
+    swapU32(this.tint, a, b);
+    swapF32(this.visible, a, b);
+    swapU16(this.srcFrame, a, b);
+    // assetRef は TextureAsset 参照を持つ配列です
+    // 参照を 1 度だけ退避してから両方を入れ替えます
+    {
+      const t = this.assetRef[a];
+      this.assetRef[b] = t;
+    }
+    swapI32(this.parentId, a, b);
+    swapF32(this.localX, a, b);
+    swapF32(this.localY, a, b);
+    swapF32(this.localRotation, a, b);
+    swapF32(this.worldX, a, b);
+    swapF32(this.worldY, a, b);
+    swapF32(this.worldRotation, a, b);
+    swapI32(this._resolvedStamp, a, b);
+    swapU8(this.interactive, a, b);
+    swapF32(this.hitWidth, a, b);
+    swapF32(this.hitHeight, a, b);
+    swapF32(this.originX, a, b);
+    swapF32(this.originY, a, b);
+    swapF32(this.scrollFactorX, a, b);
+    swapF32(this.scrollFactorY, a, b);
+    swapU8(this.active, a, b);
+    swapU8(this.tintMode, a, b);
+    swapU8(this.blendMode, a, b);
+    swapI32(this.nameSlot, a, b);
+    swapU8(this.kind, a, b);
+
+    // Packed ミラーも同じ規則で詰め替えます。
+    // SoA とミラーがずれると、インスタンスが化けます。
+    for (let k = 0; k < 4; k++) {
+      swapF32(this.packedTransform, a * 4 + k, b * 4 + k);
+      swapF32(this.packedUv, a * 4 + k, b * 4 + k);
+      swapF32(this.packedFlags, a * 4 + k, b * 4 + k);
+      swapF32(this.packedShape, a * 4 + k, b * 4 + k);
+      swapF32(this.packedOrigin, a * 4 + k, b * 4 + k);
+    }
+    for (let k = 0; k < 16; k++) {
+      swapF32(this.packedExt, a * 16 + k, b * 16 + k);
+    }
+    swapU32(this.packedTint, a, b);
+
+    this.idToIndex[idB] = a;
+    this.indexToId[a] = idB;
+    this.idToIndex[idA] = b;
+    this.indexToId[b] = idA;
+  }
+
+  /**
+   * 指定矩形と交差する可視インスタンスを先頭へまとめます（カリング）。
+   *
+   * 可視なものは `[0, visibleCount)` に、不可視なものはその後ろに寄せることで、
+   * 連続した区間として描画できます。
+   * これにより `drawInstanced(visibleCount, 0)` 1 回の描画で済むため、
+   * 頂点シェーダの処理量と転送量を同時に削減できます。
+   *
+   * 入れ替えは O(n) ですが、描画対象を V 体へ絞ることで
+   * N 体の頂点処理と N 体分の転送を避けられます。
+   *
+   * @param minX 判定矩形の左
+   * @param minY 判定矩形の上
+   * @param maxX 判定矩形の右
+   * @param maxY 判定矩形の上下
+   * @returns 先頭に寄せた可視インスタンス数
+   */
+  public partitionVisible(minX: number, minY: number, maxX: number, maxY: number): number {
+    const n = this._activeCount;
+    if (n === 0) return 0;
+
+    // 階層を使っている場合はワールド座標で判定します
+    const useWorld = this.hasHierarchy;
+    const posX = useWorld ? this.worldX : this.posX;
+    const posY = useWorld ? this.worldY : this.posY;
+    const scaleX = this.scaleX;
+    const scaleY = this.scaleY;
+    const frameW = this.frameWidth;
+    const frameH = this.frameHeight;
+    const visible = this.visible;
+    const active = this.active;
+
+    // 可視インスタンスを先頭へ寄せるための書き込み位置
+    let write = 0;
+
+    for (let i = 0; i < n; i++) {
+      // 描画対象外（非表示 / 非 active）はそのまま後ろに残します
+      if (visible[i] === 0 || active[i] === 0) continue;
+
+      // 当たり判定寸法 x スケール倍率 = 描画サイズ
+      const halfW = frameW[i] * Math.abs(scaleX[i]) * 0.5;
+      const halfH = frameH[i] * Math.abs(scaleY[i]) * 0.5;
+      const cx = posX[i];
+      const cy = posY[i];
+
+      // いずれかの辺が外側なら不可視
+      if (cx + halfW < minX || cx - halfW > maxX) continue;
+      if (cy + halfH < minY || cy - halfH > maxY) continue;
+
+      // 可視なので先頭へ寄せる。既にその位置なら何もしない
+      if (i !== write) this._swapInstances(i, write);
+      write++;
+    }
+
+    if (write !== n) {
+      // 並びが変わったので GPU への再送が必要です
+      this.markAllDirty();
+    }
+    return write;
   }
 
   /**

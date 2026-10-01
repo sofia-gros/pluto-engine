@@ -174,13 +174,12 @@ export class Container {
     const parentWorldY =
       this._arena.parentId[pi] >= 0 ? this._arena.worldY[pi] : this._arena.posY[pi];
 
+    this._arena.setParentId(childId, this.id);
+    // setParentId は localX を現在の posX で初期化するため、
+    // その後を親基準のローカル座標へ上書きします
     this._arena.localX[ci] = childWorldX - parentWorldX;
     this._arena.localY[ci] = childWorldY - parentWorldY;
-    this._arena.parentId[ci] = this.id;
-    this._arena.hasHierarchy = true;
     this._arena.dirtyHierarchy = true;
-    // 階層時はワールド座標で描画するため、transform ミラーの再送が必要です
-    this._arena.dirtyTransformGroup = true;
     return this;
   }
 
