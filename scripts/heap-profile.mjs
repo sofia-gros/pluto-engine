@@ -91,7 +91,9 @@ function walk(node, stack) {
   if (self > 0) {
     const frames = stack
       .slice(0, 6)
-      .map((f) => `${f.functionName || '(anon)'}@${(f.url || '').split('/').pop()}:${f.lineNumber}`);
+      .map(
+        (f) => `${f.functionName || '(anon)'}@${(f.url || '').split('/').pop()}:${f.lineNumber}`,
+      );
     rows.push({ bytes: self, size: node.selfSize, frames: frames.join(' <- ') });
   }
   for (const c of node.children || []) {

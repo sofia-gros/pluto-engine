@@ -907,6 +907,25 @@ export class SoundManager {
    * @param y リスナー Y
    * @param z リスナー Z
    */
+  public get listenerX(): number {
+    return this.context.listener.positionX?.value ?? 0;
+  }
+  public set listenerX(v: number) {
+    if (this.context.listener.positionX !== undefined) this.context.listener.positionX.value = v;
+  }
+  public get listenerY(): number {
+    return this.context.listener.positionY?.value ?? 0;
+  }
+  public set listenerY(v: number) {
+    if (this.context.listener.positionY !== undefined) this.context.listener.positionY.value = v;
+  }
+  public get listenerZ(): number {
+    return this.context.listener.positionZ?.value ?? 0;
+  }
+  public set listenerZ(v: number) {
+    if (this.context.listener.positionZ !== undefined) this.context.listener.positionZ.value = v;
+  }
+
   public setListenerPosition(x: number, y: number, z = 100): this {
     const listener = this.context.listener;
     if (listener.positionX !== undefined) {

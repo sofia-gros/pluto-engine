@@ -243,7 +243,8 @@ class BenchmarkScene extends Scene {
     const cs = this.flow.cellSize;
     const invCs = this.flow.invCellSize;
     const dX = this.flow.dirX,
-      dY = this.flow.dirY;    const pressure = this.flow.pressure;
+      dY = this.flow.dirY;
+    const pressure = this.flow.pressure;
     const cols = this.flow.cols;
 
     // 1. Math.floor によるグリッド座標変換

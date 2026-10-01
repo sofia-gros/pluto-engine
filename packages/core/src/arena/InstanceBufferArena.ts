@@ -531,7 +531,8 @@ export class InstanceBufferArena {
     this.packedFlags[tBase + FlagsLane.FrameIdx] = 0.0;
     this.packedFlags[tBase + FlagsLane.Facing] = 1.0;
     this.packedFlags[tBase + FlagsLane.Visible] = 1.0;
-    this.packedFlags[tBase + FlagsLane.SpriteFlags] = (this.isText[idx] !== 0 ? 1 : 0) | (this.tintMode[idx] << 1);
+    this.packedFlags[tBase + FlagsLane.SpriteFlags] =
+      (this.isText[idx] !== 0 ? 1 : 0) | (this.tintMode[idx] << 1);
     this.packedShape[tBase + ShapeLane.Rotation] = 0.0;
     this.packedShape[tBase + ShapeLane.FrameWidth] = DEFAULT_FRAME_SIZE;
     this.packedShape[tBase + ShapeLane.FrameHeight] = DEFAULT_FRAME_SIZE;
@@ -1124,7 +1125,8 @@ export class InstanceBufferArena {
     this.packedFlags[base + FlagsLane.FrameIdx] = frameIdx;
     this.packedFlags[base + FlagsLane.Facing] = facing;
     this.packedFlags[base + FlagsLane.Visible] = visible;
-    this.packedFlags[base + FlagsLane.SpriteFlags] = (isText !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
+    this.packedFlags[base + FlagsLane.SpriteFlags] =
+      (isText !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
     if (isText !== 0) this.hasText = true;
     this.dirtyFrameIdx = true;
     this.dirtyScale = true;
@@ -1279,7 +1281,8 @@ export class InstanceBufferArena {
       // ミラー側も同じ既定値へ戻します。
       const base = i * 4;
       this.packedFlags[base + FlagsLane.Visible] = 1.0;
-      this.packedFlags[base + FlagsLane.SpriteFlags] = (this.isText[i] !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
+      this.packedFlags[base + FlagsLane.SpriteFlags] =
+        (this.isText[i] !== 0 ? 1 : 0) | (this.tintMode[i] << 1);
       this.packedOrigin[base + OriginLane.OriginX] = 0.5;
       this.packedOrigin[base + OriginLane.OriginY] = 0.5;
       this.packedOrigin[base + OriginLane.ScrollFactorX] = 1.0;

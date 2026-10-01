@@ -226,19 +226,19 @@ Phase 2 の実装・テストの中で発見した、Phase 2 とは無関係な�
 
 ### 4.2 チェックリスト
 
-- [ ] `Key` に `duration` / `timeDown` / `timeUp` を追加
-- [ ] `input.keyboard` に `Shift/Ctrl/Alt/Meta/WASD/arrows` を追加
-- [ ] `Pointer.worldX/worldY` をワールド座標に修正
-- [ ] `sound.listenerX/Y/Z` を公開
-- [ ] `LoaderManager` に `audio` を追加（`AssetType` 拡張 + `loadAudioData` 連携）
-- [ ] `LoaderManager.reset/abort/onProgress` を実装
-- [ ] `TextureManager.remove/list/getKeys/getFrame/refresh` を実装
-- [ ] `TextureManager.addSpriteSheet` を実装（`addSpritesheet` のエイリアス）
-- [ ] `TextureManager.addBase64/addCanvas` を実装
-- [ ] `TimeStepManager` の `repeatDelay` 未実装バグを修正
-- [ ] `ScaleManager` に `gameSize/displaySize/parentSize/zoom` を追加
-- [ ] `CameraManager.getCameras` を実装（使い回し）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `Key` に `duration` / `timeDown` / `timeUp` を追加
+- [x] `input.keyboard` に `Shift/Ctrl/Alt/Meta/WASD/arrows` を追加
+- [x] `Pointer.worldX/worldY` をワールド座標に修正
+- [x] `sound.listenerX/Y/Z` を公開
+- [x] `LoaderManager` に `audio` を追加（`AssetType` 拡張 + `loadAudioData` 連携）
+- [x] `LoaderManager.reset/abort/onProgress` を実装
+- [x] `TextureManager.remove/list/getKeys/getFrame/refresh` を実装
+- [x] `TextureManager.addSpriteSheet` を実装（`addSpritesheet` のエイリアス）
+- [x] `TextureManager.addBase64/addCanvas` を実装
+- [x] `TimeStepManager` の `repeatDelay` 未実装バグを修正
+- [x] `ScaleManager` に `gameSize/displaySize/parentSize/zoom` を追加
+- [x] `CameraManager.getCameras` を実装（使い回し）
+- [x] `bun run test` / `bun run lint` 通過
 
 ---
 

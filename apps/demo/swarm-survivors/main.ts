@@ -31,7 +31,7 @@ class GameScene extends Scene {
     const base = (import.meta as any).env?.BASE_URL || '/';
     this.load.spritesheet('chars', base + 'assets/spritesheet.png', {
       frameWidth: 64,
-      frameHeight: 64
+      frameHeight: 64,
     });
   }
 
@@ -41,7 +41,7 @@ class GameScene extends Scene {
         key: key,
         frames: frames,
         frameRate: 10,
-        repeat: -1
+        repeat: -1,
       });
     }
 

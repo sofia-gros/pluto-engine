@@ -37,7 +37,7 @@ describe('PoissonSolver: precomputeVectorField', () => {
   });
 
   test('pressure gradient deflects the flow', () => {
-    const s = new PoissonSolver(8, 8, 1, );
+    const s = new PoissonSolver(8, 8, 1);
     // 左側に密度INESS を作って圧力を発生させる
     s.splatDensity(2, 4, 20);
     s.computeDivergence(4);

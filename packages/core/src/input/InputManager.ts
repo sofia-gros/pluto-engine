@@ -37,6 +37,21 @@ export class Key {
   public get isJustUp(): boolean {
     return this._input.isKeyJustReleased(this.code);
   }
+
+  public get timeDown(): number {
+    return this._input.getKeyTimeDown(this.code);
+  }
+  public get timeUp(): number {
+    return this._input.getKeyTimeUp(this.code);
+  }
+  public get duration(): number {
+    return this._input.getKeyDuration(this.code);
+  }
+
+  // no-op for Phaser compat
+  public enableCapture(): void {}
+  public removeFrom(): void {}
+  public addTo(): void {}
 }
 
 /** 矢印キーなどの定型キーの集合 (Phaser 互換の cursorKeys) */
@@ -78,11 +93,11 @@ export class Pointer {
    * 変換前の画面座標が必要な場合は `screenX` を使ってください。
    */
   public get worldX(): number {
-    return this._input.pointerX;
+    return this._input.worldPointerX;
   }
   /** ワールド座標の Y。`y` と同じゲーム座標を返します */
   public get worldY(): number {
-    return this._input.pointerY;
+    return this._input.worldPointerY;
   }
   /** 変換前の画面座標の X (CSS ピクセル) */
   public get screenX(): number {
@@ -239,6 +254,9 @@ export class GamepadHandle {
 export class InputManager {
   // --- Keyboard ---
   private _rawKeys = new Set<string>();
+  private _timeDownMap = new Map<string, number>();
+  private _timeUpMap = new Map<string, number>();
+  private _currentTimeMs = 0;
   private _currentKeys = new Set<string>();
   private _previousKeys = new Set<string>();
 
@@ -261,6 +279,8 @@ export class InputManager {
   /** 移動速度 (ワールド座標 / 秒) */
   public pointerVelocityX = 0;
   public pointerVelocityY = 0;
+  public worldPointerX = 0;
+  public worldPointerY = 0;
   /** ボタン押下からの累積移動距離 (ワールド座標) */
   public pointerDistance = 0;
   /** 現在の移動方向 (ラジアン、+X 方向が 0) */
@@ -402,6 +422,7 @@ export class InputManager {
    *   未指定や 0 の場合は生の移動量を速度として扱います。
    */
   public update(dtSeconds = 0): void {
+    this._currentTimeMs += dtSeconds * 1000;
     // Keyboard
     this._previousKeys.clear();
     for (const key of this._currentKeys) this._previousKeys.add(key);
@@ -457,6 +478,8 @@ export class InputManager {
       this.pointerDistance = Math.sqrt(ddx * ddx + ddy * ddy);
     }
 
+    this.worldPointerX = this.pointerX;
+    this.worldPointerY = this.pointerY;
     this.pollGamepads();
   }
 

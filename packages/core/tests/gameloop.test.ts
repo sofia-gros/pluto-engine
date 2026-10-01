@@ -79,11 +79,14 @@ describe('GameLoop', () => {
 
   test('update and render receive the same frame', () => {
     const order: string[] = [];
-    const loop = new GameLoop({ targetFps: 0, fixedDeltaTime: 1 / 60 }, {
-      onFixedUpdate: () => order.push('fixed'),
-      onUpdate: () => order.push('update'),
-      onRender: () => order.push('render'),
-    });
+    const loop = new GameLoop(
+      { targetFps: 0, fixedDeltaTime: 1 / 60 },
+      {
+        onFixedUpdate: () => order.push('fixed'),
+        onUpdate: () => order.push('update'),
+        onRender: () => order.push('render'),
+      },
+    );
 
     // 初回は dt = 0 なので固定ステップは発火しない
     loop.step(0);

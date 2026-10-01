@@ -447,6 +447,7 @@ export class Scene {
     this.input = new InputManager();
     this.textures = new TextureManager();
     this.load = new LoaderManager(this.textures);
+    this.load.setSoundManagerFactory(() => this.sound);
     this.cameras = new CameraManager(this);
     this.camera = this.cameras.main;
   }
@@ -514,6 +515,12 @@ export class Scene {
     }
     // dt を渡すことで Pointer の移動速度 (velocity) を正しく算出できます。
     this.input.update(dt);
+    const cam = this.cameras.main;
+    const viewW = this.sys?.scale?.gameSize?.width ?? 0;
+    const viewH = this.sys?.scale?.gameSize?.height ?? 0;
+    const z = cam.zoom !== 0 ? cam.zoom : 1;
+    this.input.worldPointerX = cam.actualX + (this.input.pointerX - viewW * 0.5) / z;
+    this.input.worldPointerY = cam.actualY + (this.input.pointerY - viewH * 0.5) / z;
     if ((active & Subsystem.Tweens) !== 0) {
       // ループの dt は秒ですが、Phaser 互換の `duration` / `delay` はミリ秒です。
       // 変換をこの境界 1 か所に閉じることで、TweenManager 側は ms 前提で

@@ -90,7 +90,7 @@ export class Player {
     this.vy = inputDir.y * speed;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
-    
+
     if (inputDir.x > 0.1) {
       this.sprite.setFlipX(false);
       this.sprite.play('walking_side', true);
@@ -150,7 +150,7 @@ export class Player {
           const oy = this.y + Math.sin(ang) * orbDist;
           swarm.applyAreaDamage(
             ox,
-             oy,
+            oy,
             14 * areaScale,
             (10 + orbitLvl * 4) * atkMult,
             6 * knockMult,
@@ -416,14 +416,14 @@ export class SwarmSystem {
     if (id === -1) return;
 
     if (type === 1) {
-       sprite.play('walking_other_side');
+      sprite.play('walking_other_side');
     } else if (type === 2) {
-       sprite.play('walking_back');
+      sprite.play('walking_back');
     } else if (type === 3) {
-       sprite.play('walking_front');
-       sprite.setTintFill(0xffcccc);
+      sprite.play('walking_front');
+      sprite.setTintFill(0xffcccc);
     } else {
-       sprite.play('walking_front');
+      sprite.play('walking_front');
     }
     sprite.setFlipX(false);
 
@@ -447,9 +447,9 @@ export class SwarmSystem {
     const sprite = this.scene.add.sprite(x, y, 'chars');
     sprite.setFrame(1);
     if (type === 1) {
-       sprite.setTintFill(0xffff00);
+      sprite.setTintFill(0xffff00);
     } else {
-       sprite.setTintFill(0x00aaff);
+      sprite.setTintFill(0x00aaff);
     }
     sprite.setDisplaySize(14, 14);
     this.dsprite[i] = sprite;

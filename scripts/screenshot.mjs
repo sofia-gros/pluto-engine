@@ -16,7 +16,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(ROOT, 'apps', 'demo', 'dist');
 const PORT = 5202;
 const TARGET = process.argv[2] || 'rpg';
-const OUT = process.argv[3] || join(ROOT, 'C:\\Users\\metal\\AppData\\Local\\Temp\\opencode', `${TARGET}.png`);
+const OUT =
+  process.argv[3] ||
+  join(ROOT, 'C:\\Users\\metal\\AppData\\Local\\Temp\\opencode', `${TARGET}.png`);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
