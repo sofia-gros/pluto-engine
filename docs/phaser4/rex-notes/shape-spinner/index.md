@@ -1,0 +1,319 @@
+Spinner
+Introduction¶
+Loading animations on shape.
+Author: Rex
+Game object
+Live demos¶
+Spinners
+Arrow
+AIO
+Custom spinner
+Custom spinner
+Snake
+Hourglass
+Explode blob
+Loading animation
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin(
+"rexspinnerplugin",
+"https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexspinnerplugin.min.js",
+"rexSpinner",
+"rexSpinner"
+);
+Add spinner object
+var aio = scene.rexSpinner.add.aio(config);
+var arrow = scene.rexSpinner.add.arrow(config);
+var downArrow = scene.rexSpinner.add.downArrow(config);
+var leftArrow = scene.rexSpinner.add.leftArrow(config);
+var rightArrow = scene.rexSpinner.add.rightArrow(config);
+var upArrow = scene.rexSpinner.add.upArrow(config);
+var audio = scene.rexSpinner.add.audio(config);
+var ball = scene.rexSpinner.add.ball(config);
+var bars = scene.rexSpinner.add.bars(config);
+var box = scene.rexSpinner.add.box(config);
+var clock = scene.rexSpinner.add.clock(config);
+var cube = scene.rexSpinner.add.cube(config);
+var dots = scene.rexSpinner.add.dots(config);
+var facebook = scene.rexSpinner.add.facebook(config);
+var grid = scene.rexSpinner.add.grid(config);
+var hearts = scene.rexSpinner.add.hearts(config);
+var ios = scene.rexSpinner.add.ios(config);
+var orbit = scene.rexSpinner.add.orbit(config);
+var oval = scene.rexSpinner.add.oval(config);
+var pie = scene.rexSpinner.add.pie(config);
+var puff = scene.rexSpinner.add.puff(config);
+var radio = scene.rexSpinner.add.radio(config);
+var rings = scene.rexSpinner.add.rings(config);
+var spinner = scene.rexSpinner.add.spinner(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import SpinnerPlugin from "phaser4-rex-plugins/templates/spinner/spinner-plugin.js";
+var config = {
+// ...
+plugins: {
+scene: [
+{
+key: "rexSpinner",
+plugin: SpinnerPlugin,
+mapping: "rexSpinner",
+},
+// ...
+],
+},
+// ...
+};
+var game = new Phaser.Game(config);
+Add spinner object
+var aio = scene.rexSpinner.add.aio(config);
+var arrow = scene.rexSpinner.add.arrow(config);
+var downArrow = scene.rexSpinner.add.downArrow(config);
+var leftArrow = scene.rexSpinner.add.leftArrow(config);
+var rightArrow = scene.rexSpinner.add.rightArrow(config);
+var upArrow = scene.rexSpinner.add.upArrow(config);
+var audio = scene.rexSpinner.add.audio(config);
+var ball = scene.rexSpinner.add.ball(config);
+var bars = scene.rexSpinner.add.bars(config);
+var box = scene.rexSpinner.add.box(config);
+var clock = scene.rexSpinner.add.clock(config);
+var cube = scene.rexSpinner.add.cube(config);
+var dots = scene.rexSpinner.add.dots(config);
+var facebook = scene.rexSpinner.add.facebook(config);
+var grid = scene.rexSpinner.add.grid(config);
+var hearts = scene.rexSpinner.add.hearts(config);
+var ios = scene.rexSpinner.add.ios(config);
+var orbit = scene.rexSpinner.add.orbit(config);
+var oval = scene.rexSpinner.add.oval(config);
+var pie = scene.rexSpinner.add.pie(config);
+var puff = scene.rexSpinner.add.puff(config);
+var radio = scene.rexSpinner.add.radio(config);
+var rings = scene.rexSpinner.add.rings(config);
+var spinner = scene.rexSpinner.add.spinner(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import {
+AIO, Arrow, Audio, Ball, Bars, Box, Clock, Cube, Custom, Dots,
+Facebook, Grid, Hearts, Ios, Orbit, Oval, Puff, Radio, Rings, Spinner
+} from "phaser4-rex-plugins/templates/spinner/spinner-components.js";
+Add spinner object
+var spinner = new Audio(scene, config);
+scene.add.existing(spinner);
+Add spinner object¶
+General¶
+var spinner = scene.rexSpinner.add.audio({
+// x: 0,
+// y: 0,
+// width: 64,
+// height: 64,
+// color: 0xffffff,
+// duration: 1000,
+// start: true,
+// delay: 0,
+// repeatDelay: 0,
+});
+x, y : Position of this object.
+width, height : Size of this object.
+color : Fill color, or stroke color. Default value is 0xffffff
+duration : Duration of animation.
+start : Start animation when object created.
+false : Don't play animation at beginning.
+delay : Delay time in ms before running.
+repeatDelay : Delay time between 2 periods.
+Arrow¶
+var spinner = scene.rexSpinner.add.audio({
+// ...
+// direction: 'down'
+});
+direction :
+0, 'right' : Arrow from left to right.
+1, 'down' : Arrow from up to down. Default behavior.
+2, 'left' : Arrow from right to left.
+3, 'up' : Arrow from down to up.
+AIO¶
+All-in-one
+var spinner = scene.rexSpinner.add.aio({
+// ...
+// animationMode: undefined
+});
+animationMode :
+undefined : Play random spinner animation.
+'leftArrow' : Play leftArrow spinner animation.
+'rightArrow' : Play rightArrow spinner animation.
+'upArrow' : Play upArrow spinner animation.
+'downArrow' : Play dowbArrow spinner animation.
+'audio' : Play audio spinner animation.
+'ball' : Play ball spinner animation.
+'bars' : Play bars spinner animation.
+'box' : Play box spinner animation.
+'clock' : Play clock spinner animation.
+'cube' : Play cube spinner animation.
+'dots' : Play dots spinner animation.
+'facebook' : Play facebook spinner animation.
+'grid' : Play grid spinner animation.
+'hearts' : Play hearts spinner animation.
+'ios' : Play ios spinner animation.
+'oribit' : Play oribit spinner animation.
+'oval' : Play oval spinner animation.
+'pie' : Play pie spinner animation.
+'puff' : Play puff spinner animation.
+'radio' : Play radio spinner animation.
+'rings' : Play rings spinner animation.
+'spinner' : Play spinner spinner animation.
+Play animation¶
+Start¶
+Start playing, won't restart when playing
+spinner.start();
+Restart with new duration
+spinner.start(duration);
+Pause¶
+spinner.pause();
+Resume¶
+spinner.resume();
+Stop¶
+spinner.stop();
+Play animation manually¶
+Set start to false in config
+Set progress manually
+spinner.setValue(t);
+or
+spinner.value = t;
+t : 0 ~ 1
+Is running¶
+var isRunning = spinner.isRunning;
+Color¶
+Get
+var color = spinner.color;
+Set
+spinner.setColor(color);
+or
+spinner.color = color;
+color : Fill color, or stroke color, in number.
+Alpha¶
+Get
+var alpha = spinner.alpha;
+Set
+spinner.setAlpha(alpha);
+// spinner.alpha = alpha;
+Duration¶
+Get
+var duration = spinner.duration;
+Set, will apply to next animation playing.
+spinner.setDuration(duration);
+or
+spinner.duration = duration;
+Ease¶
+Get
+var ease = spinner.ease;
+Set, will apply to next animation playing.
+spinner.setEasen(ease);
+or
+spinner.ease = ease;
+Set animation mode¶
+AIO-spinner only
+aioSpinner.setAnimationMode(mode);
+mode :
+undefined : Play random spinner animation.
+'leftArrow' : Play leftArrow spinner animation.
+'rightArrow' : Play rightArrow spinner animation.
+'upArrow' : Play upArrow spinner animation.
+'downArrow' : Play dowbArrow spinner animation.
+'audio' : Play audio spinner animation.
+'ball' : Play ball spinner animation.
+'bars' : Play bars spinner animation.
+'box' : Play box spinner animation.
+'clock' : Play clock spinner animation.
+'cube' : Play cube spinner animation.
+'dots' : Play dots spinner animation.
+'facebook' : Play facebook spinner animation.
+'grid' : Play grid spinner animation.
+'hearts' : Play hearts spinner animation.
+'ios' : Play ios spinner animation.
+'oribit' : Play oribit spinner animation.
+'oval' : Play oval spinner animation.
+'pie' : Play pie spinner animation.
+'puff' : Play puff spinner animation.
+'radio' : Play radio spinner animation.
+'rings' : Play rings spinner animation.
+'spinner' : Play spinner spinner animation.
+aioSpinner.setRandomAnimationMode();
+Custom spinner¶
+var customSpinner = scene.rexSpinner.add.custom({
+// x: 0,
+// y: 0,
+// width: 64,
+// height: 64,
+// color: 0xffffff,
+// duration: 1000,
+// start: true,
+create: {
+// shapeType: [name0, name1, ...],
+// shapeType: number,
+// shapeType: name,
+},
+// create: function() {
+//
+// },
+update: function() {
+},
+})
+create : Callback to create shapes
+A plain object with shapeType: name, or shapeType: number
+shapeType :
+'arc' : Create Arc shape.
+'circle' : Create Circle shape.
+'ellipse' : Create Ellipse shape.
+'line' : Create Line shape.
+'lines' : Create Lines shape.
+'rectangle' : Create Rectangle shape.
+'roundRectangle' : Create Round rectangle shape.
+'triangle' : Create Triangle shape.
+nameArray : An array of unique string name for each shape.
+name : An unique string name of this shape.
+number : Amount of shapes to create.
+A callback
+function() {
+// this : This spinner game object
+var shape = this.createShape(shapeType, name);
+this.addShape(shape);
+}
+this.createShape(shapeType, name) : Crate a shape instance, with an unique name.
+this.addShape(shape) : Add this shape instance to this custom spinner.
+update : Callback when porgressing
+function() {
+// this : This spinner game object
+var centerX = this.centerX;
+var centerY = this.centerY;
+var radius = this.radius;
+var color = this.color;
+var shapes = this.getShapes();
+var shape = this.getShape(name);
+var t = this.value;
+// ...
+}
+this.value : Progress, 0~1.
+Position :
+this.centerX, this.centerY : Center position of this spinner. The coordinate of top-left point is (0,0)
+this.radius : Minimun value of this.centerX, this.centerY, to draw shape at square.
+Color :
+this.color : Color property of this spinner.
+Shape instances : Change properties of shape instances.
+this.getShapes() : Return all shapes in an array.
+this.getShape(name) : Return a shape by the unique string name.
+Shape class¶
+See Shape class
+Prompt¶
+Prompt for generating customize logic
+Demo
+Other properties¶
+See game object
+Create mask¶
+See mask
+Shader effects¶
+Support internal and external filters

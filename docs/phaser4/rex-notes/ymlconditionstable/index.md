@@ -1,0 +1,57 @@
+YAML Conditions table
+Introduction¶
+Check conditions to find passed tests listed in a YAML table.
+Author: Rex
+Member of scene
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexymlconditionstableplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexymlconditionstableplugin.min.js', true);
+Add conditions-table object
+var conditionstable = scene.plugins.get('rexymlconditionstableplugin').add();
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import ConditionsTablePlugin from 'phaser4-rex-plugins/plugins/ymlconditionstable-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexConditionsTable',
+plugin: ConditionsTablePlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add conditions-table object
+var conditionstable = scene.plugins.get('rexConditionsTable').add();
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import ConditionsTable from 'phaser4-rex-plugins/plugins/ymlconditionstable.js';
+Add conditions-table object
+var conditionstable = new ConditionsTable();
+Create instance¶
+var table = scene.plugins.get('rexConditionsTable').add();
+Load table from YAML string¶
+table.loadYML(ymlString);
+For exameple
+Test1 : (A >= 10) && (A <= 20)
+Test2 : B == 3
+Equations will be parsed by expression-parser.
+Test¶
+Get test results¶
+var results = table.getTestResults(context);
+context : Inputs in Key-value pairs
+results : {name: boolean}, use OR operation to combine result of tests with the same name.
+Get first pass test name¶
+var testName = table.anyPassTest(context);
+context : Inputs in Key-value pairs

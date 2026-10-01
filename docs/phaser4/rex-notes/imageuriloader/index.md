@@ -1,0 +1,81 @@
+Imageuriloader
+Note
+Phaser3.80 can load image by uri (base64 string) in preload stage.
+Introduction¶
+Load image by uri (base64 string) in preload stage.
+Built-in image loader dosen't support loading local image uri.
+Author: Rex
+Custom File of loader
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+var sceneConfig = {
+// ....
+pack: {
+files: [{
+type: 'plugin',
+key: 'reximageuriloaderplugin',
+url: 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/reximageuriloaderplugin.min.js',
+start: true
+}]
+}
+};
+class MyScene extends Phaser.Scene {
+constructor() {
+super(sceneConfig)
+}
+// ....
+preload() {
+// reximageuriloaderplugin will be installed before preload(), but not added to loader yet
+// Call addToScene(scene) to add this await loader to loader of this scene
+this.plugins.get('reximageuriloaderplugin').addToScene(this);
+this.load.rexImageURI(key, uri);
+}
+}
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import ImageURILoaderPlugin from 'phaser4-rex-plugins/plugins/imageuriloader-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexImageURILoader',
+plugin: ImageURILoaderPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+In preload stage
+scene.load.rexImageURI(key, uri);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import ImageURILoader from 'phaser4-rex-plugins/plugins/imageuriloader.js';
+Start loading task
+ImageURILoader.call(scene.load, key, uri);
+Load image¶
+In preload stage:
+this.load.rexImageURI(key, uri);
+key : Texture key.
+uri : URI, a base64 string.
+Load sprite sheet¶
+In preload stage:
+this.load.rexImageURI(key, uri, frameConfig);
+key : Texture key.
+uri : URI, a base64 string.
+frameConfig :
+frameWidth : The width of the frame in pixels.
+frameHeight : The height of the frame in pixels. Uses the frameWidth value if not provided.
+startFrame : The first frame to start parsing from.
+endFrame : The frame to stop parsing at. If not provided it will calculate the value based on the image and frame dimensions.
+margin : The margin in the image. This is the space around the edge of the frames.
+spacing : The spacing between each frame in the image.

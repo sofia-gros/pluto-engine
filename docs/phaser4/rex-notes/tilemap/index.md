@@ -1,0 +1,512 @@
+Tile map
+Introduction¶
+Display of tiles map, built-in game object of phaser.
+Author: Phaser Team
+Usage¶
+Hierarchy¶
+graph TB
+tilemap --> layerA["layerA<br>(Game object)"]
+tilemap --> layerB
+layerA --> tilesA["tiles<br>(layer.data[x][y])"]
+layerB --> tilesB["tiles"]
+map : A container for Tilemap data.
+layer : A Game Object that renders LayerData from a map when used in combination with one or more tileset.
+tiles : A 2d array of Tile object
+Tile : A lightweight data representation, store position information without factoring in scroll, layer scale or layer position.
+tileset : Image and tileData of some kind of tiles.
+Load tile map¶
+scene.load.tilemapTiledJSON(key, url);   // JSON
+scene.load.tilemapCSV(key, url);         // CSV
+Add tile map object¶
+Create map
+Create map from tiled
+var map = scene.add.tilemap(key);
+or
+var map = this.make.tilemap({
+key: 'map',
+tileWidth: 16,
+tileHeight: 16
+});
+Support ORTHOGONAL, ISOMETRIC, STAGGERED, HEXAGONAL map
+Create map from 2d array
+var map = this.make.tilemap({
+// data: tileIdxArray,  // [ [], [], ... ]
+tileWidth: 32,
+tileHeight: 32,
+width: 10,
+height: 10,
+});
+Only support ORTHOGONAL map
+Create map from csv
+var map = this.make.tilemap({
+key: 'map',     // csv file
+tileWidth: 32,
+tileHeight: 32,
+});
+Only support ORTHOGONAL map
+Add tileset image
+var tileset = map.addTilesetImage(tilesetName, key); // key: texture key
+// var tileset = map.addTilesetImage(tilesetName);  // key = tilesetName
+// var tileset = map.addTilesetImage(tilesetName, key, tileWidth, tileHeight, tileMargin, tileSpacing, gid, tileOffset);
+key : The key of the Phaser.Cache image used for this tileset.
+undefined , null : Use tilesetName as default value.
+tileWidth , tileHeight : The width/height of the tile (in pixels) in the Tileset Image.
+undefined : Default to the map's tileWidth/tileHeight.
+tileMargin : The margin around the tiles in the sheet (in pixels).
+undefined : Default to 0
+tileSpacing The spacing between each the tile in the sheet (in pixels).
+undefined : Default to 0
+gid : If adding multiple tilesets to a blank map, specify the starting GID this set will use here.
+tileOffset : {x, y} Tile texture drawing offset.
+Create layer
+Create existed layer
+var layer = map.createLayer(layerID, tileset);
+// var layer = map.createLayer(layerID, tileset, x, y);
+tileset : The tileset, or an array of tilesets.
+A string, or an array of string.
+A tileset object, or an array of tileset objects.
+x, y : Offset in pixels. Default is 0/0.
+Create a new and empty layer
+var layer = map.createBlankLayer(layerID, tileset);
+// var layer = map.createBlankLayer(layerID, tileset, x, y, width, height, tileWidth, tileHeight); // x, y : offset in pixels
+layerID : The name of this layer. Must be unique within the map.
+tileset : The tileset, or an array of tilesets.
+A string, or an array of string.
+A tileset object, or an array of tileset objects.
+x, y : Offset in pixels. Default is 0/0.
+width, height : The width/height of the layer in tiles. Default is map.width/map.height.
+tileWidth, tileHeight : The width/height of the tiles the layer uses for calculations. Default is map's tileWidth/tileHeight.
+Create game objects (optional)
+Create game objects by Object-ID/Object-GID/Object-Name
+var sprites = map.createFromObjects(layerName, {
+// gid: 26,
+// name: 'bonus',
+// id: 9,
+// classType: Sprite,
+// ignoreTileset
+// scene,
+// container: null,
+// key: null,
+// frame: null,
+// sortByY: false,
+}, useTileset);
+or
+var sprites = map.createFromObjects(layerName, configArray, useTileset);
+One of filter
+gid : Object GID.
+id : Object ID.
+name : Object Name.
+classType : Class of game object, default is Sprite.
+ignoreTileset :
+scene : A Scene reference, passed to the Game Objects constructors. Default is map's scene.
+container : Optional Container to which the Game Objects are added.
+key, frame : Optional key of a Texture to be used.
+sortByY : Sort objects in layer by their y position. Objects with a higher y are displayed above objects with a lower y.
+Create game objects by tile
+var sprites = map.createFromTiles(indexes, replacements, spriteConfig);
+// var sprites = map.createFromTiles(indexes, replacements, spriteConfig, scene, camera, layer);
+indexes : The tile index, or array of indexes
+replacements :
+null : Leave the tiles unchanged
+Array of indexes : One-to-one mapping indexes to replacements.
+spriteConfig : The config object to pass into the Sprite creator (i.e. scene.make.sprite).
+{
+useSpriteSheet
+}
+useSpriteSheet : Set to true to load the tileset as a sprite sheet (not an image), map frame to tile index.
+Copy rotation, flipX, flipY, alpha, visible and tint properties from Tile to sprites if these properties are not given.
+scene : The Scene to create the Sprites within.
+camera : The Camera to use when determining the world XY.
+layer : The Tilemap Layer to act upon.
+Map¶
+Map size¶
+var mapWidth = map.width;
+var mapHeight = map.height;
+Tile size¶
+Set
+map.setBaseTileSize(tileWidth, tileHeight);
+Get
+var tileWidth = map.tileWidth;
+var tileHeight = map.tileHeight;
+Tile/world position¶
+World position -> Tile position
+var tileXY = map.worldToTileXY(worldX, worldY);
+// var out = map.worldToTileXY(worldX, worldY, snapToFloor, out, camera, layer);
+Tile position -> World position
+var worldXY = map.tileToWorldXY(tileX, tileY);
+// var out = map.tileToWorldXY(tileX, tileY, out, camera, layer);
+Tile at world XY¶
+var hasTile = map.hasTileAtWorldXY(worldX, worldY);
+or
+var hasTile = map.hasTileAtWorldXY(worldX, worldY, camera, layer);
+Draw on graphics¶
+map.renderDebug(graphics);
+or
+map.renderDebug(graphics, {
+tileColor: new Phaser.Display.Color(105, 210, 231, 150),         // null
+collidingTileColor: new Phaser.Display.Color(243, 134, 48, 200), // null
+faceColor: new Phaser.Display.Color(40, 39, 37, 150)             // null
+});
+or
+map.renderDebug(graphics, styleConfig, layer);
+graphics : Graphics game object.
+Layer¶
+A Game Object that renders LayerData from a map when used in combination with one or more tileset.
+Get layer¶
+Get layer instance
+var layer = map.getLayer(name);
+Set current layer of map
+map.setLayer(layer);  // layer name, layer index
+or
+map.layer = layer;
+Shader effects¶
+Support internal and external filters
+Render order¶
+layer.setRenderOrder(renderOrder);
+renderOrder
+0, or 'right-down'
+1, or 'left-down'
+2, or 'right-up'
+3, or 'left-up'
+Fill tiles¶
+Fill current layer
+map.fill(index);  // Fill all grids
+or
+map.fill(index, tileX, tileY, width, height);
+Fill layer
+layer.fill(index);  // Fill all grids
+or
+layer.fill(index, tileX, tileY, width, height);
+Randomize¶
+Randomize current layer
+map.randomize(); // Randomize all grids
+or
+map.randomize(tileX, tileY, width, height, indexes);
+indexes An array of tile indexes.
+-1 : Empty tile.
+Weight randomize current layer
+map.weightedRandomize(
+{
+{ index: 0, weight: 4 },
+{ index: [0, 1], weight: 4 }
+},
+tileX, tileY, width, height);
+Randomize layer
+layer.randomize();  // Randomize all grids
+or
+layer.randomize(tileX, tileY, width, height, indexes);
+indexes An array of tile indexes.
+Weight randomize layer
+layer.weightedRandomize(
+{
+{ index: 0, weight: 4 },
+{ index: [0, 1], weight: 4 }
+},
+tileX, tileY, width, height);
+Copy tiles¶
+Copy current layer
+map.copy(srcTileX, srcTileY, width, height, destTileX, destTileY);
+Copy layer
+map.copy(srcTileX, srcTileY, width, height, destTileX, destTileY, recalculateFaces, layer);
+or
+layer.copy(srcTileX, srcTileY, width, height, destTileX, destTileY, recalculateFaces);
+Put tile at¶
+Put on current layer
+map.putTileAt(tile, tileX, tileY);
+tile :
+Tile index
+Tile object :
+var tile = map.getTileAt(tileX, tileY);
+or
+var tile = map.getTileAtWorldXY(worldX, worldY);
+Put on layer
+map.putTileAt(tile, tileX, tileY, recalculateFaces, layer);
+or
+layer.putTileAt(tile, tileX, tileY, recalculateFaces);
+tile : Tile index, or tile object.
+Put tiles at¶
+Put on current layer
+map.putTilesAt(tilesArray, tileX, tileY);  // tilesArray: 1d/2d array of Tile object or tile index
+tilesArray : 1d/2d array of tile objects or tile indexes
+Put on layer
+map.putTilesAt(tilesArray, tileX, tileY, recalculateFaces, layer);
+or
+layer.putTilesAt(tilesArray, tileX, tileY, recalculateFaces);
+tilesArray : 1d/2d array of tile objects or tile indexes
+Replace tiles¶
+Replace on current layer
+map.replaceByIndex(findIndex, newIndex); // Search on all grids
+or
+map.replaceByIndex(findIndex, newIndex, tileX, tileY, width, height);
+Replace on layer
+map.replaceByIndex(findIndex, newIndex, tileX, tileY, width, height, layer);
+or
+layer.replaceByIndex(findIndex, newIndex, tileX, tileY, width, height);
+Swap tiles¶
+Swap on current layer
+map.swapByIndex(indexA, indexB);
+or
+map.swapByIndex(indexA, indexB, tileX, tileY, width, height);
+Swap on layer
+map.swapByIndex(indexA, indexB, tileX, tileY, width, height, layer);
+or
+layer.swapByIndex(indexA, indexB, tileX, tileY, width, height);
+Shuffle tiles¶
+Shuffle on current layer
+map.shuffle();
+or
+map.shuffle(tileX, tileY, width, height);
+Shuffle on layer
+map.shuffle(tileX, tileY, width, height, layer);
+or
+layer.shuffle(tileX, tileY, width, height);
+Shader effects¶
+`layer`` support internal and external filters
+Tile¶
+Get tile¶
+var tile = map.getTileAt(tileX, tileY);
+// var tile = map.getTileAtWorldXY(worldX, worldY);
+or
+var tile = map.getTileAt(tileX, tileY, true, layer);  // Return a Tile object with an index of -1 for empty tile
+// var tile = map.getTileAtWorldXY(worldX, worldY, true, camera, layer);
+layer : The tile layer to use. Default is current layer (map.setLayer(layer))
+tile : A tile, or null if layer is invalid.
+Get tiles within a rectangle area¶
+var tiles = map.getTilesWithin(tileX, tileY, width, height);
+or
+var tiles = map.getTilesWithin(tileX, tileY, width, height, {
+// isNotEmpty: false,
+// isColliding: false,
+// hasInterestingFace: false
+}, layer);
+tileX , tileY : The left/top most tile index (in tile coordinates) to use as the origin of the area. Default is 0/0.
+width , height : How many tiles wide/tall from the tileX/tileY index the area will be. Default is map.width/map.height.
+filteringOptions : Optional filters to apply when getting the tiles.
+isNotEmpty :  If true, only return tiles that don't have -1 for an index.
+isColliding : If true, only return tiles that collide on at least one side.
+hasInterestingFace : If true, only return tiles that have at least one interesting face.
+layer : The tile layer to use. Default is current layer (map.setLayer(layer))
+tiles : An array of Tiles, or null if layer is invalid.
+Get tiles within world XY¶
+var tiles = map.getTilesWithinWorldXY(worldX, worldY, width, height);
+or
+var tiles = map.getTilesWithinWorldXY(worldX, worldY, width, height,  {
+// isNotEmpty: false,
+// isColliding: false,
+// hasInterestingFace: false
+}, camera, layer);
+worldX , worldY : The world x/y coordinate for the top-left of the area.
+width , height : The width/height of the area. Default is map.width/map.height.
+filteringOptions : Optional filters to apply when getting the tiles.
+isNotEmpty :  If true, only return tiles that don't have -1 for an index.
+isColliding : If true, only return tiles that collide on at least one side.
+hasInterestingFace : If true, only return tiles that have at least one interesting face.
+camera : The Camera to use when factoring in which tiles to return. Default is main camera.
+layer : The tile layer to use. Default is current layer (map.setLayer(layer))
+tiles : An array of Tiles, or null if layer is invalid.
+Get tiles within shape¶
+vat tiles = map.getTilesWithinShape(shape);
+or
+vat tiles = map.getTilesWithinShape(shape, {
+// isNotEmpty: false,
+// isColliding: false,
+// hasInterestingFace: false
+}, camera, layer);
+Shape:
+new Phaser.Geom.Rectangle(x0, y0, width, height)
+new Phaser.Geom.Line(x0, y0, x1, y1)
+new Phaser.Geom.Circle(x, y, radius)
+new Phaser.Geom.Triangle(x0, y0, x1, y1, x2, y2)
+For each tile in layer¶
+map.forEachTile(function(tile, index, tileArray) { /* ... */ }, context);
+or
+map.forEachTile(function(tile, index, tileArray) { /* ... */ }, context,
+tileX, tileY, width, height, {
+// isNotEmpty: false,
+// isColliding: false,
+// hasInterestingFace: false
+}, layer);
+tileX , tileY : The left/top most tile index (in tile coordinates) to use as the origin of the area to search.
+width , height : How many tiles wide/tall from the tileX/tileY index the area will be. Default is map.width/map.height.
+filteringOptions : Optional filters to apply when getting the tiles.
+isNotEmpty :  If true, only return tiles that don't have -1 for an index.
+isColliding : If true, only return tiles that collide on at least one side.
+hasInterestingFace : If true, only return tiles that have at least one interesting face.
+layer : The tile layer to use. Default is current layer (map.setLayer(layer))
+Tile index¶
+Get index
+var index = tile.index;
+Copy index
+tile.index = index;
+Copy
+tile.copy(tileSrc);
+Copies the tile data & properties from the given tile to this tile. This copies everything except for position and interesting faces.
+Tile position¶
+var x = tile.x;
+var y = tile.y;
+Tile corners¶
+var points = map.getTileCorners(tileX, tileY, camera, layer);
+points : Array of vector2 corresponding to the world XY location of each tile corner.
+Alpha¶
+Set
+tile.setAlpha(value);
+or
+tile.alpha = value;
+Get
+var alpha = tile.alpha;
+Visible¶
+Set
+tile.setVisible(visible);
+or
+tile.visible = visible;
+Get
+var visible = visible;
+Flip¶
+Set
+tile.setFlipX(flipX);
+tile.setFlipY(flipY);
+or
+tile.flipX = flipX;
+tile.flipY = flipY;
+Toggle
+tile.toggleFlipX();
+tile.toggleFlipY();
+or
+tile.flipX = !tile.flipX;
+tile.flipY = !tile.flipY;
+Reset
+tile.resetFlip();
+or
+tile.flipX = false;
+tile.flipY = false;
+Get
+var flipX = tile.flipX;
+var flipY = tile.flipY;
+Bounds¶
+Bounds rectangle
+var bounds = tile.getBounds();
+// var out = tile.getBounds(camera, out);
+Left
+var left = tile.getLeft();
+// var left = tile.getLeft(camera);
+Right
+var right = tile.getRight();
+// var right = tile.getRight(camera);
+CenterX
+var centerX = tile.getCenterX();
+// var centerX = tile.getCenterX(camera);
+Top
+var top = tile.getTop();
+// var top = tile.getTop(camera);
+Bottom
+var bottom = tile.getBottom();
+// var bottom = tile.getBottom(camera);
+CenterY
+var centerY = tile.getCenterY();
+// var centerY = tile.getCenterY(camera);
+Properties¶
+var properties = tile.properties;  // object or null
+var value = properties[key];
+tile.properties[key] = value;
+Collision¶
+Enable collision¶
+Enable collision by tile index
+map.setCollision(index);
+// map.setCollision(index, true, recalculateFaces, updateLayer);
+index : Tile index, or an array of tile indexes.
+Enable collision by tile index in a range
+map.setCollisionBetween(start, stop);
+// map.setCollisionBetween(start, stop, true, recalculateFaces, layer);
+start , stop :  The first/last index of the tile.
+Enable collision excluded tile indexes
+map.setCollisionByExclusion(indexes);
+// map.setCollisionByExclusion(indexes, true, recalculateFaces, layer);
+index : An array of tile indexes.
+Enable collision by properties matching
+Enable collision if value of tile property 'key' is equal to 'value'
+map.setCollisionByProperty({key:value});
+// map.setCollisionByProperty({key:value}, true, recalculateFaces, layer);
+Enable collision if value of tile property 'key' is equal to 'value0', or 'value1'
+map.setCollisionByProperty({key:[value0, value1]});
+// map.setCollisionByProperty({key:[value0, value1]}, true, recalculateFaces, layer);
+Enable collision by collision group
+map.setCollisionFromCollisionGroup();
+// map.setCollisionFromCollisionGroup(true, recalculateFaces, layer);
+Disable collision¶
+Disable collision by tile index
+map.setCollision(index, false);
+// map.setCollision(index, false, recalculateFaces, layer);
+index : Tile index, or an array of tile indexes.
+Disable collision by tile index in a range
+map.setCollisionBetween(start, stop, false);
+// map.setCollisionBetween(start, stop, false, recalculateFaces, layer);
+start , stop :  The first/last index of the tile.
+Disable collision by properties matching
+Disable collision if value of tile property 'key' is equal to 'value'
+map.setCollisionByProperty({key:value}, false);
+// map.setCollisionByProperty({key:value}, false, recalculateFaces, layer);
+Disable collision if value of tile property 'key' is equal to 'value0', or 'value1'
+map.setCollisionByProperty({key:[value0, value1]}, false);
+// map.setCollisionByProperty({key:[value0, value1]}, false, recalculateFaces, layer);
+Disable collision by collision group
+map.setCollisionFromCollisionGroup(false);
+// map.setCollisionFromCollisionGroup(false, recalculateFaces, layer);
+Get collision group¶
+var collisionGroup = tile.getCollisionGroup();
+or
+var collisionGroup = tileset.getTileCollisionGroup(tile.index); // array of collision shapes, or null
+Types of collision shape (collisionGroup.objects[i])
+object.rectangle :
+{
+rectangle: true,
+x, y,
+width, height
+}
+x, y : Offset position related top-left of tile.
+var worldX = tile.getLeft() + object.x;
+var worldY = tile.getTop() + object.y;
+width, height : Width/height of rectangle area in pixels.
+object.ellipse :
+{
+ellipse: true,
+x, y,
+width, height
+}
+x, y : Offset position related top-left of tile.
+var centerX = tile.getLeft() + object.x + (object.width / 2);
+var centerY = tile.getTop() + object.y + (object.height / 2);
+width, height : Width/height of ellipse area in pixels.
+object.polygon :
+{
+x, y,
+polygon: [{x,y}, {x,y}, ...]
+}
+Each point :
+{
+x: tile.getLeft() + object.x + polygon[i].x,
+y: tile.getTop() + object.y + polygon[i].y
+}
+object.polyline :
+{
+x, y,
+polyline: [{x,y}, {x,y}, ...]
+}
+Each point :
+{
+x: tile.getLeft() + object.x + polyline[i].x,
+y: tile.getTop() + object.y + polyline[i].y
+}
+Arcade collision¶
+scene.physics.add.collider(arcadeGO, layer);
+or, in update stage:
+scene.physics.world.collide(arcadeGO, layer);
+See Collision section of Arcade-world.
+Matter collision¶
+Any colliding tiles will be given a Matter body.
+scene.matter.world.convertTilemapLayer(layer);
+Tileset¶
+Get tileset¶
+var tileset = map.getTileset(name);
+Change texture of tileset¶
+var texture = scene.sys.textures.get(key);
+tileset.setImage(texture);

@@ -1,0 +1,293 @@
+Holy grail
+Introduction¶
+Layout elements in Holy grail style.
+Author: Rex
+Game object
+Live demos¶
+Simple
+Align
+Layout modes
+Change layout mode
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin('rexuiplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexuiplugin.min.js', 'rexUI', 'rexUI');
+Add holy-grail object
+var holyGrail = scene.rexUI.add.holyGrail(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import UIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+var config = {
+// ...
+plugins: {
+scene: [{
+key: 'rexUI',
+plugin: UIPlugin,
+mapping: 'rexUI'
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add holy-grail object
+var holyGrail = scene.rexUI.add.holyGrail(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import { HolyGrail } from 'phaser4-rex-plugins/templates/ui/ui-components.js';
+Add holy-grail object
+var holyGrail = new HolyGrail(scene, config);
+scene.add.existing(holyGrail);
+Add holyGrail object¶
+var holyGrail = scene.rexUI.add.holyGrail({
+// x: 0,
+// y: 0,
+// anchor: undefined,
+// width: undefined,
+// height: undefined,
+// origin: 0.5
+// originX:
+// originY:
+layoutMode: 0,
+// Elements
+background: backgroundGameObject,
+header: headerGameObject,
+leftSide: leftSideGameObject,
+content: contentGameObject,
+rightSide: rightSideGameObject,
+footer: footerGameObject,
+// Space
+space: {
+left: 0,
+right: 0,
+top: 0,
+bottom: 0,
+header: 0,  // {left, right, top, bottom}
+footer: 0,  // {left, right, top, bottom}
+leftSide: 0, // {left, right, top, bottom}
+rightSide: 0, // {left, right, top, bottom}
+},
+// proportion: {
+//     header: 0,
+//     footer: 0,
+//     leftSide: 0,
+//     rightSide: 0,
+//     content: 1,
+// },
+// expand: {
+//     header: true,
+//     footer: true,
+//     leftSide: true,
+//     rightSide: true,
+//     content: false,
+// },
+// align: {
+//     header: 'center',
+//     footer: 'center',
+//     leftSide: 'center',
+//     rightSide: 'center',
+//     content: 'center',
+// },
+// name: '',
+// draggable: false,
+// sizerEvents: false,
+// enableLayer: false,
+});
+x, y : Position of this object, it is valid when this object is the top object.
+anchor : See anchor.
+left, right, centerX, x, top, bottom, centerY, y, aspectRatio : Position based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+'left'(=0%), 'center'(=50%), 'right'(=100%)
+'top'(=0%), 'center'(=50%), 'bottom'(=100%)
+Offset : '+n', or '-n'.
+width, height : Set size (invoke onResizeCallback) based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+Padding : '+n', or '-n'.
+aspectRatio :
+undefined, or false : Does not keep aspect ratio. Default behavior.
+true : Use the current width and height as the aspect ratio.
+A number : Use given number as the aspect ratio.
+onResizeCallback : A default resize callback will be assigned interanlly.
+width, height : Minimum width, minimum height.
+origin, originX, originY : Set origin of this sizer. Default value is (0.5, 0.5).
+layoutMode : Expand left side, right side to bottom row.
+0, or 'FFF' : Bottom row is footer. Default behavior
+1, or 'LFF' : Left side will expand down to bottom row.
+2, or 'FFR' : Right side will expand down to bottom row.
+3, or 'LFR' : Left side and right side will expand down to bottom row.
+background : Game object of background, optional. This background game object will be resized to fit the size of holyGrail.
+header : Game object of header, optional.
+Will fixed height (proportion=0) and expand width (expand=true) width default setting.
+leftSide : Game object of leftSide, optional.
+Will fixed width (proportion=0) and expand height (expand=true) width default setting.
+content : Game object of content, optional.
+Will expand width (proportion=1) and expand height (expand=true) width default setting.
+rightSide : Game object of rightSide, optional.
+Will fixed width (proportion=0) and expand height (expand=true) width default setting.
+footer : Game object of footer, optional.
+Will fixed height (proportion=0) and expand width (expand=true) width default setting.
+space : Pads spaces
+space.left, space.right, space.top, space.bottom : Space of bounds.
+space.header :
+A number : Space between header game object and below game object, equal to {bottom}
+{left, right, top, bottom} : Padding values of header game object.
+space.footer
+A number : Space between footer game object and above game object, equal to {top}
+{left, right, top, bottom} : Padding values of footer game object.
+space.leftSide :
+A number : Space between leftSide game object and content game object, equal to {right}
+{left, right, top, bottom} : Padding values of leftSide game object.
+space.rightSide :
+A number : Space between rightSide game object and content game object, equal to {left}
+{left, right, top, bottom} : Padding values of rightSide game object.
+expand : Expand width or height of element
+expand.header : Set true to expand width of header game object. Default is true.
+expand.footer : Set true to expand width of footer game object. Default is true.
+expand.leftSide : Set true to expand height of leftSide game object. Default is true.
+expand.rightSide : Set true to expand height of rightSide game object. Default is true.
+expand.content : Set true to expand height of content game object. Default is true.
+proportion : Fixed width or height of element
+proportion.header :
+0 : Fixed height. Default behavior.
+1, or other numbers : Expand height.
+proportion.footer :
+0 : Fixed height. Default behavior.
+1, or other numbers : Expand height.
+proportion.leftSide :
+0 : Fixed width. Default behavior.
+1, or other numbers : Expand width.
+proportion.rightSide :
+0 : Fixed width. Default behavior.
+1, or other numbers : Expand width.
+proportion.content :
+0 : Fixed width.
+1, or other numbers : Expand width. Default value is 1.
+align : Align element
+align.header
+align.footer
+align.leftSide
+align.rightSide
+align.content
+name : Set name of this game object.
+draggable : Set true to drag top-most object.
+sizerEvents : Set true to fire sizer events. Default value is false..
+enableLayer :
+false : Add child game objects into scene's display list. Default behavior.
+true : Add child game objects into an internal layer game object. See also.
+Custom class¶
+Define class
+class MyHolyGrail extends RexPlugins.UI.HolyGrail {
+constructor(scene, config) {
+super(scene, config);
+// ...
+scene.add.existing(this);
+}
+// ...
+}
+Create instance
+var holyGrail = new MyHolyGrail(scene, config);
+Layout modes¶
+Mode 0¶
+Bottom row is footer. Default behavior.
+Header
+Left side
+Content
+Right side
+Footer
+Mode 1¶
+Left side will expand down to bottom row.
+Header
+Left side
+Content
+Right side
+Footer
+Mode 2¶
+Right side will expand down to bottom row.
+Header
+Left side
+Content
+Right side
+Footer
+Mode 3¶
+Left side and right side will expand down to bottom row.
+Header
+Left side
+Content
+Right side
+Footer
+Layout children¶
+Arrange position of all elements.
+holyGrail.layout();
+See also - dirty
+Re-build¶
+Destroy current elements then add elements with new config.
+holyGrail
+.build({
+// Elements
+background: backgroundGameObject,
+header: headerGameObject,
+leftSide: leftSideGameObject,
+content: contentGameObject,
+rightSide: rightSideGameObject,
+footer: footerGameObject,
+layoutMode: 0,
+// Space
+space: {
+header: 0,  // {left, right, top, bottom}
+footer: 0,  // {left, right, top, bottom}
+leftSide: 0, // {left, right, top, bottom}
+rightSide: 0, // {left, right, top, bottom}
+},
+// proportion: {
+//     header: 0,
+//     footer: 0,
+//     leftSide: 0,
+//     rightSide: 0,
+//     content: 1,
+// },
+// expand: {
+//     header: true,
+//     footer: true,
+//     leftSide: true,
+//     rightSide: true,
+//     content: false,
+// },
+// align: {
+//     header: 'center',
+//     footer: 'center',
+//     leftSide: 'center',
+//     rightSide: 'center',
+//     content: 'center',
+// },
+})
+.layout()
+Other properties¶
+See sizer object, base sizer object, container-lite.
+Get element¶
+Get element
+Background game object
+var background = holyGrail.getElement('background');
+Header game object
+var header = holyGrail.getElement('header');
+Left-side game object
+var leftSide = holyGrail.getElement('leftSide');
+Content game object
+var content = holyGrail.getElement('content');
+Right-side game object
+var rightSide = holyGrail.getElement('rightSide');
+Footer game object
+var footer = holyGrail.getElement('footer');
+Get by name
+var gameObject = holyGrail.getElement('#' + name);
+// var gameObject = holyGrail.getElement('#' + name, recursive);
+or
+var gameObject = holyGrail.getByName(name);
+// var gameObject = holyGrail.getByName(name, recursive);
+recursive : Set true to search all children recursively.

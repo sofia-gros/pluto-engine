@@ -1,0 +1,444 @@
+# 影響範囲 — Phaser 4 互換 API 実装 roadmap
+
+> 判定の根拠は [`SOA_FEASIBILITY.md`](./SOA_FEASIBILITY.md)、
+> 全シンボルは [`API_INDEX.md`](./API_INDEX.md) を参照。
+>
+> **この文書に沿って実装を進めることで、実装忘れとバグが軽減されます。**
+> 各 Phase 完了時にチェックリストの全項目にチェックを付ける運用です。
+
+## 0. 鉄則（実装時に必ず守る）
+
+| # | 鉄則 | 違反后果 |
+| --- | --- | --- |
+| R-01 | **CPU 側の状態はすべて SoA**（`Float32Array` / `Int32Array` / `Uint8Array` / `Uint32Array`）。vec / オブジェクトは **GPU 転送用 `packed*` ミラーと vec 演算子のみ** | アリーナの連続性与キャッシュ局所性が崩壊し、300k が成立しなくなる |
+| R-02 | **`update` / `render` ループ内で `new` / `{}` / `[]` / `.push()` 禁止** | GC スパイク（1.9〜80 B/frame の予算が壊れる） |
+| R-03 | **Flyweight は own property を `id` + 参照のみ**に保つ | ヒープigrafが 32 バイトを超えて 300k で数 MB になる |
+| R-04 | **SoA 配列への直接代入禁止**。write-through セッターを通す | packed ミラーが腐り、その 1 体だけ描画が壊れる |
+| R-05 | **性能順序は WebGPU > WebGL > CPU**。これを下回る実装は却下 | 要件2違反 |
+| R-06 | 実装不可と判断したものは **E リスト（20 件）** に従い、互換性をあきらめて代替 API を提供する | 要件3違反 |
+| R-07 | 1 メソッドを追加するたびに **SoA 対応テスト**を同时追加する | テストが追いつかず退行が混入 |
+
+---
+
+## 1. Phase 構成（依存順）
+
+```
+Phase 0  計測基盤（WebGPU bench）
+   │
+   ├─ Phase 1  GameObject 基盤 SoA 拡張
+   │      ├ origin / scrollFactor / active / tintMode / name
+   │      └ 結果: Sprite が Phaser の基本 API を網羅
+   │
+   ├─ Phase 2  Flyweight ハンドル群
+   │      Tween / AnimState / TimerEvent / Sound / Group / Container
+   │
+   ├─ Phase 3  入力・サウンド・ 시간の API 拡張
+   │
+   ├─ Phase 4  physics-arcade の body/world
+   │
+   ├─ Phase 5  particles の Phaser API
+   │
+   ├─ Phase 6  text / tilemaps / graphics(static shapes)
+   │
+   ├─ Phase 7  curves / math / geometry（out パラメータ化）
+   │
+   └─ Phase 8  GPU-driven（要件2 の達成）
+          ├ RenderGraph + Filter（WebGPU のみ）
+          └ culling / Morton / indirect draw
+```
+
+---
+
+## 2. Phase 1 — GameObject 基盤 SoA 拡張
+
+### 2.1 追加する SoA 配列（`InstanceBufferArena`）
+
+| 配列 | 型 | 用途 | packed ミラー |
+| --- | --- | --- | --- |
+| `originX` / `originY` | `Float32Array` | 描画原点（Phaser は 0.5, 0.5 既定） | 新規 `packedOrigin`（vec4 + 予備 2 lane） |
+| `scrollFactorX` / `scrollFactorY` | `Float32Array` | カメラスクロール係数（パララックス） | 同上 lane に格納 |
+| `active` | `Uint8Array` | update/draw の一括スキップ | `packedFlags` の予備 lane へ |
+| `tintMode` | `Uint8Array` | Phaser 4 の 6 モード | 同上 |
+| `nameSlot` | `Int32Array` | `setName` のスロット化 | なし（CPU 専用） |
+| `blendMode` | `Uint8Array` | `setBlendMode` | なし（**バッチ分割**で解決） |
+| `kind` | `Uint8Array` | `type` の数値表現 | なし（CPU 専用） |
+
+> **注意**: `packedFlags` は 4 lane を使い切りです。新規 lane は
+> `packedOrigin`（vec4: originX, originY, scrollFactorX, scrollFactorY）を新設し、
+> `active` / `tintMode` は `packedExt` の 4 lane 消費枠のうち 2 つを使います。
+
+### 2.2 追加する `Sprite` メソッド
+
+| メソッド | 分類 | 備考 |
+| --- | --- | --- |
+| `setOrigin(x?, y?)` / `setOriginFromFrame()` | **B** | 既定 0.5。頂点シェーダでクワッドを移動 |
+| `getLocalTransformMatrix()` | **D** | `out: Float32Array(4)` を必須化（オブジェクト生成禁止） |
+| `getWorldTransformMatrix()` | **D** | `out` 必須。シェーダと同じ計算を CPU 側で行う |
+| `getOrigin()` | **A** | `out` パラメータ |
+| `setTintMode(mode)` / `tintMode` | **B** | シェーダに分岐を追加（6 モード） |
+| `setActive(v)` / `active` | **B** | `render()` / `update()` の先頭で一括スキップ |
+| `setScrollFactor(v)` / `setScrollFactorX/Y()` / `scrollFactorX/Y` | **B** | カメラごとの描画位置を計算 |
+| `setName(name)` / `name` | **C** | 文字列プール。**SoA 化しない** |
+| `setBlendMode(mode)` / `blendMode` | **D** | **バッチ分割が必要**。即座には実装せず Phase 8 で |
+| `setBlendMode` の enum | **D** | `BlendMode` 定数オブジェクト |
+| `setInteractive` の Phaser 互換オーバーロード | **C** | shape / callback / config を Flyweight で扱う |
+| `willRoundVertices()` | **E** | 却下 |
+| `setWinding` / `setShader` / `setMask` / `setPipeline` | **E** | 却下 |
+| `setData` / `getData` | **D** | `scene.registry` へ誘導する誘導のみ実装 |
+| `setOriginToDefault()` | **B** | `setOrigin(0.5, 0.5)` |
+| `setSize(w, h)` | **B** | `frameWidth/Height` を直接 |
+| `getSize(out)` | **B** | — |
+
+### 2.3 チェックリスト
+
+- [x] `InstanceBufferArena` に SoA 配列 7 種を追加
+- [x] write-through セッターを追加（`setOrigin` / `setScrollFactor` / `setActive` / `setName` / `setBlendMode` / `setTintMode`）
+- [x] `packedOrigin` を `InstanceLayout` に追加（vec4 = originX, originY, scrollFactorX, scrollFactorY）
+- [x] `ExtLane.Active` / `ExtLane.TintMode` を `packedExt` に定義（**転送は Phase 8 まで見送り**、下記 2.4 参照）
+- [x] `Sprite` に 14 メソッドを追加
+- [x] 頂点シェーダに origin / scrollFactor の反映を追加（GLSL + WGSL）
+- [x] `active = 0` を `visible` と AND させて `packedFlags` へ反映（頂点シェーダ不要・48 B/instance 節約）
+- [x] SoA テスト（`packed_mirror.test.ts` に origin / scrollFactor / active / name / tintMode / blendMode / transform 行列の整合性検証）
+- [x] golden テスト（`setOrigin(0.5)` の中心配置・`(0,0)`・`(1,1)` と `setActive(false)` の回帰検出）
+- [x] `bun run build:all` / `bun run test`（36 ファイル / 477 件）通過
+- [x] `bun x tsc --noEmit -p tsconfig.base.json` の `src/` エラー 0
+- [x] 変更ファイルは `biome check` clean
+
+### 2.4 設計変更（当初計画からの逸脱と理由）
+
+| 項目 | 当初計画 | 実際の決定 | 理由 |
+| --- | --- | --- | --- |
+| `tintMode` の GPU 転送 | フラグメントシェーダに分岐を追加 | **CPU 側 SoA のみ**。`ExtLane` の定義だけ先に用意 | 6 分岐を全ピクセルで評価するのは要件2（WebGPU > WebGL > CPU）に反する。分岐をテクスチャ化するか描画パスごとに分ける方が速い |
+| `blendMode` の GPU 転送 | 32 lane へ格納 | **転送しない**。CPU 側でバッチ分割のキーとして使う | バッチ分割は Phase 8 の RenderGraph に統合する方が衝突しない |
+| `active` の GPU 転送 | `packedFlags` の予備 lane | **`visible` と AND して `packedFlags.Visible` へ** | 独立 lane を増やさず、頂点シェーダも汚さない |
+| `getLocalTransformMatrix` | `Float32Array(4)` | `Float32Array(6)`（2x3 相当の a,b,c,d,tx,ty） | 2x3 で回転・スケール・平行移動を過不足なく表現できる。4 要素は精度が落ちる |
+| `setBlendMode` | Phase 8 まで未実装 | **CPU 側だけ実装**（WebGL2 非対応値は `Normal` に丸め） | 格納場所がないと API として穴になるので先に用意する |
+
+---
+
+## 3. Phase 2 — Flyweight ハンドル群
+
+Phaser は多くの API が「オブジェクトを返してlater操作」する。SoA では**Flyweight ハンドル**が必要。
+
+### 3.1 追加する Flyweight クラス（own property は `id` + 参照のみ）
+
+| クラス | R-03 遵守 | 参照先 | 実装メソッド |
+| --- | --- | --- | --- |
+| `Tween` | id + `_manager` | `TweenManager` の SoA | `play` / `pause` / `resume` / `stop` / `isPlaying` / `isPaused` / `progress` / `getProgress` / `seek` / `isDestroyed` / `reset` |
+| `AnimState` | id + `_manager` | `AnimationManager` の SoA | `play` / `playReverse` / `stop` / `pause` / `resume` / `isPlaying` / `isPlayingReverse` / `progress` / `getProgress` |
+| `TimerEvent` | id + `_manager` | `TimeStepManager` の SoA | `remove` / `reset` / `getProgress` / `getElapsed` |
+| `Sound` | id + `_manager` | `SoundManager` の Voice プール | `play` / `stop` / `pause` / `resume` / `isPlaying` / `isPaused` / `setVolume` / `setRate` / `setSeek` / `setLoop` / `destroy` / `mark` / `addMarker` |
+| `Group` | id + `_array` | **可変長 `Array`**（**D**） | `add` / `remove` / `getAt` / `getAll` / `getLength` / `contains` |
+| `Container` | id + `_arena` | **SoA `parentId`**（**C**） | `setSize` / `setPosition` / `add` / `remove` / `getBounds`（`out` 必須） |
+| `Body` | id + `_physics` | `ArcadePhysics` の SoA | `setVelocity` / `setVelocityX/Y` / `setAcceleration` / `setDrag` / `setBounce` / `setMaxVelocity` / `setSize` / `setOffset` / `setImmovable` / `setCircle` / `setCollideWorldBounds` |
+| `World` | **SoA**（camera 未満のため） | `ArcadePhysics` の SoA + 境界矩形 | `setBoundsRectangle` / `setBounds` / `collideWorldBounds` / `bounds` / `getBounds` / `gravityX/Y` |
+| `ParticleEmitter` | **SoA** | `ParticleManager` | `emitParticle` / `start` / `stop` / `explode` / `setConfig` |
+| `TilemapLayer` | id + `_arena` | SoA `tileIndex` | `setCollisionByIndex` / `setPosition` / `destroy` |
+| `Pointer` | **既存**（拡張） | — | `pointerId` / `movementX` / `velocity` / `angle` / `distance` / `dx/dy` / `upX/upY` / `downX/downY` |
+| `Gamepad` | index + `_input` | `InputManager` | `total` / `gamepads` / `getAll` / `supported` |
+
+### 3.2 `Group` / `Container` の扱い（要件3）
+
+- **`Group` は SoA 化しない（D）**。可変長の子リストは SoA の得意分野ではないため、
+  **使い回し `Array`** で実装する。ただし **Pluto の SoA アリーナは汚さない**
+  （`Group` は「Cpu-managed なビュー」として arena と並行して持つ）。
+- **`Container` は SoA（`parentId`）で実装する（C）**。
+  `children` は `parentId` による走査で生成し、**使い回し `Array`** を返す。
+- **`add.existing` は却下（E-01）**。Flyweight は「オブジェクトの登録」を表現できないため、
+  `setParentId` のみで表現します。
+
+### 3.3 チェックリスト
+
+- [ ] `Tween` Flyweight を実装（SoA を `TweenManager` 内で参照）
+- [ ] `AnimState` Flyweight を実装
+- [ ] `TimerEvent` Flyweight を実装
+- [ ] `Sound` Flyweight を実装
+- [ ] `Body` Flyweight を実装（`ArcadePhysics` の SoA 配列 12 種を追加）
+- [ ] `World` を SoA で実装（境界矩形 + gravity）
+- [ ] `Group` を Array ベースで実装（SoA 化しない）
+- [ ] `Container` を `parentId` ベースで実装
+- [ ] `ParticleEmitter` Flyweight を実装（`ParticleManager` を拡張）
+- [ ] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array`）
+- [ ] `Pointer` を拡張（`pointerId` / `movementX` / `velocity` / `angle` 等）
+- [ ] `Gamepad` Flyweight を実装
+- [ ] 各 Flyweight の **own property 数**をテストで保証（Flyweight 掟 R-03）
+- [ ] SoA テスト（handle 経由の書き込みが SoA に反映されること）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 4. Phase 3 — 入力・サウンド・時間の API 拡張
+
+### 4.1 追加 API
+
+| 対象 | 追加 API | 分類 |
+| --- | --- | --- |
+| `Key` | `duration` / `timeDown` / `timeUp` / `addTo` / `removeFrom` / `enableCapture` | D |
+| `input.keyboard` | `Shift` / `Ctrl` / `Alt` / `Meta` / `WASD` / `arrows` / `JustDown` / `JustUp` / `addKey` | D |
+| `input` | `setCapture` / `setPreventDefault` / `stopPropagation` / `enabled` / `activeKeys` | D/A |
+| `Pointer` | `Pointer.worldX/worldY` を **ワールド座標**に修正 | C |
+| `sound` | `listenerX/Y/Z` / `effects` / `setRate` / `setSeek` / `setLoop` / `pauseByKey` / `resumeByKey` / `playAfterDelay` / `onEnded` | D |
+| `loader` | `audio` / `setPath` / `setCORS` / `reset` / `abort` / `onProgress` / `key` / `file` / `totalToLoad` / `list` | B/D |
+| `TextureManager` | `addSpriteSheet` / `addBase64` / `addCanvas` / `remove` / `list` / `getKeys` / `getFrame` / `refresh` | A/B/D |
+| `time` | `timeScale` / `smoothStep` / `TimerEvent` の `repeatDelay`（未実装バグ修正） | A |
+| `scale` | `gameSize` / `displaySize` / `parentSize` / `displayScale` / `zoom` / `setParentSize` / `setGameSize` / `setZoom` / `addGameSize` / `addDisplaySize` / `startListeners` / `stopListeners` | A |
+| `cameras` | `getCameras`（使い回し）/ `setName` / `setAlpha` / `getWorldDirection` / `getMidPoint` / `resetFX` | A/D |
+
+### 4.2 チェックリスト
+
+- [ ] `Key` に `duration` / `timeDown` / `timeUp` を追加
+- [ ] `input.keyboard` に `Shift/Ctrl/Alt/Meta/WASD/arrows` を追加
+- [ ] `Pointer.worldX/worldY` をワールド座標に修正
+- [ ] `sound.listenerX/Y/Z` を公開
+- [ ] `LoaderManager` に `audio` を追加（`AssetType` 拡張 + `loadAudioData` 連携）
+- [ ] `LoaderManager.reset/abort/onProgress` を実装
+- [ ] `TextureManager.remove/list/getKeys/getFrame/refresh` を実装
+- [ ] `TextureManager.addSpriteSheet` を実装（`addSpritesheet` のエイリアス）
+- [ ] `TextureManager.addBase64/addCanvas` を実装
+- [ ] `TimeStepManager` の `repeatDelay` 未実装バグを修正
+- [ ] `ScaleManager` に `gameSize/displaySize/parentSize/zoom` を追加
+- [ ] `CameraManager.getCameras` を実装（使い回し）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 5. Phase 4 — physics-arcade の body / world
+
+### 5.1 追加する SoA 配列（`ArcadePhysics`）
+
+| 配列 | 型 | 用途 |
+| --- | --- | --- |
+| `accX` / `accY` | `Float32Array` | `setAcceleration` |
+| `dragX` / `dragY` | `Float32Array` | `setDrag` |
+| `maxVelX` / `maxVelY` | `Float32Array` | `setMaxVelocity` |
+| `friction` / `frictionStatic` | `Float32Array` | `setFriction` |
+| `bounce`（既存） | `Float32Array` | `setBounce` |
+| `immovable` | `Uint8Array` | `setImmovable` |
+| `enable` | `Uint8Array` | `enable/disable` |
+| `offsetX` / `offsetY` | `Float32Array` | `setOffset` |
+| `collideWorldBounds` | `Uint8Array` | `setCollideWorldBounds` |
+| `bodySizeX` / `bodySizeY` | `Float32Array` | `setSize`（`hitWidth/Height` と共通化） |
+| `worldBoundsX0/Y0/X1/Y1` | `Float32Array`（スカラー4） | `world.setBoundsRectangle` |
+| `gravityX` / `gravityY` | スカラー | `world.gravity` |
+
+### 5.2 方針（要件3）
+
+- **`Body` は Flyweight**（SoA を `ArcadePhysics` に置く）
+- **`World` は**「camera が 1 つの Scene より多い」ため **SoA 化せずスカラー＋Flyweight**。
+  per-entity の `body` は **`Sprite` に委譲**（Pluto の SoA を汚さない）
+- `physics.add.existing` は**却下（E-01）**
+
+### 5.3 チェックリスト
+
+- [ ] SoA 配列 15 種を `ArcadePhysics` に追加
+- [ ] `Body` Flyweight を実装（`setVelocityX/Y` / `setAcceleration` / `setDrag` / `setBounce` / `setMaxVelocity` / `setImmovable` / `setSize` / `setOffset` / `setCircle` / `setCollideWorldBounds` / `setFriction` / `velocity` / `speed` / `angle`）
+- [ ] `World` Flyweight を実装（`setBoundsRectangle` / `setBounds` / `collideWorldBounds` / `bounds` / `getBounds` / `gravityX/Y`）
+- [ ] `ArcadePhysics.update` に acceleration / drag / maxVelocity / friction を統合
+- [ ] `world.bounds` とスプライトの衝突判定を実装
+- [ ] `physics.add.group` / `staticGroup` を `Group` Flyweight 経由で実装
+- [ ] SoA テスト（body の各 field が SoA に反映されること）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 6. Phase 5 — particles の Phaser API
+
+### 6.1 方針（平坦化）
+
+`ParticleEmitter` の zone / ops を**平坦化**して SoA で実装。
+
+| Phaser API | SoA 平坦化 |
+| --- | --- |
+| `emitter.emitters[]` | `emitterZoneShape: Uint8Array(n)` + `emitterZoneParams: Float32Array(n*4)` |
+| `emitter.ops.*` | `ops: Float32Array(n*2)`（isEnabled, value）＋ `opIndex` の SoA |
+| `emitter.particleX/Y` | `emitterParticleX: Float32Array`（SoA） |
+
+### 6.2 追加 API
+
+| 追加 API | 分類 |
+| --- | --- |
+| `add.particles(x, y, texture, config)` | **B** |
+| `emitter.emitParticle(atX?, atY?)` | **B** |
+| `emitter.start()` / `stop()` / `explode(count, x?, y?)` | **B** |
+| `emitter.setConfig(config)` | **D** |
+| `emitter.speedX/Y` / `scaleX/Y` / `alpha` / `tint` / `angle` / `rotate` | **B**（SoA） |
+| `emitter.lifespan` / `quantity` / `frequency` / `maxAliveParticles` / `duration` | **B**（スカラー） |
+| `emitter.gravityX/Y` / `setParticleGravity(x, y)` / `setParticleGravityY` | **B** |
+| `setParticleTint` / `particleBringToTop` | **A** |
+| `emitter.emitters` | **D**（平坦化） |
+| `emitter.ops` / `ParticleEmitterOp` | **D**（平坦化） |
+| `ParticleEmitterZone` | **D**（形状 enum 化） |
+
+### 6.3 チェックリスト
+
+- [ ] `ParticleManager` に Phaser 互換の `ParticleEmitter` を実装（SoA）
+- [ ] zone を平坦化（`Uint8Array` 形状 ID + `Float32Array` パラメータ）
+- [ ] ops を平坦化（`Float32Array`）
+- [ ] `add.particles` を `Scene.add` に追加
+- [ ] `emitParticle` / `start` / `stop` / `explode` を実装
+- [ ] gravity / lifespan / quantity / frequency を SoA に
+- [ ] `ParticleEmitterZone` の形状 enum を実装（point/line/circle/random/emit）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 7. Phase 6 — text / tilemaps / graphics（静的シェイプ）
+
+### 7.1 text
+
+| 追加 API | 分類 | 備考 |
+| --- | --- | --- |
+| `add.text` のスタイル系（`setFont` / `setFontSize` / `setColor` / `setAlign` / `setLineSpacing` / `setPadding` / `setWordWrapWidth` / `setResolution`） | **B** | SoA 配列追加 |
+| `add.bitmapText` | **B** | BMFont → SoA |
+| `Text` を `Sprite` と共通化（Flyweight 共通化） | **C** | `Text` は現在 `Sprite` のサブクラスではない |
+| `Text.setOrigin` / `setScale` / `setAlpha` / `setDepth` / `setVisible` | **B** | `Sprite` と共通化すれば継承 |
+| `BBCodeText` / `TagText` / `DynamicText` | **E** | 却下（E-04 / E-05） |
+| `setStroke` / `setShadow` | **E** | 却下（E-06） |
+
+### 7.2 tilemaps
+
+| 追加 API | 分類 | 備考 |
+| --- | --- | --- |
+| **UV mapping の実装**（現在 TODO） | **A** | `tileIndex → uv` を SoA で事前計算 |
+| `make.tilemap` / `tilemap.createLayer` / `createBlankLayer` | **B/C** | `TilemapLayer` Flyweight + `tileIndex: Int32Array` |
+| `tilemap.findTileAt` / `getTilesWithinWorldXY` | **A** | SoA 走査 |
+| `tilemap.setCollisionByIndex` | **C** | `collision: Uint8Array` |
+| `tilemap.setDepthSort` | **E** | 却下（E-18） |
+| `TilemapGPULayer` | **C** | WebGPU compute。**Phase 8** |
+
+### 7.3 graphics（静的シェイプのみ）
+
+| 追加 API | 分類 |
+| --- | --- |
+| `add.rectangle` / `circle` / `ellipse` / `arc` / `triangle` / `star` / `polygon` / `line` / `grid` / `isobox` / `isotriangle` / `roundrect` / `quad` / `cover` / `fullwindowrect` | **C**（静的 SoA） |
+| `Shape` の transform 系 | **B/A**（SoA） |
+| `add.shape` | **D** |
+| `add.graphics`（動的 command buffer） | **E**（却下 E-02） |
+
+### 7.4 チェックリスト
+
+- [ ] `Text` を `Sprite` と共通化（Flyweight）
+- [ ] `Text` のスタイル SoA 配列を追加（font / size / color / align / lineSpacing / padding / wrapWidth / resolution）
+- [ ] `add.bitmapText` を実装
+- [ ] Tilemap の **UV mapping TODO** を解消（`tileIndex → uv` の SoA 事前計算）
+- [ ] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array`）
+- [ ] `tilemap.createLayer` / `createBlankLayer` / `findTileAt` / `getTilesWithinWorldXY` を実装
+- [ ] `tilemap.setCollisionByIndex` を実装（`collision: Uint8Array`）
+- [ ] 静的シェイプを SoA で実装（rectangle / circle / triangle / star / roundrect ほか）
+- [ ] `add.graphics`（動的）が**未実装**であることを確認（E-02）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 8. Phase 7 — curves / math / geometry
+
+### 8.1 curves（out パラメータ必須）
+
+| グループ | 分類 | 対策 |
+| --- | --- | --- |
+| `Curves.Line` / `QuadraticBezier` / `CubicBezier` / `Spline` / `CatmullRom` | **C** | **`out: Float32Array` 必須**。Point オブジェクトを生成しない |
+| `Curves.Ellipse` / `Arc` / `RandomWalk` / `Path` | **C** | 点列は **`Float32Array` 事前確保 + `writeCursor`** |
+| `Path.getPoints` / `getSpacedPoints` / `getRandomPoint` / `Interpolate` / `Rotate` / `Scale` / `Translate` / `Mirror` / `Reflect` | **C** | 同上 |
+| `Curve.getPoint` / `getPoints` / `getLength` | **C** | 同上 |
+
+### 8.2 math / geometry
+
+| 追加 API | 分類 |
+| --- | --- |
+| `Math.Linear` / `SmoothStep` / `Sinusoidal` / `Percentage` / `FuzzyMatch` / `FuzzyString` | **A** |
+| `Math.BetweenPoints` / `DistanceSquared` / `RadiansToDegrees` / `DegreesToRadians` | **A** |
+| `Math.Vector2` 系（`ceil` / `floor` / `invert` / `projectUnit` / `setLength` / `negate`） | **A/C**（**`out` 必須**） |
+| `Math.GetCentroid` / `GetVec2Bounds` | **A**（**`out` 必須**） |
+| `Math.Raycaster` | **A/C**（**SoA 走査**） |
+| `Math.ExprParser` | **A/C** |
+| `Struct.Set` / `Struct.Map` → ネイティブ | **D**（Phaser 4 と同じ実装に追随） |
+| `Geom.*`（Rectangle / Circle / Triangle / Ellipse / Line / Polygon / Rhombus / Hexagon） | **C**（**`out` 必須**。オブジェクト生成禁止） |
+
+### 8.3 チェックリスト
+
+- [ ] `Math` に `Linear` / `SmoothStep` / `Sinusoidal` / `Percentage` / `FuzzyMatch` を追加
+- [ ] `Math` に `BetweenPoints` / `DistanceSquared` / `RadiansToDegrees` / `DegreesToRadians` を追加
+- [ ] `Vector2` を SoA 友善に（`out` パラメータ化）
+- [ ] `Math.GetCentroid` / `GetVec2Bounds` を `out` パラメータで実装
+- [ ] `Math.Raycaster` を SoA 走査で実装
+- [ ] `Curves.*` をすべて `out` パラメータ化
+- [ ] `Path` の点列を `Float32Array` 事前確保 + `writeCursor` で実装
+- [ ] `Geom.*` をすべて `out` パラメータ化
+- [ ] `Struct.Set` / `Map` をネイティブ実装に置換
+- [ ] **ヒープ生成ゼロテスト**（out パラメータ強制の確認）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 9. Phase 8 — GPU-driven（要件2 の達成）
+
+### 9.1 必須タスク（Phase 0 の P-01〜P-05）
+
+| # | タスク | 状態 |
+| --- | --- | --- |
+| P-01 | WebGPU bench harness | **未着手** |
+| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手** |
+| P-03 | WebGL2 culling（byteOffset による baseInstance） | **未着手** |
+| P-04 | Filter を WebGPU のみに限定 | **未着手** |
+| P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **未着手** |
+
+### 9.2 RenderGraph / Filter
+
+| 対象 | 分類 | 備考 |
+| --- | --- | --- |
+| `RenderGraph`（複数パス） | **C** | **`packages/renderer` に新設**。`Filter` の土台 |
+| `filters.internal` / `filters.external` | **D** | 内部 / 外部の 2 リスト |
+| `Blur` / `Bloom` / `Glow` / `Shadow` / `Pixelate` / `ColorMatrix` / `Quantize` / `Vignette` / `Wipe` / `Blocky` / `Sampler` / `Threshold` / `Key` / `GradientMap` / `NormalTools` / `ImageLight` / `PanoramaBlur` / `CombineColorMatrix` / `ParallelFilters` / `Displacement` / `Blend` | **C**（**WebGPU のみ**。WebGL2 では簡易版） |
+| `Gradient` / `Noise`（Cell2D/3D/4D, Simplex2D/3D） | **C**（WebGPU） | フラグメントシェーダ |
+| `SpriteGPULayer` | **C** | **SoA と最適**。Pluto の中核 |
+| `TilemapGPULayer` | **C**（WebGPU） | 1 quad |
+| `CaptureFrame` / `Stamp` | **E** | 却下（E-23） |
+| `RenderNodeManager` / `RenderSteps` | **E** | 却下（E-20） |
+| `setLighting` | **E** | 却下（E-09） |
+| `setPipeline` / `preFX` / `postFX` / `setPostPipeline` | **E** | 却下（E-11）。**`filters` として別実装** |
+
+### 9.3 チェックリスト
+
+- [ ] WebGPU bench harness を構築（P-01）
+- [ ] WebGPU compute で culling を実装（P-02）
+- [ ] WebGPU compute で Morton sort を実装（P-02）
+- [ ] WebGPU で indirect draw を実装（P-02）
+- [ ] WebGL2 で byteOffset による culling を実装（P-03）
+- [ ] `RenderGraph` を新設（複数パス）
+- [ ] `Filter` 基盤を新設（`filters.internal` / `filters.external`）
+- [ ] 主要 Filter を WebGPU のみで実装（Blur / Bloom / Glow / Pixelate / ColorMatrix / Vignette ほか）
+- [ ] `SpriteGPULayer` を実装（静的 GPU バッファ + GPU 駆動アニメ）
+- [ ] `TilemapGPULayer` を実装（1 quad）
+- [ ] `Gradient` / `Noise` を実装（WebGPU）
+- [ ] benchmark_results.json に 3 系統（WebGPU / WebGL2 / CPU）を記録（P-05）
+- [ ] **要件2 の検証**（WebGPU > WebGL > CPU を bench で確認）
+- [ ] `bun run test` / `bun run lint` 通過
+
+---
+
+## 10. 全体チェックリスト
+
+### 文書
+
+- [x] Phaser4 データを md で保存（`docs/phaser4/skills` 36 md + `changelog/v4` 17 md + `rex-notes` 421 ページ）
+- [x] API 全文の列挙（`docs/phaser4/API_INDEX.md` 1,744 シンボル）
+- [x] SoA 実行可能性の検査（`docs/phaser4/SOA_FEASIBILITY.md`）
+- [x] 影響範囲 md（本文書）
+
+### 鉄則の遵守
+
+- [ ] R-01: CPU 側は SoA のみ
+- [ ] R-02: ループ内 `new` なし
+- [ ] R-03: Flyweight は own property 2 個以下
+- [ ] R-04: SoA 直接代入なし（write-through のみ）
+- [ ] R-05: WebGPU > WebGL > CPU
+- [ ] R-06: E リスト（20 件）に従う
+- [ ] R-07: メソッド追加ごとに SoA テスト追加
+
+### 検証
+
+- [ ] `bun run test`（46+ ファイル）
+- [ ] `bun run lint`
+- [ ] `bun scripts/smoke-test.mjs`（3 デモで 2048 B/frame 以内）
+- [ ] `bun scripts/gpu-benchmark.mjs`（WebGPU / WebGL2 / CPU の 3 系統）
+- [ ] golden テスト（フレームバッファの回帰検出）

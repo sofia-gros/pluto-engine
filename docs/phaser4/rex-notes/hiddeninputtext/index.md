@@ -1,0 +1,130 @@
+Hidden edit
+Introduction¶
+An invisible Input DOM element to
+receive character input and display on text, bbocodetext, or tagtext.
+Inspirited from CanvasInput.
+Author: Rex
+Behavior of text object
+Live demos¶
+With Text
+With BBCodeText
+With rexui-Label
+With bitmaptext
+Number input
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexhiddeninputtextplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexhiddeninputtextplugin.min.js', true);
+Add text-edit behavior
+var hiddenInputText = scene.plugins.get('rexhiddeninputtextplugin').add(textGameObject, config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import HiddenInputTextPlugin from 'phaser4-rex-plugins/plugins/hiddeninputtext-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexHiddenInputTextPlugin',
+plugin: HiddenInputTextPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add text-edit behavior
+var hiddenInputText = scene.plugins.get('rexHiddenInputTextPlugin').add(textGameObject, config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import HiddenInputText from 'phaser4-rex-plugins/plugins/hiddeninputtext.js';
+Add text-edit behavior
+var hiddenInputText = new HiddenInputText(textGameObject, config);
+Add input text object¶
+var hiddenInputText = scene.plugins.get('rexHiddenInputTextPlugin').add(textGameObject, {
+// inputType: 'text',    // 'text'|'password'|'textarea'|...
+// type: 'text',    // 'text'|'password'|'textarea'|...
+cursor: '|',
+cursorFlashDuration: 1000,
+// enterClose: true,
+// onOpen: function (textObject, hiddenInputText) {   // Or onFocus:
+// },
+// onClose: function (textObject, hiddenInputText) {  // Or onBlur:
+// },
+// onUpdate: function (text, textObject, hiddenInputText) {
+//     return text;
+// },
+});
+textGameObject :
+inputType, or type : Type of element
+'text', 'password', 'textarea', ...
+cursor : Cursor character used in default update text callback.
+null, or '' : Don't insert cursor character.
+cursorFlashDuration : Display cursor character or a space string to create a flash cursor.
+enterClose :
+true : Close input text when enter-key was pressed. Default value is true if inputType is not 'textarea'.
+false : If inputType is set to 'textarea', default value will be false.
+onOpen, or onFocuse : Callback invoked when focus on this hidden input text.
+function (textObject, hiddenInputText) {
+}
+onClose, or onBlur : Callback invoked when blur.
+function (textObject, hiddenInputText) {
+}
+onUpdate :
+A callback invoked in each tick of editing.
+function (text, textObject, hiddenInputText) {
+// return text;
+}
+Can return a new string for text game object displaying.
+'number' : Only output number string.
+Note
+This hiddenInputText will be destroyed when textGameObject is destroyed.
+Custom class¶
+Define class
+class MyHiddenText extends HiddenInputText {
+constructor(textGameObject, config) {
+super(textGameObject, config) {
+// ...
+}
+// ...
+// preUpdate(time, delta) {}
+}
+scene.add.existing(gameObject) : Adds an existing Game Object to this Scene.
+If the Game Object renders, it will be added to the Display List.
+If it has a preUpdate method, it will be added to the Update List.
+Create instance
+var hiddenInputText = new MyHiddenText(textGameObject, config);
+Cursor¶
+Set
+hiddenInputText.setCursor(s);
+Get
+var cursor = hiddenInputText.cursor;
+Open editor¶
+hiddenInputText.open();
+Close editor¶
+hiddenInputText.close();
+Is opened¶
+var isOpened = hiddenInputText.isOpened;
+Select text¶
+This feature does not support.
+Bypass key input¶
+Registered keyboard events might capture key input.
+var keyObj = scene.input.keyboard.addKey('W', enableCapture, emitOnRepeat);
+Set enableCapture to false to bypass key input to this input-text game objecct.
+Event¶
+On text change
+hiddenInputText.on('textchange', function(text, textGameObject){
+})
+Not a number input
+hiddenInputText.on('nan', function(text){
+})
+Close editor by ENTER key down
+hiddenInputText.on('keydown-ENTER', function(){
+})

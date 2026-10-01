@@ -1,0 +1,179 @@
+Virtual joystick
+Introduction¶
+Simulate cursor keys according to touch events.
+Author: Rex
+Member of scene
+Live demos¶
+Virtual joystick
+Two joySticks
+Joystick and button
+Toggle visible
+Drag vector to cursor keys
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
+Create instance
+var joyStick = scene.plugins.get('rexvirtualjoystickplugin').addPlayer(scene, config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import VirtualJoystickPlugin from 'phaser4-rex-plugins/plugins/virtualjoystick-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexVirtualJoystick',
+plugin: VirtualJoystickPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Create instance
+var joyStick = scene.plugins.get('rexVirtualJoystick').addPlayer(scene, config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import VirtualJoystick from 'phaser4-rex-plugins/plugins/virtualjoystick.js';
+Create instance
+var joyStick = new VirtualJoystick(scene, config);
+Create instance¶
+var joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
+x: x,
+y: y,
+radius: 100,
+base: baseGameObject,
+thumb: thumbGameObject,
+// dir: '8dir',
+// forceMin: 16,
+// fixed: true,
+// enable: true
+});
+base : Base game object.
+Create a circle shape object if no base game object passed.
+thumb : Thumb game object.
+Create a circle shape object if no thumb game object passed.
+x, y : Position of base game object
+radius : Circle hit-area of base game object
+dir :
+'up&down', or 0 : Simulate up or down cursor keys only.
+'left&right', or 1 : Simulate left or right cursor keys only.
+'4dir', or 2 : Simulate up, down, left or right cursor keys.
+'8dir', or 3 : Simulate up, up-left, up-right, down, down-left, down-right, left, or right cursor keys.
+forceMin : Cursor keys will be pressed when force is larger then this value.
+force : Distance between position of base game object to touch pointer
+fixed : Set true to fix to camera, i.e set scrollFactor to 0 for base and thumb game object. Default value is true.
+enable : Set false to disable cursor keys simulation
+State of cursor keys¶
+var cursorKeys = joystick.createCursorKeys();
+var leftKeyDown = cursorKeys.left.isDown;
+var rightKeyDown = cursorKeys.right.isDown;
+var upKeyDown = cursorKeys.up.isDown;
+var downKeyDown = cursorKeys.down.isDown;
+Or
+var leftKeyDown = joystick.left;
+var rightKeyDown = joystick.right;
+var upKeyDown = joystick.up;
+var downKeyDown = joystick.down;
+var noKeyDown = joystick.noKey;
+Force & Angle¶
+Force : Distance between position of base game object to touch pointer.
+var force = joystick.force;
+var forceX = joystick.forceX;
+var forceY = joystick.forceY;
+var angle = joystick.angle;  // degree between -180 to 180
+var rotation = joystick.rotation; // radians
+Visible¶
+Visible of base game object.
+Get : Return visible of base game object
+var visible = joystick.visible;
+Set : Set visible to base game object and thumb game object
+joystick.visible = visible;
+joystick.setVisible(visible);
+joystick.toggleVisible();
+Joystick will be disabled when invisible.
+Enable¶
+Get
+var enable = joystick.enable;
+Set
+joystick.setEnable(enable);  // enable: true, or false
+//joystick.enable = enable;
+Toggle
+joystick.toggleEnable();
+Position¶
+Position of base game object.
+Get
+var x = joystick.x;
+var y = joystick.y;
+Set
+joystick.setPosition(x ,y);
+// joystick.x = x;
+// joystick.y = y;
+Scroll factor¶
+Fix to camera
+joystick.setScrollFactor(0);
+Touch pointer¶
+Position
+var x = joystick.pointerX;
+var y = joystick.pointerY;
+Pointer
+var pointer = joystick.pointer;
+Destroy¶
+Destroy base & thumb game object.
+joystick.destroy();
+Events¶
+On joystick updated :
+joystick.on('update', function(){});
+On pointer-down
+joystick.on('pointerdown', function(pointer){});
+On pointer-up
+joystick.on('pointerup', function(pointer){});
+Elements¶
+Base Game object:
+var baseGO = joystick.base;
+Thumb Game object:
+var thumb = joystick.thumb;
+Vector to cursor keys¶
+A controller to represent cursor keys by (drag) vector
+Create controller¶
+var controller = scene.plugins.get('rexVirtualJoyStick').addVectorToCursorKeys({
+// dir: '8dir',
+// forceMin: 16,
+// enable: true
+})
+or
+// import VirtualJoystick from 'phaser4-rex-plugins/plugins/vectortocursorkeys.js';
+var controller = new VirtualJoystick(undefined, config);
+dir :
+'up&down', or 0 : Simulate up or down cursor keys only.
+'left&right', or 1 : Simulate left or right cursor keys only.
+'4dir', or 2 : Simulate up, down, left or right cursor keys.
+'8dir', or 3 : Simulate up, up-left, up-right, down, down-left, down-right, left, or right cursor keys.
+forceMin : Cursor keys will be pressed when force is larger then this value.
+force : Distance between position of base game object to touch pointer
+enable : Set false to disable cursor keys simulation.
+Set vector¶
+Set vector
+controller.setVector(x0, y0, x1, y1);
+Clear vector
+controller.clearVector();
+State of cursor keys¶
+var cursorKeys = controller.createCursorKeys();
+var leftKeyDown = cursorKeys.left.isDown;
+var rightKeyDown = cursorKeys.right.isDown;
+var upKeyDown = cursorKeys.up.isDown;
+var downKeyDown = cursorKeys.down.isDown;
+Force & Angle¶
+var force = controller.force;
+var forceX = controller.forceX;
+var forceY = controller.forceY;
+var angle = controller.angle;  // degree between -180 to 180
+var rotation = controller.rotation; // radians

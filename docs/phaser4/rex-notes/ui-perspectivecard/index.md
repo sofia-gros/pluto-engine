@@ -1,0 +1,231 @@
+Perspective card
+Introduction¶
+A container with front and back faces.
+Author: Rex
+Game object
+WebGL only
+It only works in WebGL render mode.
+Live demos¶
+Flip
+Rotation
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin('rexuiplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexuiplugin.min.js', 'rexUI', 'rexUI');
+Add card object
+var card = scene.rexUI.add.perspectiveCard(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import UIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+var config = {
+// ...
+plugins: {
+scene: [{
+key: 'rexUI',
+plugin: UIPlugin,
+mapping: 'rexUI'
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add card object
+var card = scene.rexUI.add.perspectiveCard(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import { PerspectiveCard } from 'phaser4-rex-plugins/templates/ui/ui-components.js';
+Add card object
+var card = new PerspectiveCard(scene, config);
+scene.add.existing(card);
+Add card object¶
+var sizer = scene.rexUI.add.perspectiveCard({
+// x: 0,
+// y: 0,
+// anchor: undefined,
+// width: undefined,
+// height: undefined,
+// origin: 0.5
+// originX:
+// originY:
+back: backGameObject,
+front: frontGameObject,
+// face: 0,
+// orientation: 0,
+// snapshotPadding: 0,
+// flip : {
+//     frontToBack: 0,
+//     backToFront: 1,
+//     duration: 1000,
+//     ease: 'Cubic',
+//     delay: 0,
+// }
+// space: { left: 0, right:0, top:0, bottom:0 },
+// name: '',
+// draggable: false,
+// sizerEvents: false,
+});
+x, y : Position of this object, it is valid when this object is the top object.
+anchor : See anchor.
+left, right, centerX, x, top, bottom, centerY, y, aspectRatio : Position based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+'left'(=0%), 'center'(=50%), 'right'(=100%)
+'top'(=0%), 'center'(=50%), 'bottom'(=100%)
+Offset : '+n', or '-n'.
+width, height : Set size (invoke onResizeCallback) based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+Padding : '+n', or '-n'.
+aspectRatio :
+undefined, or false : Does not keep aspect ratio. Default behavior.
+true : Use the current width and height as the aspect ratio.
+A number : Use given number as the aspect ratio.
+onResizeCallback : A default resize callback will be assigned interanlly.
+width, height : Minimum width, minimum height.
+origin, originX, originY : Set origin of this sizer. Default value is (0.5, 0.5).
+front, back : Any game object for front or back face.
+face : Show front or back face.
+'front', or 0 : Show front face.
+'back', or 1 : Show back face.
+orientation : Flipping orientation.
+'horizontal','h', 'x', or 0 : Flipping left-to-right, or right-to-left.
+'vertical','v', 'y', or 1 : Flipping top-to-bottom, or bottom-to-top.
+snapshotPadding : Padding around face when taking a snapshot of a face.
+flip : Configuration of flipping behavior.
+flip.frontToBack, flip.backToFront : Flipping direction.
+'right', 'left-to-right', or 0 : Flipping from right to left.
+'left', 'right-to-left', or 1 : Flipping from left to right.
+flip.duration : Duration of flipping, in millisecond.
+flip.delay : Initial delay.
+flip.ease : Ease function. Default value is 'Cubic'.
+space : Pads spaces.
+space.left, space.right, space.top, space.bottom : Space of bounds.
+name : Set name of this game object.
+draggable : Set true to drag top-most object.
+sizerEvents : Set true to fire sizer events. Default value is false.
+enableLayer :
+false : Add child game objects into scene's display list. Default behavior.
+true : Add child game objects into an internal layer game object. See also.
+Custom class¶
+Define class
+class MyPerspectiveCard extends PerspectiveCard {
+constructor(scene, config) {
+super(scene, config);
+// ...
+scene.add.existing(this);
+}
+// ...
+// preUpdate(time, delta) {
+//     super.preUpdate(time, delta);
+// }
+}
+scene.add.existing(gameObject) : Adds an existing Game Object to this Scene.
+If the Game Object renders, it will be added to the Display List.
+If it has a preUpdate method, it will be added to the Update List.
+Create instance
+var card = new MyPerspectiveCard(scene, config);
+Layout children¶
+Arrange position of all elements.
+card.layout();
+See also - dirty
+Get element¶
+Get element
+Background game object
+var background = card.getElement('background');
+Front face game object
+var frontFace = card.getElement('front');
+Back face game object
+var backFace = card.getElement('back');
+Get by name
+var gameObject = card.getElement('#' + name);
+// var gameObject = card.getElement('#' + name, recursive);
+or
+var gameObject = card.getByName(name);
+// var gameObject = card.getByName(name, recursive);
+recursive : Set true to search all children recursively.
+Face¶
+Get
+var face = card.face;
+face:
+0 : Show front face.
+1 : Show back face.
+Set
+card.setFace(face)
+face
+'front', or 0 : Show front face.
+'back', or 1 : Show back face.
+Toggle
+card.toggleFace()
+Face instances¶
+Front face
+var frontFace = card.frontFace;
+// var frontFace = card.faces.front;
+Back face
+var backFace = card.backFace;
+// var backFace = card.faces.back;
+Flip behavior¶
+Start flipping¶
+card.flip.flip();
+// card.flip.flip(duration, repeat);
+duration : Overwrite default duration value.
+repeat : Number of flipping time (repeat + 1) during duration. Default value is 0.
+or
+Flip-right
+card.flip.flipRight();
+// card.flip.flipRight(duration, repeat);
+Flip-left
+card.flip.flipLeft();
+// card.flip.flipLeft(duration, repeat);
+Note
+When flipping start:
+Snapshot face game objects to perspective-card mesh
+Set face game objects to invisible, and perspective-card mesh to visible
+When flipping complete:
+Revert visible of Face game objects and perspective-card mesh
+Stop flipping¶
+card.flip.stop();
+Set duration¶
+card.flip.setDuration(duration);
+// card.flip.duration = duration;
+Set ease¶
+card.flip.setEase(ease);
+// card.flip.ease = ease;
+Events¶
+On flipping start
+card.flip.on('start', function(){
+// ...
+});
+On flipping complete
+card.flip.on('complete', function(){
+// ...
+});
+Status¶
+Is flipping
+var isRunning = card.flip.isRunning;
+Rotation¶
+Get rotation angle
+var angleX = card.angleX; // Angle in degrees
+var angleY = card.angleY; // Angle in degrees
+var angleZ = card.angleZ; // Angle in degrees
+or
+var rotationX = card.rotationX; // Angle in radians
+var rotationY = card.rotationY; // Angle in radians
+var rotationZ = card.rotationZ; // Angle in radians
+Set rotation angle
+card.angleX = angleX; // Angle in degrees
+card.angleY = angleY; // Angle in degrees
+card.angleZ = angleZ; // Angle in degrees
+or
+card.rotationX = rotationX; // Angle in radians
+card.rotationY = rotationY; // Angle in radians
+card.rotationZ = rotationZ; // Angle in radians
+Warning
+Can't be used with flipping mode.
+Other properties¶
+See overlapSizer.

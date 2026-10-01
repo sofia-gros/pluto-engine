@@ -1,0 +1,85 @@
+Files
+Introduction¶
+Save JSON data, using localforage.
+Each file contains header and content indexed by fileID.
+Author: Rex
+Member of scene
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexlocalforagefilesplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexlocalforagefilesplugin.min.js', true);
+Add localforage-files object
+var fileManager = scene.plugins.get('rexlocalforagefilesplugin').add(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import FilesPlugin from 'phaser4-rex-plugins/plugins/localforagefiles-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexFiles',
+plugin: FilesPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add localforage-files object
+var fileManager = scene.plugins.get('rexFiles').add(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import Files from 'phaser4-rex-plugins/plugins/localforagefiles.js';
+Add localforage-files object
+var fileManager = new Files(config);
+Create instance¶
+var fileManager = scene.plugins.get('rexFiles').add.files({
+// name: 'files',
+// zip: true
+});
+name : Storage name.
+zip :
+true : Save compressed stringify json data.
+false : Save json data directly
+Save file¶
+Overwrite
+fileManager.save(fileID, header, content);
+fileID : Unique ID of this file.
+header : Header data for indexing, a JSON object.
+Reserve keys : fileID.
+content : Content/body, a JSON object.
+Reserve keys : fileID.
+Update
+fileManager.save(fileID, header, content, true);
+Load headers¶
+fileManager.loadHeaders()
+.then(function(result) {
+// var headers = result.headers;
+})
+.catch(function(result) {
+// var error = result.error;
+})
+headers : Get header by headers[fileID], each header contains
+header.fileID : Unique ID of this file.
+Load file¶
+fileManager.load(fileID)
+.then(function(result) {
+// var header = result.header;
+// var content = result.content;
+// var fileID = result.fileID;
+})
+.catch(function(result) {
+// var error = result.error;
+// var fileID = result.fileID;
+})
+header, content : Header/content of this file.
+fileID : Unique ID of this file.
+userID : User ID of file owner.

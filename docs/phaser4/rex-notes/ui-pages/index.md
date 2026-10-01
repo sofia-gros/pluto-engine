@@ -1,0 +1,215 @@
+Pages
+Introduction¶
+A container with pages, only current page is visible.
+Author: Rex
+Game object
+Live demos¶
+Pages
+Tabpage
+Lazy-create-page
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin('rexuiplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexuiplugin.min.js', 'rexUI', 'rexUI');
+Add pages object
+var pages = scene.rexUI.add.pages(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import UIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+var config = {
+// ...
+plugins: {
+scene: [{
+key: 'rexUI',
+plugin: UIPlugin,
+mapping: 'rexUI'
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add pages object
+var pages = scene.rexUI.add.pages(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import { Pages } from 'phaser4-rex-plugins/templates/ui/ui-components.js';
+Add pages object
+var pages = new Pages(scene, config);
+scene.add.existing(pages);
+Add pages object¶
+var pages = scene.rexUI.add.pages({
+// x: 0,
+// y: 0,
+// anchor: undefined,
+// width: undefined,
+// height: undefined,
+// origin: 0.5
+// originX:
+// originY:
+// space: { left: 0, right:0, top:0, bottom:0 },
+// swapMode: 0,
+// fadeIn: 0,
+// name: '',
+// draggable: false,
+// sizerEvents: false,
+// enableLayer: false,
+});
+x, y : Position of this object, it is valid when this object is the top object.
+anchor : See anchor.
+left, right, centerX, x, top, bottom, centerY, y, aspectRatio : Position based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+'left'(=0%), 'center'(=50%), 'right'(=100%)
+'top'(=0%), 'center'(=50%), 'bottom'(=100%)
+Offset : '+n', or '-n'.
+width, height : Set size (invoke onResizeCallback) based on visible window, which composed of
+Percentage of visible width/height : 'p%', p: 0 ~ 100.
+Padding : '+n', or '-n'.
+aspectRatio :
+undefined, or false : Does not keep aspect ratio. Default behavior.
+true : Use the current width and height as the aspect ratio.
+A number : Use given number as the aspect ratio.
+onResizeCallback : A default resize callback will be assigned interanlly.
+width, height : Minimum width, minimum height.
+origin, originX, originY : Set origin of this sizer. Default value is (0.5, 0.5).
+space : Pads spaces.
+space.left, space.right, space.top, space.bottom : Space of bounds.
+swapMode : Set to invisible or destroy swapped page.
+0, 'invisible' : Set swapped page to invisible. Default behavior.
+1, 'destroy' : Destroy swapped page. Use with the 'createpage' event.
+fadeIn : Fade-in duration of current page.
+0 : No fade-in effect. Default behavior.
+name : Set name of this game object.
+draggable : Set true to drag top-most object.
+sizerEvents : Set true to fire sizer events. Default value is false.
+enableLayer :
+false : Add child game objects into scene's display list. Default behavior.
+true : Add child game objects into an internal layer game object. See also.
+Custom class¶
+Define class
+class MyPages extends RexPlugins.UI.Pages {
+constructor(scene, config) {
+super(scene, config);
+// ...
+scene.add.existing(this);
+}
+// ...
+}
+Create instance
+var pages = new MyPages(scene, config);
+Add background¶
+pages.addBackground(child);
+or
+pages.addBackground(child, {left: 0, right: 0, top: 0, bottom: 0}, key);
+left, right, top, bottom : Extra padded space. Default is 0.
+key : Add this child into childMap, which could be read back by sizer.getElement(key).
+undefined : Don't add this child. Default value.
+Add page¶
+pages.addPage(child, key, align, padding, expand);
+// pages.add(child, key, align, padding, expand);
+or
+pages.addPage(child,
+{
+key: 0,
+align: Phaser.Display.Align.TOP_LEFT,
+padding: {left: 0, right: 0, top: 0, bottom: 0},
+expand: true
+}
+);
+// pages.add(child, config);
+child : A game object.
+key : Unique name of this page.
+align :
+'left-top', or Phaser.Display.Align.TOP_LEFT : Align game object at left-top. Default value.
+'left-center', or Phaser.Display.Align.LEFT_CENTER : Align game object at left-center.
+'left-bottom', or Phaser.Display.Align.LEFT_BOTTOM : Align game object at left-bottom.
+'center-top', or Phaser.Display.Align.TOP_CENTER : Align game object at center-top.
+'center-center', or Phaser.Display.Align.CENTER : Align game object at center-center.
+'center-bottom', or Phaser.Display.Align.BOTTOM_CENTER : Align game object at center-bottom.
+'right-top', or Phaser.Display.Align.TOP_RIGHT : Align game object at right-top.
+'right-center', or Phaser.Display.Align.RIGHT_CENTER : Align game object at right-center.
+'right-bottom', or Phaser.Display.Align.RIGHT_BOTTOM : Align game object at right-bottom.
+padding : Add space between bounds. Default is 0.
+A number for left/right/top/bottom bounds,
+Or a plain object.
+{
+left: 0,
+right: 0,
+top: 0,
+bottom: 0
+}
+expand : Expand width and height of the page.
+true : Expand width and height.
+false : Don't expand width or height.
+A plain object, to expand width or height
+{
+width: true,
+height: true
+}
+expand.width : Expand width.
+expand.height : Expand height.
+Swap to page¶
+pages.swapPage(key);
+// pages.swapPage(key, fadeInDuration);
+key : Unique name of this page.
+Note
+This method will run pages.layout() to arrange position of current page.
+Page name¶
+Current page name
+var pageName = pages.currentKey;
+Previous page name
+var pageName = pages.previousKey;
+Name of all pages
+var names = pages.keys;
+Page object¶
+Get page object
+var pageObject = pages.getPage(key);
+pageObject : A game object or null.
+Current page object
+var pageObject = pages.currentPage;
+Previous page object
+var pageObject = pages.previousPage;
+Fade in duration¶
+pages.setFadeInDuration(duration);
+0 : No fade-in effect.
+Get element¶
+Get element
+All page game objects
+var gameObjects = pages.getElement('items');
+Get by name
+var gameObject = pages.getElement('#' + name);
+// var gameObject = pages.getElement('#' + name, recursive);
+or
+var gameObject = pages.getByName(name);
+// var gameObject = pages.getByName(name, recursive);
+recursive : Set true to search all children recursively.
+Other properties¶
+See base sizer object, container-lite.
+Events¶
+Lazy-create page instance. Triggered when page is not found, create page instance and add it to pages under this event
+pages.on('createpage', function(key, pages){
+// var page = ...
+pages.addPage(page, key, align, padding, expand);
+pages.getTopmostSizer().layout();
+})
+Set page invisible, triggered when page is swapped out.
+pages.on('pageinvisible', function(pageObject, key, pages) {
+// ...
+}, scope);
+pageObject : Game object of page.
+key : Page name.
+pages : Pages object
+Set page visible, triggered when page is shown.
+pages.on('pagevisible', function(pageObject, key, pages) {
+// ...
+}, scope);
+pageObject : Game object of page.
+key : Page name.
+pages : Pages object

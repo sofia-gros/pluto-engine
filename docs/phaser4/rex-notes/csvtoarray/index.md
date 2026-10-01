@@ -1,0 +1,36 @@
+CSV to array
+Introduction¶
+Generate array from csv string.
+Reference: Papa Parse
+Method only
+Usage¶
+Sample code
+Import class¶
+import rexCSVToArray from './plugins/csvtoarray.js';
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import CSVToArrayPlugin from 'phaser4-rex-plugins/plugins/csvtoarray-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexCSVToArray',
+plugin: CSVToArrayPlugin,
+start: true
+}
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Convert csv
+var arr = scene.plugins.get('rexCSVToArray').convert(csvString, config);
+Convert csv¶
+var arr = scene.plugins.get('rexCSVToArray').convert(csvString, {
+// delimiter: ',',
+// convert: true
+});
+Values will be converted to number (include hex number string like '0xFF'), boolean, null, or string, if convert is true.

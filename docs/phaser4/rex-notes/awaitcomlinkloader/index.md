@@ -1,0 +1,233 @@
+Await Comlink loader
+Introduction¶
+Running web worker by using Comlink in preload stage.
+Author: Rex
+Custom File of loader
+Live demos¶
+Worker file in external url
+Usage¶
+Sample code
+Install Comlink¶
+Comlink API is not included in this plugin.
+Load by script tag¶
+<script src="https://unpkg.com/comlink/dist/umd/comlink.js"></script>
+Load by scene¶
+var config = {
+key: '...',
+pack: {
+files: [
+{
+'type': 'script',
+'key': 'comlink',
+'url': 'https://unpkg.com/comlink/dist/umd/comlink.js'
+},
+]
+}
+}
+Lazy load¶
+Plugin will load Comlink API if Comlink API is not ready.
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+var sceneConfig = {
+// ....
+pack: {
+files: [
+// Also load Comlink API
+// {
+//     'type': 'script',
+//     'key': 'comlink',
+//     'url': 'https://unpkg.com/comlink/dist/umd/comlink.js'
+// },
+{
+type: 'plugin',
+key: 'rexawaitcomlinkloaderplugin',
+url: 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/    rexawaitcomlinkloaderplugin.min.js',
+start: true
+}
+]
+}
+};
+class MyScene extends Phaser.Scene {
+constructor() {
+super(sceneConfig)
+}
+// ....
+preload() {
+// rexawaitloaderplugin will be installed before preload(), but not added to loader yet
+// Call addToScene(scene) to add this await loader to loader of this scene
+this.plugins.get('rexawaitloaderplugin').addToScene(this);
+this.load.rexAwaitComlink({
+// ...
+});
+}
+}
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import AwaitComlinkLoaderPlugin from 'phaser4-rex-plugins/plugins/awaitcomlinkloader-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexAwaitComlinkLoader',
+plugin: AwaitComlinkLoaderPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+In preload stage, start web-worker task
+scene.load.rexAwaitComlink({
+// ...
+});
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import AwaitComLinkLoader from 'phaser4-rex-plugins/plugins/awaitcomlinkloader.js';
+In preload stage, start web-worker task
+AwaitComLinkLoader.call(scene.load, {
+// ...
+})
+Start web-worker task¶
+Worker file URL¶
+In preload stage:
+scene.load.rexAwaitComlink({
+// comlink: 'https://unpkg.com/comlink/dist/umd/comlink.js',
+workerFilePath: undefined,
+data: undefined,
+// run: undefined,
+// terminateWorker: true,
+// onBegin(data) { /*...*/ },
+// onBeforeWorker(data) { /*...*/ },
+// onAfterWorker(data) { /*...*/ },
+// onEnd(data) { /*...*/ },
+});
+comlink : URL of Comlink API, load Comlink API if it has not been ready yet.
+undefined : Using default value , 'https://unpkg.com/comlink/dist/umd/comlink.js'
+workerFilePath : URL of user worker file.
+data : User-defined data that will be passed to other callbacks.
+run :
+undefined : Expose a function in worker file, run this function directly. Default behavior.
+A string : Expose an object in worker file, run method by this name.
+terminateWorker :
+true : Terminate worker after onEnd callback. Default behavior.
+false : Keep worker alive.
+onBegin : Callback invoked befor running worker thread, in main thread.
+onBegin(data, comlinkWrapperObject, worker) {
+// return data;
+}
+or
+async onBegin(data, comlinkWrapperObject, worker) {
+// return data;
+}
+Return value will be passed to worker task.
+undefined : Bypass data to worker task.
+Store reference of comlinkWrapperObject, worker in this callback.
+onBeforeWorker : Proxy callback for inovking in worker thread. Implemented in worker code.
+onBeforeWorker(data) {
+// return data;
+}
+or
+async onBeforeWorker(data) {
+// return data;
+}
+Return value will be passed to worker task.
+undefined : Bypass data to worker task.
+onAfterWorker : Proxy callback for inovking in worker thread. Implemented in worker code.
+onAfterWorker(data) {
+// return data;
+}
+or
+async onAfterWorker(data) {
+// return data;
+}
+Return value will be passed to worker task.
+undefined : Bypass data to worker task.
+onEnd : Callback invoked after running worker thread, in main thread.
+onEnd(data, comlinkWrapperObject, worker) {
+// return false;
+}
+or
+async onEnd(data, comlinkWrapperObject, worker) {
+// return false;
+}
+Return value
+false : Simulate loading failled.
+Others : Simulate loading Success.
+Retrieve reference of comlinkWrapperObject, worker in this callback.
+Worker code¶
+Sample code of worker file.
+importScripts('https://unpkg.com/comlink/dist/umd/comlink.js');
+(() => {
+async function run(data, onBefore, onAfter) {
+var newData;
+if (onBefore) {
+newData = await onBefore(data);
+if (newData !== undefined) {
+data = newData;
+}
+}
+// worker logic...
+if (onAfter) {
+newData = await onAfter(data);
+if (newData !== undefined) {
+data = newData;
+}
+}
+return data;
+}
+Comlink.expose(run);
+})();
+Worker code string¶
+In preload stage:
+scene.load.rexAwaitComlink({
+// comlink: 'https://unpkg.com/comlink/dist/umd/comlink.js',
+workerCode: workerCode
+data: undefined,
+// onBegin(data) { /*...*/ },
+// onBeforeWorker(data) { /*...*/ },
+// onAfterWorker(data) { /*...*/ },
+// onEnd(data) { /*...*/ },
+});
+workerCode : Worker code in string format. Reference
+undefined : Use default worker code
+Note that workerFilePath is not given (undefined) in this use case.
+Default worker code¶
+importScripts('https://unpkg.com/comlink/dist/umd/comlink.js');
+(() => {
+async function run(data, onBefore, onAfter) {
+var newData;
+if (onBefore) {
+newData = await onBefore(data);
+if (newData !== undefined) {
+data = newData;
+}
+}
+if (onAfter) {
+newData = await onAfter(data);
+if (newData !== undefined) {
+data = newData;
+}
+}
+return data;
+}
+Comlink.expose(run);
+})();
+Callback in main thread¶
+In preload stage:
+scene.load.rexAwaitComlink({
+// comlink: 'https://unpkg.com/comlink/dist/umd/comlink.js',
+data: undefined,
+// onBegin(data) { /*...*/ },
+onBeforeWorker(data) { /*...*/ },
+// onAfterWorker(data) { /*...*/ },
+// onEnd(data) { /*...*/ },
+});
+workerFilePath and workerCode are not given, will use default worker code,
+which will run onBeforeWorker and onAfterWorker callback passed from main thread.

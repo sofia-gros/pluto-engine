@@ -1,0 +1,251 @@
+Mini board
+Introduction¶
+Chess Container, to rotate/mirror/drag chess together.
+Author: Rex
+Container Game object of chess group
+Live demos¶
+Group 4
+Drag & drop, mirror, rotate
+Drag overlapped miniboard
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin('rexboardplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexboardplugin.min.js', 'rexBoard', 'rexBoard');
+Add container
+var miniBoard = scene.rexBoard.add.miniBoard(x, y, config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import BoardPlugin from 'phaser4-rex-plugins/plugins/board-plugin.js';
+var config = {
+// ...
+plugins: {
+scene: [{
+key: 'rexBoard',
+plugin: BoardPlugin,
+mapping: 'rexBoard'
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add container
+var miniBoard = scene.rexBoard.add.miniBoard(x, y, config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import { MiniBoard } from 'phaser4-rex-plugins/plugins/board-components.js';
+Add match object
+var miniBoard = new MiniBoard(scene, x, y, config);
+Add Container¶
+var miniBoard = scene.rexBoard.add.miniBoard(x, y, {
+grid: grid,
+draggable: undefined,
+});
+grid : Create board object first, then get grid object via board.grid.
+gridType :
+'quadGrid' : Quad grid
+'hexagonGrid' : hexagon grid
+draggable : Set true to enable dragging events
+Add chess¶
+miniBoard.addChess(gameObject, tileX, tileY, tileZ);
+chess : A game object.
+tileX , tileY , tileZ : Tile position.
+tileX , tileY : Number.
+tileZ : Number or string.
+Chess and tile position
+Any chess has a (tileX, tileY, tileZ) index
+Any (tileX, tileY, tileZ) index contains only 1 chess.
+(tileX, tileY) could have more then 1 chess with different tileZ index.
+tileZ is not equal to depth.
+These world properties of chess will be changed with container.
+Position/Angle/Scale
+Visible
+Alpha
+Scroll factor
+Mask
+Bounds and origin will change after adding chess.
+Remove chess¶
+Remove chess object from board
+miniBoard.removeChess(chess, null, null, null, destroy);
+chess : A game object
+destroy : Set true to desrtoy chess object.
+Remove chess at (tileX, tileY, tileZ) from board
+miniBoard.removeChess(null, tileX, tileY, tileZ, destroy);
+tileX, tileY, tileZ : Tile position
+destroy : Set true to desrtoy chess object.
+Remove all chess
+miniBoard.removeAllChess(destroy);
+destroy : Set true to desrtoy chess object.
+Bounds and origin will change after removing chess.
+Set origin¶
+Set origin tileXY by offset tileXY of all chess.
+miniBoard.setOrigin(origin);
+// miniBoard.setOrigin(originX, originY);
+originX, originY: 0~1.
+0 : Left/top.
+0.5 : Center.
+1 : Right/bottom.
+Set origin tileXY to center by offset tileXY of all chess.
+miniBoard.setOrigin();
+// miniBoard.setOrigin('center');
+Set origin tileXY to top-left.
+miniBoard.setOrigin('top-left');
+Position of this miniboard will change
+Get all chess¶
+var gameObjects = miniBoard.getAllChess();
+// var out = miniBoard.getAllChess(out);
+Get bounds¶
+A rectangle bounds contains all chess.
+var rect = miniBoard.getBounds();
+// var out = miniBoard.getBounds(out);
+Main board¶
+Put chess to a main-board (Board object) with the same tile position in mini-board, or pull chess out from main-board.
+Put on main-board¶
+miniBoard.putOnMainBoard(mainBoard, tileX, tileY);
+// miniBoard.putOnMainBoard(mainBoard, tileX, tileY, align);
+mainBoard : Board object.
+tileX, tileY : Tile position to put on.
+align : Set true to align world position of each chess Game object to grid of main-board. Default is true.
+or
+miniBoard.putOnMainBoard(mainBoard);
+To put this mini-board to nearest grid of main-board.
+Pull out from main-board¶
+miniBoard.pullOutFromMainBoard();
+Remove all chess from main-board.
+Put back to previous main-board¶
+miniBoard.putBack();
+Previous main-board and tile position will be remembered for putting back.
+Is overlapping to main-board¶
+Return true if any chess is overlapping to main-board.
+miniBoard.isOverlapping(mainBoard);
+or
+miniBoard.isOverlapping(mainBoard, tileZ);
+Align world position to grid of main-board¶
+miniBoard.alignToMainBoard(mainBoard, tileX, tileY);
+mainBoard : Board object
+tileX, tileY : Tile position on main-board
+or
+miniBoard.alignToMainBoard(mainBoard);
+to align this mini-board to nearest grid of main-board.
+Get current main-board¶
+var board = miniBoard.mainBoard;
+board : Board object
+Return null if this mini-board is not at any main-board.
+Rotate¶
+Can rotate¶
+miniBoard.canRotate(n);
+n : Rotate to direction current direction + n
+or
+miniBoard.canRotateTo(direction);
+direction : Rotate to direction
+0 ~ 3 : Quad grid.
+0 ~ 5 : Hexagon grid.
+Always return true if this mini-board is not on a main-board.
+Rotate¶
+miniBoard.rotate(n);
+n : Rotate direction to current direction + n
+or
+miniBoard.rotateTo(direction);
+direction : Rotate to direction
+0 ~ 3 : Quad grid.
+0 ~ 5 : Hexagon grid.
+Return true if this rotating request is accepted.
+var isSuccess = miniBoard.lastTransferResult;
+Mirror¶
+Can mirror¶
+miniBoard.canMirror(mode);
+mode :
+0, or 'x' : Set tileX to -tileX
+1, or 'y' : Set tileY to -tileY
+3, or 'x&y' : Set tileX to -tileX, and tileY to -tileY
+Always return true if this mini-board is not on a main-board.
+Mirror¶
+miniBoard.mirror(mode);
+mode :
+0, or 'x' : Set tileX to -tileX
+1, or 'y' : Set tileY to -tileY
+3, or 'x&y' : Set tileX to -tileX, and tileY to -tileY
+Return true if this mirroring request is accepted.
+var isSuccess = miniBoard.lastTransferResult;
+Touch events¶
+Set interactive¶
+Enable
+miniBoard.setInteractive();
+Disable
+miniBoard.setInteractive(false);
+Set drag-able¶
+Enable
+miniBoard.setDragEnable();
+Disable
+miniBoard.setDragEnable(false);
+Touch event¶
+Pointer down¶
+Pointer down at any chess
+miniBoard.on('pointerdown', function(pointer, miniBoard) {
+})
+Pointer down at a chess
+miniBoard.on('gameobjectdown', function(pointer, gameObject) {
+})
+or
+gameObject.on('miniboard.pointerdown', function(pointer) {
+})
+pointer : Touch pointer
+gameObject : Game object at touched (tileX, tileY)
+Pointer up¶
+Pointer up
+miniBoard.on('pointerup', function(pointer, miniBoard) {
+})
+Pointer up at a chess
+miniBoard.on('gameobjectup', function(pointer, gameObject) {
+})
+or
+gameObject.on('miniboard.pointerup', function(pointer) {
+})
+pointer : Touch pointer
+gameObject : Game object at touched (tileX, tileY)
+Pointer move¶
+Pointer move
+miniBoard.on('pointermove', function(pointer, miniBoard) {
+})
+Pointer move to another chess
+miniBoard.on('gameobjectmove', function(pointer, gameObject) {
+})
+or
+gameObject.on('miniboard.pointermove', function(pointer) {
+})
+pointer : Touch pointer
+gameObject : Game object at touched (tileX, tileY)
+Drag events¶
+Drag-start
+miniBoard.on('dragstart', function(pointer, dragX, dragY){
+/*
+miniBoard.pullOutFromMainBoard();
+*/
+}, scope);
+Pull out from main-board for dragging.
+Dragging
+miniBoard.on('drag', function(pointer, dragX, dragY){
+/*
+miniBoard.setPosition(dragX, dragY);
+if (miniBoard.isOverlapping(mainBoard)) {
+miniBoard.alignToMainBoard(mainBoard);
+}
+*/
+}, scope);
+Set world position of mini-board via (dragX, dragY), align to nearest grid of main-board if overlapping with that main-board.
+Drag-end
+miniBoard.on('dragend', function(pointer, dragX, dragY){
+/*
+miniBoard.putOnMainBoard(mainBoard);
+if (miniBoard.mainBoard) {
+}
+*/
+}, scope);
+Put chess on main-board at nearest grid.

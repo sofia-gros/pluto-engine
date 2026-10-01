@@ -1,0 +1,74 @@
+Quad
+Introduction¶
+Quad grid object of Board system.
+Author: Rex
+Grid object of board
+Usage¶
+Sample code
+Create instance¶
+var grid = scene.rexBoard.add.quadGrid({
+x: 0,
+y: 0,
+cellWidth: 0,
+cellHeight: 0,
+type: 0,
+// dir: 4
+});
+or
+// import { QuadGrid } from 'phaser4-rex-plugins/plugins/board-components.js';
+var grid = new QuadGrid(config);
+x, y : World position of tile (0, 0)
+cellWidth : The width of the cell, in pixels.
+cellHeight : The height of the cell, in pixels.
+type
+0, or orthogonal
+1, or isometric
+dir :
+4 or '4dir' : Left/Down/Right/Up
+8 or '8dir' : Left/Down/Right/Up/Left-down/Down-right/Right-up/Up-left
+World position of tile (0, 0)¶
+Get
+var worldX = grid.x;
+var worldY = grid.y;
+Set
+grid.setOriginPosition(worldX, worldY);
+or
+grid.x = worldX;
+grid.y = worldY;
+Cell size¶
+Get
+var width = grid.width;
+var height = grid.height;
+Set
+grid.setCellSize(width, height);
+or
+grid.width = width;
+grid.height = height;
+Grid type¶
+Get
+var mode = grid.mode;
+Set
+grid.setType(mode);
+mode
+0, or orthogonal
+1, or isometric
+Get world position¶
+var worldXY = grid.getWorldXY(tileX, tileY);  // worldXY: {x, y}
+// var out = grid.getWorldXY(tileX, tileY, out);
+Get tile position¶
+var tileXY = grid.getTileXY(worldX, worldY);  // tileXY: {x, y}
+// var out = grid.getTileXY(worldX, worldY, out);
+Directions¶
+0 : Right
+1 : Down
+2 : Left
+3 : Up
+4 : Right-down
+5 : Left-down
+6 : Left-up
+7 : Right-up
+6|3|7
+-+-+-
+2|A|0
+-+-+-
+5|1|4

@@ -1,0 +1,152 @@
+Dynamic texture
+Introduction¶
+Canvas Dynamic Texture stored in texture cache, built-in object of phaser.
+Author: Phaser Team
+Usage¶
+Create dynamic texture¶
+var texture = scene.textures.addDynamicTexture(key, width, height);
+Set size¶
+texture.setSize(width, height);
+Fill color¶
+texture.fill(rgb).render();
+// texture.fill(rgb, alpha, x, y, width, height).render();
+rgb : The number color to fill this Dynamic Texture with.
+alpha : The alpha value used by the fill. Default value is 1.
+x, y, width, height : The area of the fill rectangle. Default behavior is filling whole size.
+Clear¶
+texture.clear().render();
+texture.clear(x, y, width, height).render();
+Draw game object¶
+texture.draw(entries).render();
+// texture.draw(entries, x, y).render();
+// texture.draw(entries, x, y, alpha, tint).render();
+entries :
+Any renderable Game Object, such as a Sprite, Text, Graphics or TileSprite.
+Tilemap Layers.
+A Group. The contents of which will be iterated and drawn in turn.
+A Container. The contents of which will be iterated fully, and drawn in turn.
+A Scene Display List. Pass in Scene.children to draw the whole list.
+Another Dynamic Texture, or a Render Texture.
+A Texture Frame instance.
+A string. This is used to look-up the texture from the Texture Manager.
+x, y : The x/y position to draw the Frame at, or the offset applied to the object.
+If the object is a Group, Container or Display List, the coordinates are added to the positions of the children.
+For all other types of object, the coordinates are exact.
+alpha, tint : Only used by Texture Frames.
+Game Objects use their own alpha and tint values when being drawn.
+Note
+texture.draw(gameObject) stores the game object in the command buffer, then renders it later when calling texture.render().
+If this game object will be modified or reused before texture.render(), call texture.draw(gameObject).render() immediately.
+If the game object state will stay unchanged until texture.render(), multiple draw(gameObject) calls can be batched safely.
+Erase¶
+texture.erase(entries).render();
+// texture.erase(entries, x, y).render();
+entries :
+Any renderable Game Object, such as a Sprite, Text, Graphics or TileSprite.
+Tilemap Layers.
+A Group. The contents of which will be iterated and drawn in turn.
+A Container. The contents of which will be iterated fully, and drawn in turn.
+A Scene Display List. Pass in Scene.children to draw the whole list.
+Another Dynamic Texture, or a Render Texture.
+A Texture Frame instance.
+A string. This is used to look-up the texture from the Texture Manager.
+x, y : The x/y position to draw the Frame at, or the offset applied to the object.
+If the object is a Group, Container or Display List, the coordinates are added to the positions of the children.
+For all other types of object, the coordinates are exact.
+Draw frame¶
+texture.stamp(key, frame, x, y, {
+alpha: 1,
+tint: 0xffffff,
+angle: 0,
+rotation: 0,
+scale: 1,
+scaleX: 1,
+scaleY: 1,
+originX: 0.5,
+originY: 0.5,
+blendMode: 0
+}).render();
+or
+texture.stamp(key, frame, x, y, {
+alpha: 1,
+tint: 0xffffff,
+originX: 0.5,
+originY: 0.5
+}).render();
+x, y : Top-left position
+originX, originY : The horizontal/vertical origin of the stamp. Default value is 0.5/0.5.
+Note
+This method ignores the camera property of the Dynamic Texture.
+Draw repeat frames¶
+Repeat frames full of size
+texture.repeat(key, frame).render();
+Repeat in an area
+texture.repeat(key, frame, x, y, width, height).render();
+// texture.repeat(key, frame, x, y, width, height, config).render();
+Add frame¶
+texture.add(name, sourceIndex, x, y, width, height);
+name : The name of this Frame. The name is unique within the Texture.
+sourceIndex : The index of the TextureSource that this Frame is a part of.
+x : The x coordinate of the top-left of this Frame.
+y : The y coordinate of the top-left of this Frame.
+width : The width of this Frame.
+height : The height of this Frame.
+Batch draw¶
+Draw
+Draw game object
+texture.draw(entries, x, y, alpha, tint);
+entries :
+Any renderable Game Object, such as a Sprite, Text, Graphics or TileSprite.
+Tilemap Layers.
+A Group. The contents of which will be iterated and drawn in turn.
+A Container. The contents of which will be iterated fully, and drawn in turn.
+A Scene Display List. Pass in Scene.children to draw the whole list.
+Another Dynamic Texture, or a Render Texture.
+A Texture Frame instance.
+A string. This is used to look-up the texture from the Texture Manager.
+Draw frame
+texture.stamp(key, frame, x, y, {
+alpha: alpha,
+tint: tint,
+originX: 0.5,
+originY: 0.5
+});
+Draw image
+texture.stamp(key, frame, x, y, {
+// ...
+});
+Draw repeat images
+texture.repeat(key, frame, x, y, width, height, {
+alpha: alpha,
+tint: tint
+});
+End
+texture.render();
+Internal camera¶
+Internal camera texture.camera
+Scroll (offset)
+texture.camera.setScroll(x, y);
+Zoom (scale)
+texture.camera.setZoom(zoom);
+Rotate
+texture.camera.setAngle(angle);  // angle in degrees
+Snapshot¶
+Snapshot area¶
+texture.snapshot(callback);
+// texture.snapshot(callback, type, encoderOptions);
+or
+texture.snapshotArea(x, y, width, height, callback, type, encoderOptions);
+callback : The Function to invoke after the snapshot image is created.
+function(imageElement) {
+}
+imageElement : HTMLImageElement.
+type : The format of the image to create, usually 'image/png' or 'image/jpeg'. Default value is 'image/png'.
+encoderOptions : The image quality, between 0 and 1. Used for image formats with lossy compression, such as 'image/jpeg'. Default value is 0.92.
+x, y, width, height : Snapshot area.
+Get color of a pixel¶
+texture.snapshotPixel(x, y, callback);
+x, y : The x/y coordinate of the pixel to get.
+callback : The Function to invoke after the snapshot image is created.
+function(color) {
+}
+color : Color object.

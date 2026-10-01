@@ -1,0 +1,220 @@
+Item table
+Introduction¶
+1d/2d/3d table, using firebase-database.
+Author: Rex
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Add Firebase SDKs
+<body>
+<!-- Insert these scripts at the bottom of the HTML, but before you use any Firebase services -->
+<!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+<script src="/__/firebase/10.13/firebase-app-compat.js"></script>
+<!-- Add Firebase products that you want to use -->
+<script src="/__/firebase/10.13/firebase-database-compat.js"></script>
+</body>
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexfirebaseplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexfirebaseplugin.min.js', true);
+Initialize firebase application.
+firebase.initializeApp({
+apiKey: '...',
+authDomain: '...',
+databaseURL: '...',
+projectId: '...',
+storageBucket: '...',
+messagingSenderId: '...'
+})
+Add table object
+var table = scene.plugins.get('rexfirebaseplugin').add.itemTable(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Add Firebase SDKs
+<body>
+<!-- Insert these scripts at the bottom of the HTML, but before you use any Firebase services -->
+<!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+<script src="/__/firebase/10.13/firebase-app-compat.js"></script>
+<!-- Add Firebase products that you want to use -->
+<script src="/__/firebase/10.13/firebase-database-compat.js"></script>
+</body>
+Install plugin in configuration of game
+import FirebasePlugin from 'phaser4-rex-plugins/plugins/firebase-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexFirebase',
+plugin: FirebasePlugin,
+start: true
+}]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Initialize firebase application.
+firebase.initializeApp({
+apiKey: '...',
+authDomain: '...',
+databaseURL: '...',
+projectId: '...',
+storageBucket: '...',
+messagingSenderId: '...'
+})
+Add table object
+var table = scene.plugins.get('rexFirebase').add.itemTable(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Add Firebase SDKs
+<body>
+<!-- Insert these scripts at the bottom of the HTML, but before you use any Firebase services -->
+<!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+<script src="/__/firebase/10.13/firebase-app-compat.js"></script>
+<!-- Add Firebase products that you want to use -->
+<script src="/__/firebase/10.13/firebase-database-compat.js"></script>
+</body>
+Initialize firebase application.
+firebase.initializeApp({
+apiKey: '...',
+authDomain: '...',
+databaseURL: '...',
+projectId: '...',
+storageBucket: '...',
+messagingSenderId: '...'
+})
+Import class
+import { ItemTable } from 'phaser4-rex-plugins/plugins/firebase-components.js';
+Add table object
+var table = new ItemTable(config);
+Create instance¶
+var table = scene.plugins.get('rexFirebase').add.itemTable({
+root: '',
+type: 3
+});
+root : Path of this item table.
+type : Table type.
+1, or '1d' : 1d table, indexing by (key0)
+2, or '2d' : 2d table, indexing by (key0, key1)
+3, or '3d' : 3d table, indexing by (key0, key1, key2)
+Write¶
+Set data
+table.setData(key0, value)
+// table.setData(key0, key1, value)
+// table.setData(key0, key1, key2, value)
+.then(function() { })
+.catch(function() { })
+key0, key1, key2 : Any string.
+value : Number, string, or JSON data.
+Increase value
+table.incValue(key0, value)
+// table.incValue(key0, key1, value)
+// table.incValue(key0, key1, key2, value)
+.then(function() { })
+.catch(function() { })
+key0, key1, key2 : Any string.
+value : Number.
+Remove key
+table.removeData(key0)
+// table.removeData(key0, key1)
+// table.inremoveDatacValue(key0, key1, key2)
+.then(function() { })
+.catch(function() { })
+key0, key1, key2 : Any string.
+Batch writing specific values at key pathes
+table.updateData({
+`${key0}` : value0,
+`${key0}/${key1}` : value1,
+`${key0}/${key1}/${key2}` : value2,
+...
+})
+.then(function() { })
+.catch(function() { })
+Transaction, write new value according to latest value
+table.transaction(key0, callback)
+// table.transaction(key0, key1, callback)
+// table.transaction(key0, key1, key2, callback)
+.then(function() { })
+.catch(function() { })
+key0, key1, key2 : Any string.
+callback : Write new value according to latest value.
+function(preValue) {
+return newValue;
+}
+Remove key when current user disconnect
+table.removeDataOnDisconnect(key0)
+// table.removeDataOnDisconnect(key0, key1)
+// table.removeDataOnDisconnect(key0, key1, key2)
+.then(function() { })
+.catch(function() { })
+Set value when current user disconnect
+table.setDataOnDisconnect(key0, value)
+// table.setDataOnDisconnect(key0, key1, value)
+// table.setDataOnDisconnect(key0, key1, key2, value)
+.then(function() { })
+.catch(function() { })
+Read¶
+Start updating
+table.startUpdate();
+Trigger 'init' event when all data read back.
+table.initialFlag : Return true when all data read back.
+Stop updating
+table.stopUpdate();
+Read data stored in client
+var data = table.getData(key0);
+// var data = table.getData(key0, key1);
+// var data = table.getData(key0, key1, key2);
+data : Number, string, or JSON data.
+Read all data stored in client
+var data = table.getData();
+data : JSON data.
+Clone data stored in client
+var data = table.cloneData(key0);
+// var data = table.cloneData(key0, key1);
+// var data = table.cloneData(key0, key1, key2);
+Clone all data stored in client
+var data = table.cloneData();
+Events¶
+Initialize, read all data back after start updating
+table.on('init', function(data) { })
+data : Table data.
+table.initialFlag will be set to true.
+Any value updated
+table.on('update', function(data) { })
+data : Table data.
+1d table¶
+1d table, indexing by (key0)
+On add key0
+table.on('addkey0', function(key0, value) {  });
+On remove key0
+table.on('removekey0', function(key0) {  });
+On change key0
+table.on('changekey0', function(key0, value) {  });
+2d table¶
+2d table, indexing by (key0, key1)
+On add key0
+table.on('addkey0', function(key0, value) {  });
+On remove key0
+table.on('removekey0', function(key0) {  });
+On add key1
+table.on('addkey1', function(key0, key1, value) {  });
+On remove key1
+table.on('removekey1', function(key0, key1) {  });
+On change key1
+table.on('changekey1', function(key0, key1, value) {  });
+3d table¶
+3d table, indexing by (key0, key1, key2)
+On add key0
+table.on('addkey0', function(key0, value) {  });
+On remove key0
+table.on('removekey0', function(key0) {  });
+On add key1
+table.on('addkey1', function(key0, key1, value) {  });
+On remove key1
+table.on('removekey1', function(key0, key1) {  });
+On add key2
+table.on('addkey2', function(key0, key1, key2, value) {  });
+On remove key2
+table.on('removekey2', function(key0, key1, key2) {  });
+On change key2
+table.on('changekey2', function(key0, key1, key2, value) {  });

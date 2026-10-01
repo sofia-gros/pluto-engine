@@ -1,0 +1,240 @@
+Line progres
+Introduction¶
+Horizontal line progress bar filled with gradient color on canvas.
+Author: Rex
+Game object
+Live demos¶
+Line-progress
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.plugin('rexlineprogresscanvasplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexlineprogresscanvasplugin.min.js', true);
+Add line-progress object
+var lineProgress = scene.add.rexLineProgressCanvas(x, y, width, height, barColor, value, config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import LineProgressCanvasPlugin from 'phaser4-rex-plugins/plugins/lineprogresscanvas-plugin.js';
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexLineProgressCanvasPlugin',
+plugin: LineProgressCanvasPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add line-progress object
+var lineProgress = scene.add.rexLineProgressCanvas(x, y, width, height, barColor, value, config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import LineProgressCanvas from 'phaser4-rex-plugins/plugins/lineprogresscanvas.js';
+Add line-progress object
+var lineProgress = new LineProgressCanvas(scene, x, y, width, height, barColor, value, config);
+scene.add.existing(image);
+Install plugin¶
+Install plugin in configuration of game
+var config = {
+// ...
+plugins: {
+global: [{
+key: 'rexLineProgressCanvasPlugin',
+plugin: LineProgressCanvasPlugin,
+start: true
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Create instance¶
+var lineProgress = scene.add.rexLineProgressCanvas(x, y, width, height, barColor, value, {
+barColor2: undefined,
+isHorizontalGradient: true,
+trackColor: undefined,
+trackStrokeColor: undefined,
+trackStrokeThickness: 2,
+skewX:0,
+rtl: false,
+easeValue: {
+duration: 0,
+ease: 'Linear'
+},
+valuechangeCallback: function(newValue, oldValue, lineProgress) {
+},
+});
+or
+var lineProgress = scene.add.rexLineProgressCanvas({
+x: 0,
+y: 0,
+width: 2,
+height: 2,
+barColor: undefined,
+barColor2: undefined,
+isHorizontalGradient: true,
+trackColor: undefined,
+trackStrokeColor: undefined,
+trackStrokeThickness: 2,
+skewX:0,
+rtl: false,
+easeValue: {
+duration: 0,
+ease: 'Linear'
+},
+value: 0,
+valuechangeCallback: function(newValue, oldValue, lineProgress) {
+},
+});
+x, y : Position of this object.
+width, height : Size of this object.
+barColor, barColor2, isHorizontalGradient : Fill color of line bar, in number or css string value. Assign gradient start color by barColor2.
+trackColor : Fill color of line track, in number or css string value.
+trackStrokeColor : Stroke color of track, in number or css string value.
+trackStrokeThickness : Stroke line width of track.
+skewX : Horizontal skew of track and bar.
+rtl :
+false : Bar starts from left side. Default behavior.
+true : Bar starts from right side.
+value : 0 ~ 1, progress value. Default is 0.
+easeValue : Parameters of easing value.
+easeValue.duration : Duration of value easing, default is 0 (no easing).
+easeValue.ease : Ease function, default is 'Linear'.
+valuechangeCallback : callback function when value changed.
+function(newValue, oldValue, lineProgress) {
+}
+Add line-progress from JSON
+var lineProgress = scene.make.rexLineProgressCanvas({
+x: 0,
+y: 0,
+width: 2,
+height: 2,
+barColor: undefined,
+barColor2: undefined,
+isHorizontalGradient: true,
+trackColor: undefined,
+trackStrokeColor: undefined,
+trackStrokeThickness: 2,
+skewX:0,
+rtl: false,
+easeValue: {
+duration: 0,
+ease: 'Linear'
+},
+value: 0,
+valuechangeCallback: function(newValue, oldValue, lineProgress) {
+},
+add: true
+});
+Custom class¶
+Define class
+class MyLineProgressCanvas extends LineProgressCanvas {
+constructor(scene, x, y, width, height, barColor, value, config) {
+super(scene, x, y, width, height, barColor, value, config);
+// ...
+scene.add.existing(this);
+}
+// ...
+// preUpdate(time, delta) {}
+}
+scene.add.existing(gameObject) : Adds an existing Game Object to this Scene.
+If the Game Object renders, it will be added to the Display List.
+If it has a preUpdate method, it will be added to the Update List.
+Create instance
+var lineProgress = new MyLineProgressCanvas(scene, x, y, width, height, barColor, value, config);
+Progress value¶
+Get value
+var value = lineProgress.getValue(min, max); // value : min ~ max
+or
+var value = lineProgress.getValue(); // value: 0 ~ 1
+or
+var value = lineProgress.value; // value: 0 ~ 1
+Set value
+lineProgress.setValue(value, min, max); // value: min ~ max
+or
+lineProgress.setValue(value); // value: 0 ~ 1
+or
+lineProgress.value = value; // value: 0 ~ 1
+Increase value
+lineProgress.addValue(inc, min, max); // inc: min ~ max
+or
+lineProgress.addValue(inc); // inc: 0 ~ 1
+or
+lineProgress.value += inc; // inc: 0 ~ 1
+Ease progress value¶
+Ease value to
+lineProgress.easeValueTo(value, min, max);  // value: min ~ max
+or
+lineProgress.easeValueTo(value);  // value: 0 ~ 1
+Stop ease
+lineProgress.stopEaseValue();
+Set ease duration
+lineProgress.setEaseValueDuration(duration);
+Set ease function
+lineProgress.setEaseValueFunction(ease);
+ease : Ease function.
+Line track¶
+Color
+Get
+var trackColor = lineProgress.trackColor;
+Set
+lineProgress.setTrackColor(trackColor);
+// lineProgress.trackColor = trackColor;
+Stroke
+Get
+var trackStrokeColor = lineProgress.trackStrokeColor;
+var trackStrokeThickness = lineProgress.trackStrokeThickness;
+Set
+lineProgress.setTrackColor(color);
+lineProgress.setTrackStroke(lineWidth, color);
+Line bar¶
+Color
+Get
+var barColor = lineProgress.barColor;
+var barColor2 = lineProgress.barColor2;
+Set
+lineProgress.setBarColor(barColor, barColor2);
+// lineProgress.barColor = barColor;
+// lineProgress.barColor2 = barColor2;
+Horizontal skew¶
+Get
+var skewX = lineProgress.skewX;
+Set
+lineProgress.setSkewX(skewX);
+// lineProgress.skewX = skewX;
+Right-to-left¶
+Get
+var rtl = lineProgress.rtl;
+Set
+lineProgress.setRTL(rtl);
+// lineProgress.rtl = rtl;
+Events¶
+On value changed
+lineProgress.on('valuechange', function(newValue, oldValue, lineProgress){
+//
+}, scope);
+Alpha¶
+Get
+var alpha = lineProgress.alpha;
+Set
+lineProgress.setAlpha(alpha);
+// lineProgress.alpha = alpha;
+Other properties¶
+See game object
+Create mask¶
+See mask
+Shader effects¶
+Support internal and external filters
+Compare with Line-progress shape¶
+Line-progress canvas creates a canvas then draw on that canvas, line progress shape draw on GRAPHICS pipeline like Shape or Graphics game object.
+Line-progress canvas can fill gradient color, line progress shape only can fill 1 color.

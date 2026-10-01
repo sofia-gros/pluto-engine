@@ -1,0 +1,208 @@
+Confirm action button
+Introduction¶
+Click this label to invoke ConfirmAction. It will
+create a modal confirm dialog temporary, invoke callback after clicking button.
+Author: Rex
+Game object
+Live demos¶
+Open page
+Usage¶
+Sample code
+Install plugin¶
+Load minify file¶
+Load plugin (minify file) in preload stage
+scene.load.scenePlugin('rexuiplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexuiplugin.min.js', 'rexUI', 'rexUI');
+Add button object
+var button = scene.rexUI.add.confirmActionButton(config);
+Import plugin¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Install plugin in configuration of game
+import UIPlugin from 'phaser4-rex-plugins/templates/ui/ui-plugin.js';
+var config = {
+// ...
+plugins: {
+scene: [{
+key: 'rexUI',
+plugin: UIPlugin,
+mapping: 'rexUI'
+},
+// ...
+]
+}
+// ...
+};
+var game = new Phaser.Game(config);
+Add button object
+var button = scene.rexUI.add.confirmActionButton(config);
+Import class¶
+Install rex plugins from npm
+npm i phaser4-rex-plugins
+Import class
+import { ConfirmActionButton } from 'phaser4-rex-plugins/templates/ui/ui-components.js';
+Add button object
+var button = new ConfirmActionButton(scene, config);
+scene.add.existing(button);
+Add button object¶
+var button = scene.rexUI.confirmActionButton({
+// Parameters of Label
+// x: 0,
+// y: 0,
+// anchor: undefined,
+// width: undefined,
+// height: undefined,
+// origin: 0.5
+// originX:
+// originY:
+orientation: 0,
+// rtl: false,
+background: backgroundGameObject,
+icon: iconGameObject,
+// iconMask: false,
+// squareFitIcon: false,
+// iconSize: undefined, iconWidth: undefined, iconHeight: undefined,
+text: textGameObject,
+expandTextWidth: false,
+expandTextHeight: false,
+action: actionGameObject,
+// actionMask: false,
+// squareFitAction: false,
+// actionSize: undefined, actionWidth: undefined, actionHeight: undefined,
+align: undefined,
+space: {
+left: 0, right: 0, top: 0, bottom: 0,
+icon: 0,
+iconTop: 0, iconBottom: 0, iconLeft: 0, iconRight: 0,
+text: 0,
+actionTop: 0, actionBottom: 0, actionLeft: 0, actionRight: 0,
+},
+// name: '',
+// draggable: false,
+// sizerEvents: false,
+// enableLayer: false,
+// Parameter of building confirm dialog
+confirmDialog: {
+style: confirmDialogConfig
+// content: confirmDialogResetChoiceDisplayContentConfig,
+// modal: confirmDialogModalConfig,
+// onCreateDialog: function(dialog) { },
+// confirmButtonIndex: 0,
+// cancelButtonIndex: 1,
+},
+// Callbacks
+confirm: function() {},
+// confirmScope:
+// cancel: function() {},
+// cancelScope:
+});
+Parameters of Label...
+Parameter of building confirm dialog
+confirmDialog.style : Config parameter of Confirm dialog
+confirmDialog.content : Content strings of title, content, button. Can assign this value later.
+confirmDialog.modal : Config parameter of modal method
+confirmDialog.onCreateDialog : Callback invoking after creating dialog.
+function(dialog) {
+}
+confirmDialog.confirmButtonIndex : Index of confirm/OK button on Confirm dialog. Default value is 0.
+confirmDialog.cancelButtonIndex : Index of cancel/cancel button on Confirm dialog. Default value is 1.
+Callbacks
+confirm, confirmScope : Callback invoking when click confirm/OK button of Confirm dialog
+cancel, cancelScope : Callback invoking when click cancel/cancel button of Confirm dialog
+Destroy confirm dialog after clicking confirm/OK, or cancel/cancel button.
+Custom class¶
+Define class
+class MyButton extends RexPlugins.UI.ConfirmActionButton {
+constructor(scene, config) {
+super(scene, config);
+// ...
+scene.add.existing(this);
+}
+// ...
+}
+Create instance
+var button = new MyButton(scene, config);
+Layout children¶
+Arrange position of all elements.
+button.layout();
+See also - dirty
+Get element¶
+See Get element
+Set callbacks¶
+Callback after clicking confirm/OK button of confirm dialog
+button.setConfirmCallback(callback);
+// button.setConfirmCallback(callback, scope);
+callback : Any function object
+function() {
+}
+Callback after clicking cancel/cancel button of confirm dialog
+button.setCancelCallback(callback);
+// button.setCancelCallback(callback, scope);
+callback : Any function object
+function() {
+}
+Set display content of confirm dialog¶
+button.setConfirmDialogContent({
+title: '',
+content: '',
+buttonA: '',
+buttonB: '',
+});
+or
+button.setConfirmDialogContent({
+title: {
+text: '',
+icon: undefined, iconFrame: undefined,
+iconSize: undefined,
+action: undefined, actionFrame: undefined,
+actionSize: undefined,
+},
+content: {
+text: '',
+icon: undefined, iconFrame: undefined,
+iconSize: undefined,
+action: undefined, actionFrame: undefined,
+actionSize: undefined,
+},
+buttonA: {
+text: '',
+icon: undefined, iconFrame: undefined,
+iconSize: undefined,
+action: undefined, actionFrame: undefined,
+actionSize: undefined,
+},
+buttonB: {
+text: '',
+icon: undefined, iconFrame: undefined,
+iconSize: undefined,
+action: undefined, actionFrame: undefined,
+actionSize: undefined,
+},
+choices: [
+{
+text: '', value: undefined,
+icon: undefined, iconFrame: undefined,
+iconSize: undefined,
+action: undefined, actionFrame: undefined,
+actionSize: undefined,
+},
+// ...
+]
+});
+title, content,buttonA, buttonB : Display content
+A string : Set text of simple lable
+Configuration of simpleLabel.resetDisplayContent(config) : Set icon, text, action icon of simple label.
+choices : Array of display content
+A string : Set text of simple lable, also use this string as option value.
+Configuration of simpleLabel.resetDisplayContent(config) : Set icon, text, action icon of simple label.
+Property value : Option value.
+Set style of confirm dialog¶
+button.setConfitmDialogStyle(style);
+style : See Config parameter of Confirm dialog
+Set configuration of confirm dialog's modal behavior¶
+button.setConfitmDialogModalConfig(config);
+config : See Config parameter of modal method
+Disalbe confirm dialog¶
+Run confirm callback directly without confirm dialog.
+button.setConfirmDialogEnable(false);
+Other properties¶
+See label, sizer object, base sizer object, container-lite.

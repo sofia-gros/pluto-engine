@@ -1,0 +1,233 @@
+Textures
+Introduction¶
+Textures cache, built-in object of phaser.
+Author: Phaser Team
+Usage¶
+Image texture¶
+Load image texture
+scene.load.image(key, url);
+Reference: Loader
+Load image texture via base64 string
+scene.textures.addBase64(key, data)
+Get image texture
+var texture = scene.textures.get(key);
+var image = texture.getSourceImage();
+// var width = image.width;
+// var height = image.height;
+Get image texture from frame object
+var texture = scene.textures.get(frameObject);
+Get pixel¶
+var color = scene.textures.getPixel(x, y, key);
+// var color = scene.textures.getPixel(x, y, key, frame);
+Properties of color
+r : 0 ~ 255
+g : 0 ~ 255
+b : 0 ~ 255
+a : 0 ~ 255
+color : color integer
+var alpha = scene.textures.getPixelAlpha(x, y, key);
+// var alpha = scene.textures.getPixelAlpha(x, y, key, frame);
+alpha : 0 ~ 255
+Return null if the coordinates were out of bounds.
+Generate texture from array¶
+var config = {
+data: data,
+// 3x3:
+// [ '...',
+//   '...',
+//   '...' ]
+pixelWidth: 1,    // pixel width of each data
+pixelHeight: 1,   // pixel height of each data
+preRender: null,  // callback, function(canvas, ctx) {}
+postRender: null, // callback, function(canvas, ctx) {}
+canvas: null,  // create a canvas if null
+resizeCanvas: true,
+clearCanvas: true
+};
+var texture = scene.textures.generate(key, config);
+Has key¶
+var hasKey = scene.textures.exists(key);
+Remove texture¶
+Remove texture stored in texture cache.
+scene.textures.remove(key);
+Get base64¶
+var s = scene.textures.getBase64(key);  // type= 'image/png', encoderOptions= 0.92
+// var s = scene.textures.getBase64(key, frame, type, encoderOptions);
+Default textures¶
+Default : '__DEFAULT'
+Missing : '__MISSING'
+4x4 white : '__WHITE'
+Get key list of all textures¶
+var keys = scene.textures.getTextureKeys();
+Texture¶
+Get texture¶
+var texture = scene.textures.get(key);
+Has frame¶
+var hasFrame = texture.has(frameName);
+Add frame¶
+var frame = texture.add(frameName, sourceIndex, x, y, width, height);
+key : Texture key.
+frameName : The name of this Frame. The name is unique within the Texture.
+sourceIndex : The index of the TextureSource that this Frame is a part of.
+x, y : The x/y coordinate of the top-left of this Frame.
+width, height : The width/height of this Frame.
+Remove frame¶
+var removed = texture.remove(frameName);
+Get name of frames¶
+var nameList = texture.getFrameNames();
+// nameList does not include `__BASE`
+or
+var nameList = texture.getFrameNames(true);
+// nameList includes `__BASE`
+Set smooth-pixel-art¶
+Note
+WebGL only.
+smooth-pixel-art preserves the blocky look of pixel art, but smooths the edges between texels when a texture is scaled up.
+It uses a special shader path and requires linear filtering.
+Difference from pixel art:
+pixel art : Uses nearest-neighbor sampling for a crisp and fully blocky result. Best for classic pixel-art games.
+smooth-pixel-art : Keeps the texels blocky, but antialiases the borders between them. This is mainly visible when objects are scaled up.
+texture.setSmoothPixelArt(true);
+Set wrap mode¶
+Note
+WebGL only.
+This method changes how the texture is sampled when UV coordinates go beyond the 0 to 1 range.
+For non-power-of-two textures, only Phaser.Textures.WrapMode.CLAMP_TO_EDGE is supported. Other wrap modes will be ignored.
+texture.setWrap(wrapModeS);
+// texture.setWrap(wrapModeS, wrapModeT);
+wrapModeS : The wrap mode for the S (horizontal) axis.
+wrapModeT : The wrap mode for the T (vertical) axis.
+undefined : Use the same wrap mode as wrapModeS.
+Wrap modes
+Phaser.Textures.WrapMode.CLAMP_TO_EDGE : Clamp sampling to the edge pixels of the texture.
+Phaser.Textures.WrapMode.REPEAT : Repeat the texture when sampling beyond the 0 to 1 range.
+Phaser.Textures.WrapMode.MIRRORED_REPEAT : Repeat the texture in alternating mirrored directions.
+Frame object¶
+Get frame¶
+var frame = scene.textures.getFrame(key, frame);
+Properties¶
+frame.source.image : Image of texture source.
+Cut-size from source image
+frame.cutX : X position within the source image to cut from.
+frame.cutY : Y position within the source image to cut from.
+frame.cutWidth : The width of the area in the source image to cut.
+frame.cutHeight : The height of the area in the source image to cut.
+Real-size = game object's size
+frame.realWidth : The width of the Frame in its un-trimmed, un-padded state
+gameObject.width is set to frame.realWidth
+frame.realHeight : The height of the Frame in its un-trimmed, un-padded state
+gameObject.height is set to frame.realHeight
+frame.trimmed : Is the Frame trimmed or not?
+true : frame.realWidth != frame.cutWidth, frame.realHeight != frame.cutHeight
+false : frame.realWidth == frame.cutWidth, frame.realHeight == frame.cutHeight
+Render-size
+frame.x : The X rendering offset of this Frame, taking trim into account.
+frame.y : The Y rendering offset of this Frame, taking trim into account.
+frame.width : The rendering width of this Frame, taking trim into account.
+Equal to frame.cutWidth
+frame.height : The rendering height of this Frame, taking trim into account.
+Equal to frame.cutHeight
+Add atlas¶
+scene.textures.addAtlas(key, HTMLImageElement, data);
+// scene.textures.addAtlas(key, HTMLImageElement, data, dataSource);
+key : The unique string-based key of the Texture.
+HTMLImageElement : HTML Image element/s.
+data : The Texture Atlas data/s.
+{
+frames: [
+{
+// Location of frame image
+frame: {
+x, y, w, h
+},
+// trimmed
+trimmed:
+sourceSize: {
+w, h
+},
+spriteSourceSize: {
+x, y, w, h
+},
+rotated:
+// Custom origin
+anchor:
+pivot: {
+x, y
+},
+// Other custom properties of this frame ...
+}
+],
+// Other custom properties of this texture ...
+}
+dataSource : An optional data Image element (normal map).
+or
+scene.textures.addAtlas(undefined, texture, data);
+// scene.textures.addAtlas(undefined, texture, data, dataSource);
+texture : Phaser Texture.
+Add sprite sheet¶
+scene.textures.addSpriteSheet(key, HTMLImageElement, config);
+// scene.textures.addAtlas(key, HTMLImageElement, config, dataSource);
+key : The unique string-based key of the Texture.
+HTMLImageElement : HTML Image element/s.
+config : The configuration object for this Sprite Sheet.
+{
+frameWidth: ,
+frameHeight: ,
+startFrame: 0,
+endFrame: -1,
+margin: 0,
+spacing: 0
+}
+dataSource : An optional data Image element (normal map).
+or
+scene.textures.addSpriteSheet(undefined, texture, config);
+// scene.textures.addSpriteSheet(undefined, texture, config, dataSource);
+texture : Phaser Texture.
+Add flat color texture¶
+Note
+WebGL only.
+Create a texture filled with a single color and alpha.
+var texture = scene.textures.addFlatColor(key, width, height);
+// var texture = scene.textures.addFlatColor(key, width, height, color, alpha);
+key : The unique string-based key of the Texture.
+width, height : The width/height of the texture.
+color : The color of the texture. Default is 0x000000.
+alpha : The alpha of the texture, from 0 to 1. Default is 0.
+This can be used as a placeholder or proxy texture, then replaced with a real texture source later.
+// Create a transparent proxy texture first.
+scene.textures.addFlatColor('avatar', 128, 128, 0x000000, 0);
+// Game objects can use this key immediately.
+var image = scene.add.image(400, 300, 'avatar');
+// Load the real texture under another key.
+scene.load.image('avatar-real', 'assets/avatar.png');
+scene.load.once('complete', function () {
+var proxy = scene.textures.get('avatar');
+var real = scene.textures.get('avatar-real');
+// Replace the source of the proxy texture with the real texture source.
+proxy.setSource(real.source);
+});
+scene.load.start();
+It is recommended to use the same size for the proxy texture and the real texture. If the real texture has a different size, update the base frame and any game objects which cached the old size.
+proxy.setSource(real.source);
+var source = proxy.source[0];
+proxy.get('__BASE').setSize(source.width, source.height);
+image.setSize(source.width, source.height);
+Events¶
+Texture manager is ready
+scene.textures.on('ready', function() {
+})
+Add texture
+scene.textures.on('addtexture', function(key) {
+})
+or
+scene.textures.on('addtexture-' + key, function() {
+})
+Error when adding texture
+scene.textures.on('onerror', function(key) {
+})
+Remove texture
+scene.textures.on('removetexture', function(key) {
+})
+or
+scene.textures.on('removetexture-' + key, function() {
+})
