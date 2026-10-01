@@ -49,9 +49,18 @@ export class ParticleManager implements Plugin {
       const angle = angleMin + Math.random() * (angleMax - angleMin);
       const v = speed * (0.5 + Math.random() * 0.5);
 
-      this.arena.posX[id] = x;
-      this.arena.posY[id] = y;
-      this.arena.scale[id] = 1.0;
+      // allocate() が返した id はそのまま密添字でも使えますが、
+      // swap-remove の後では乖離しうるため idToIndex 経由で解決します。
+      const idx = this.arena.idToIndex[id];
+      this.arena.setPosX(idx, x);
+      this.arena.setPosY(idx, y);
+      // パーティクルは 1 ピクセル点として描画したいため、
+      // フレーム寸法を 1 に落として scale = 1（倍率）で 1px 相当にします。
+      // scale は倍率である点に注意してください。
+      this.arena.setFrameSize(idx, 1, 1, false);
+      // テクスチャ未設定のスプライトは既定で透明なので、
+      // 描画されるよう不透明へ戻します。
+      this.arena.setTint(idx, 0xffffffff);
 
       this.velX[id] = Math.cos(angle) * v;
       this.velY[id] = Math.sin(angle) * v;
@@ -66,6 +75,8 @@ export class ParticleManager implements Plugin {
     for (let i = 0; i < this.activeCount; i++) {
       const id = this.activeIds[i];
       if (id === -1) continue;
+      const idx = this.arena.idToIndex[id];
+      if (idx < 0) continue;
 
       this.life[id] -= dt;
       if (this.life[id] <= 0) {
@@ -79,12 +90,12 @@ export class ParticleManager implements Plugin {
         continue;
       }
 
-      this.arena.posX[id] += this.velX[id] * dt;
-      this.arena.posY[id] += this.velY[id] * dt;
+      this.arena.setPosX(idx, this.arena.posX[idx] + this.velX[id] * dt);
+      this.arena.setPosY(idx, this.arena.posY[idx] + this.velY[id] * dt);
 
       // Alpha / Scale decay
       const ratio = this.life[id] / this.lifeMax[id];
-      this.arena.scale[id] = ratio;
+      this.arena.setScale(idx, ratio);
     }
   }
 

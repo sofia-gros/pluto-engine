@@ -9,12 +9,13 @@
  * 毎フレームの書き込みのみを行います。
  */
 
-import { createGraphicsDevice } from '@pluto-engine/renderer';
+import { INSTANCE_BUFFERS, createGraphicsDevice } from '@pluto-engine/renderer';
 import type { BufferInfo, GraphicsDevice } from '@pluto-engine/renderer';
+import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { ScaleManager, ScaleMode } from '../scale/ScaleManager';
+import type { Camera } from '../scene/Camera';
 import type { Scene } from '../scene/Scene';
 import { SceneManager } from '../scene/SceneManager';
-import type { Camera } from '../scene/Camera';
 import { TimeStepManager } from '../time/TimeStepManager';
 import { GameLoop } from './GameLoop';
 
@@ -145,23 +146,22 @@ export class PlutoEngine {
     this.device.initPipelines();
 
     const maxInstances = this.config.maxInstances!;
-    const bufferNames = [
-      'posX',
-      'posY',
-      'rotation',
-      'scale',
-      'facing',
-      'visible',
-      'uvX',
-      'uvY',
-      'uvW',
-      'uvH',
-      'frameIdx',
-      'tint',
-      'isText',
-    ] as const;
-    for (let i = 0; i < bufferNames.length; i++) {
-      this.gpuBuffers[bufferNames[i]] = this.device.createBuffer(maxInstances * 4);
+    // 転送する GPU バッファは `InstanceBufferArena` の packed ミラー 5 本だけです。
+    // vec4 にまとめることで、転送単位が 13 本から 5 本へ減ります
+    // （`InstanceLayout` がレイアウトの単一の情報源です）。
+    //
+    // バッファサイズ:
+    //   packedTransform = 16 バイト / 体 (posX, posY, scaleX, scaleY)
+    //   packedUv        = 16 バイト / 体 (uvX, uvY, uvW, uvH)
+    //   packedFlags     = 16 バイト / 体 (frameIdx, facing, visible, isText)
+    //   packedShape     = 16 バイト / 体 (rotation, frameW, frameH, depth)
+    //   packedTint      =  4 バイト / 体 (unorm8x4)
+    // 合計 68 バイト / 体。300k 体でも 20.4 MB です。
+    for (let i = 0; i < INSTANCE_BUFFERS.length; i++) {
+      const spec = INSTANCE_BUFFERS[i];
+      if (!spec.eager) continue;
+      // `stride` は 1 インスタンスあたりのバイト数そのものです。
+      this.gpuBuffers[spec.name] = this.device.createBuffer(maxInstances * spec.stride);
     }
 
     for (let i = 0; i < this.config.scene.length; i++) {
@@ -182,7 +182,13 @@ export class PlutoEngine {
   public renderTimeMs = 0;
   public uploadTimeMs = 0;
   public drawTimeMs = 0;
-  /** SoA をそのまま転送するためパッキング時間は 0 です。実測値を保持します。 */
+  /**
+   * SoA から vec4 への pack コストです。
+   *
+   * write-through のため、毎フレームの pack は **構造的に 0** です。
+   * pack は `InstanceBufferArena` の write-through セッター内で
+   * 「動いたスプライト 1 体につき定数回」だけ発生します。
+   */
   public packTimeMs = 0;
 
   public render() {
@@ -195,72 +201,66 @@ export class PlutoEngine {
     // Dense Set のため、そのままの状態で GPU へ転送できます。
     const renderCount = arena.activeCount;
 
-    // 階層を使っている場合だけ、解決済みのワールド座標を転送します。
-    // 使っていない場合は posX / rotation をそのまま転送し、
-    // 毎フレームのコピーを発生させません。
-    const posX = arena.hasHierarchy ? arena.worldX : arena.posX;
-    const posY = arena.hasHierarchy ? arena.worldY : arena.posY;
-    const rotData = arena.hasHierarchy ? arena.worldRotation : arena.rotation;
-
     const tPackStart = performance.now();
     this.packTimeMs = performance.now() - tPackStart;
 
     if (renderCount > 0) {
-      // Dirty Flag に基づく選択的転送。
-      // subarray() は new を発生させるため、srcOffset / length で範囲を指定する。
-      if (arena.dirtyPos || (arena.dirtyHierarchy && arena.hasHierarchy)) {
-        this.device.updateBuffer(this.gpuBuffers['posX'], posX, 0, renderCount);
-        this.device.updateBuffer(this.gpuBuffers['posY'], posY, 0, renderCount);
-        arena.dirtyPos = false;
+      // packed ミラーをグループ単位で転送します。
+      // ミラーは write-through で更新済みなので、ここは転送だけの処理です。
+      //
+      // 転送量は vec4 × 4 = 16 バイト × 4 枠 = 52 バイト / 体 で最大。
+      // 更新のないグループは丸ごと省略します。
+      if (arena.dirtyTransformGroup) {
+        this.device.updateBuffer(
+          this.gpuBuffers['packedTransform'],
+          arena.packedTransform,
+          0,
+          renderCount * 4,
+        );
+        arena.dirtyTransformGroup = false;
       }
 
-      if (arena.dirtyRotation || (arena.dirtyHierarchy && arena.hasHierarchy)) {
-        this.device.updateBuffer(this.gpuBuffers['rotation'], rotData, 0, renderCount);
-        arena.dirtyRotation = false;
+      if (arena.dirtyUvGroup) {
+        this.device.updateBuffer(this.gpuBuffers['packedUv'], arena.packedUv, 0, renderCount * 4);
+        arena.dirtyUvGroup = false;
       }
 
-      if (arena.dirtyScale) {
-        this.device.updateBuffer(this.gpuBuffers['scale'], arena.scale, 0, renderCount);
-        this.device.updateBuffer(this.gpuBuffers['facing'], arena.facing, 0, renderCount);
-        arena.dirtyScale = false;
+      if (arena.dirtyFlagsGroup) {
+        this.device.updateBuffer(
+          this.gpuBuffers['packedFlags'],
+          arena.packedFlags,
+          0,
+          renderCount * 4,
+        );
+        arena.dirtyFlagsGroup = false;
       }
 
-      // depth は GPU へ渡していません。かつては属性として渡していましたが、
-      // 頂点シェーダで参照されないデッド属性でした。
-      // 描画順のソートを実装するまでは CPU 側（SoA）で保持するだけです。
-
-      if (arena.dirtyUv) {
-        this.device.updateBuffer(this.gpuBuffers['uvX'], arena.uvX, 0, renderCount);
-        this.device.updateBuffer(this.gpuBuffers['uvY'], arena.uvY, 0, renderCount);
-        this.device.updateBuffer(this.gpuBuffers['uvW'], arena.uvW, 0, renderCount);
-        this.device.updateBuffer(this.gpuBuffers['uvH'], arena.uvH, 0, renderCount);
-        arena.dirtyUv = false;
+      if (arena.dirtyShapeGroup) {
+        // rotation / frameWidth / frameHeight / depth
+        this.device.updateBuffer(
+          this.gpuBuffers['packedShape'],
+          arena.packedShape,
+          0,
+          renderCount * 4,
+        );
+        arena.dirtyShapeGroup = false;
       }
 
-      if (arena.dirtyFrameIdx) {
-        this.device.updateBuffer(this.gpuBuffers['frameIdx'], arena.frameIdx, 0, renderCount);
-        arena.dirtyFrameIdx = false;
+      if (arena.dirtyOriginGroup) {
+        // originX / originY / scrollFactorX / scrollFactorY
+        this.device.updateBuffer(
+          this.gpuBuffers['packedOrigin'],
+          arena.packedOrigin,
+          0,
+          renderCount * 4,
+        );
+        arena.dirtyOriginGroup = false;
       }
 
-      if (arena.dirtyTint) {
-        // tint は Uint32Array のまま転送する。bufferSubData はバイト列をコピーするため
-        // 同じメモリを RGBA として扱える。ビュー生成が不要になる。
-        this.device.updateBuffer(this.gpuBuffers['tint'], arena.tint, 0, renderCount);
-        arena.dirtyTint = false;
-      }
-
-      // isText は文字列内容が変わらない限り変化しないため、
-      // テキストを 1 つも使っていないシーンでは転送を丸ごと省けます。
-      // dirty が立っていなければ、前回転送済みの内容のままなので送信不要です。
-      if (arena.hasText && arena.dirtyIsText) {
-        this.device.updateBuffer(this.gpuBuffers['isText'], arena.isText, 0, renderCount);
-        arena.dirtyIsText = false;
-      }
-
-      // visible は setVisible() が呼ばれたフレームだけ転送します。
-      if (arena.dirtyVisible) {
-        this.device.updateBuffer(this.gpuBuffers['visible'], arena.visible, 0, renderCount);
-        arena.dirtyVisible = false;
+      if (arena.dirtyTintGroup) {
+        // packedTint は 1 インスタンス 1 個の uint32 です。
+        this.device.updateBuffer(this.gpuBuffers['packedTint'], arena.packedTint, 0, renderCount);
+        arena.dirtyTintGroup = false;
       }
     }
     const tUploadEnd = performance.now();
@@ -283,15 +283,41 @@ export class PlutoEngine {
         return;
       }
 
-      this.device.setupInstancedAttributes(this.gpuBuffers, renderCount);
-
+      // culling を有効にした場合はカメラごとに可視区間を求めます。
+      // 未実装の段階では全スプライト描画の従来どおり (baseInstance = 0) です。
       for (let ci = 0; ci < camCount; ci++) {
-        this._writeProjection(this._activeCameras[ci], w, h);
+        const cam = this._activeCameras[ci];
+        const baseInstance = this._resolveVisibleRange(arena, cam, w, h);
+        const drawCount = renderCount - baseInstance;
+        if (drawCount <= 0) continue;
+
+        this._writeProjection(cam, w, h);
         this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
-        this.device.drawInstanced(renderCount);
+        this.device.setupInstancedAttributes(this.gpuBuffers, drawCount, baseInstance);
+        this.device.drawInstanced(drawCount, baseInstance);
       }
     }
     this.drawTimeMs = performance.now() - tUploadEnd;
+  }
+
+  /**
+   * カメラから可視スプライトの開始インデックスを求めます。
+   *
+   * 現在は culling 未実装のため常に 0（先頭から全件）を返します。
+   * Phase 3 で Morton 順の区間探索へ差し替えます。
+   * `renderCount` が描画上限になるため、戻り値は常に 0 以上に収めます。
+   */
+  private _resolveVisibleRange(
+    arena: InstanceBufferArena,
+    cam: Camera,
+    w: number,
+    h: number,
+  ): number {
+    void arena;
+    void cam;
+    void w;
+    void h;
+    return 0;
   }
 
   /**

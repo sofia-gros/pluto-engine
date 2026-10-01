@@ -10,6 +10,7 @@
  * ヒープ上のオブジェクトグラフを生成しません。
  */
 
+import { DEFAULT_FRAME_SIZE } from '@pluto-engine/renderer';
 import type { InstanceBufferArena, SpriteAssetLike } from './InstanceBufferArena';
 
 /** 座標を受け取るための出力先 (Phaser 互換の getBounds 系) */
@@ -31,6 +32,35 @@ export interface PointLike {
  * 毎フレーム new しないため、module スコープで 1 つだけ確保します。
  */
 const _scratchBounds: BoundsRect = { x: 0, y: 0, width: 0, height: 0 };
+
+/**
+ * `getFrameSize` の一時計算用バッファ。
+ * `setFrame` から毎フレーム呼ばれるため、module スコープで 1 つだけ確保します。
+ */
+const _scratchSize = new Float32Array(2);
+
+/**
+ * tint モード名 → `TintMode` の対応表 (Phaser 互換)。
+ *
+ * 毎フレーム呼ばれる `setTintMode` では文字列比較をせず、
+ * 呼び出し側で数値解決してから渡します。
+ */
+const TintModeMap: Record<string, number> = {
+  MULTIPLY: 0,
+  FILL: 1,
+  ADD: 2,
+  SCREEN: 3,
+  OVERLAY: 4,
+  HARD_LIGHT: 5,
+};
+
+/** ブレンドモード名 → `BlendMode` の対応表 (Phaser 互換)。WebGL2 は 4 種のみ対応。 */
+const BlendModeMap: Record<string, number> = {
+  NORMAL: 0,
+  ADD: 1,
+  MULTIPLY: 2,
+  SCREEN: 3,
+};
 
 export class Sprite {
   public readonly id: number;
@@ -90,13 +120,296 @@ export class Sprite {
   /**
    * スケールを設定します (Phaser 互換)。
    *
-   * pluto-engine の scale は X/Y 共通の単一値です。
-   * Y のみを指定された場合、Phaser と同じ「X を維持して Y だけ変える」
-   * 挙動は表現できないため、引数は無視して単一値として扱います。
+   * `scale` は**フレーム寸法の倍率**です。ピクセル数ではありません。
+   * `y` を省略した場合は `x` を X/Y 両方に適用します。
+   *
+   * ```ts
+   * this.load.sprite('hero', src, { frameWidth: 32, frameHeight: 32 });
+   * const p = this.add.sprite(x, y, 'hero');  // 32px
+   * p.setScale(2);                            // 64px
+   * ```
+   *
+   * 表示サイズを直接指定したい場合は `setDisplaySize` を使ってください。
    */
   public setScale(x: number, y?: number): this {
-    void y;
-    this.scale = x;
+    this._arena.setScale(this.idx, x, y);
+    return this;
+  }
+
+  public get scale(): number {
+    // Phaser 互換: scale は scaleX を返す
+    return this._arena.scaleX[this.idx];
+  }
+  public set scale(val: number) {
+    this._arena.setScale(this.idx, val, val);
+  }
+
+  /** X 方向のスケール倍率 (Phaser 互換の scaleX)。 */
+  public get scaleX(): number {
+    return this._arena.scaleX[this.idx];
+  }
+  public set scaleX(val: number) {
+    this._arena.setScaleX(this.idx, val);
+  }
+
+  /** Y 方向のスケール倍率 (Phaser 互換の scaleY)。 */
+  public get scaleY(): number {
+    return this._arena.scaleY[this.idx];
+  }
+  public set scaleY(val: number) {
+    this._arena.setScaleY(this.idx, val);
+  }
+
+  // --- 寸法 (Phaser 互換) ---
+
+  /**
+   * 現在のフレームのピクセル幅 (スケール未適用)。
+   *
+   * Phaser 互換の `width` は「フレームの横幅」です。
+   * 実際に表示される幅は `displayWidth` を参照してください。
+   */
+  public get width(): number {
+    return this._arena.frameWidth[this.idx];
+  }
+  public set width(val: number) {
+    this._arena.setFrameSize(this.idx, val, this._arena.frameHeight[this.idx]);
+  }
+
+  /**
+   * 現在のフレームのピクセル高 (スケール未適用)。
+   * Phaser 互換の `height` は「フレームの高さ」です。
+   */
+  public get height(): number {
+    return this._arena.frameHeight[this.idx];
+  }
+  public set height(val: number) {
+    this._arena.setFrameSize(this.idx, this._arena.frameWidth[this.idx], val);
+  }
+
+  /**
+   * 実際に表示される幅 (px)。`width * |scaleX|` です。
+   *
+   * 当たり判定・`getBounds` はすべてこの値を使います。
+   */
+  public get displayWidth(): number {
+    return this._arena.frameWidth[this.idx] * Math.abs(this._arena.scaleX[this.idx]);
+  }
+
+  /** 実際に表示される高さ (px)。`height * |scaleY|` です。 */
+  public get displayHeight(): number {
+    return this._arena.frameHeight[this.idx] * Math.abs(this._arena.scaleY[this.idx]);
+  }
+
+  /**
+   * 表示サイズをピクセル単位で指定します (Phaser 互換の setDisplaySize)。
+   *
+   * 内部では「表示幅 / フレーム幅」を倍率として計算します。
+   * テクスチャ未設定でフレーム寸法が既定 (32px) のときは、
+   * 現在は 32px 前提の倍率を設定するため、テクスチャ確定後に
+   * `setDisplaySize` を呼ぶと期待どおりの表示になります。
+   */
+  public setDisplaySize(w: number, h: number): this {
+    const fw = this._arena.frameWidth[this.idx];
+    const fh = this._arena.frameHeight[this.idx];
+    if (fw > 0) this._arena.setScaleX(this.idx, w / fw);
+    if (fh > 0) this._arena.setScaleY(this.idx, h / fh);
+    return this;
+  }
+
+  /** テクスチャ未設定のスプライトかどうか (Phaser 互換の hasTexture 相当)。 */
+  public get hasTexture(): boolean {
+    return this._arena.assetRef[this.idx] !== null;
+  }
+
+  // --- 描画原点 (Phaser 互換) ---
+
+  /**
+   * 描画原点を設定します (Phaser 互換の setOrigin)。
+   *
+   * `0.5, 0.5` はスプライトの中心、`0, 0` は左上、`1, 1` は右下です。
+   * `y` を省略した場合は `x` を両方に適用します。
+   */
+  public setOrigin(x = 0.5, y?: number): this {
+    this._arena.setOrigin(this.idx, x, y === undefined ? x : y);
+    return this;
+  }
+
+  /** 描画原点を中央 (0.5, 0.5) に戻します (Phaser 互換の setOriginToDefault)。 */
+  public setOriginToDefault(): this {
+    return this.setOrigin(0.5, 0.5);
+  }
+
+  /** 現在の描画原点を `out` へ書き出します (Phaser 互換の getOrigin)。 */
+  public getOrigin(out: Float32Array): this {
+    const i = this.idx;
+    out[0] = this._arena.originX[i];
+    out[1] = this._arena.originY[i];
+    return this;
+  }
+
+  // --- パララックス (Phaser 互換) ---
+
+  /**
+   * カメラスクロール係数を設定します (Phaser 互換の setScrollFactor)。
+   *
+   * 0.5 を指定するとカメラ移動の半分だけスプライトが動きます（背景など）。
+   * `y` を省略した場合は `x` を両方に適用します。
+   */
+  public setScrollFactor(x: number, y?: number): this {
+    this._arena.setScrollFactor(this.idx, x, y === undefined ? x : y);
+    return this;
+  }
+
+  /** X 方向のカメラスクロール係数 (Phaser 互換の setScrollFactorX)。 */
+  public setScrollFactorX(value: number): this {
+    const i = this.idx;
+    this._arena.setScrollFactor(i, value, this._arena.scrollFactorY[i]);
+    return this;
+  }
+
+  /** Y 方向のカメラスクロール係数 (Phaser 互換の setScrollFactorY)。 */
+  public setScrollFactorY(value: number): this {
+    const i = this.idx;
+    this._arena.setScrollFactor(i, this._arena.scrollFactorX[i], value);
+    return this;
+  }
+
+  public get scrollFactorX(): number {
+    return this._arena.scrollFactorX[this.idx];
+  }
+  public get scrollFactorY(): number {
+    return this._arena.scrollFactorY[this.idx];
+  }
+
+  // --- active / name / type (Phaser 互換) ---
+
+  /**
+   * update / render の対象フラグ (Phaser 互換の setActive)。
+   *
+   * false にすると描画対象から外れます（`visible` とは独立した概念です）。
+   */
+  public setActive(value: boolean | number): this {
+    this._arena.setActive(this.idx, value ? 1 : 0);
+    return this;
+  }
+  public get active(): boolean {
+    return this._arena.active[this.idx] !== 0;
+  }
+
+  /**
+   * 識別名を設定します (Phaser 互換の setName)。
+   *
+   * 文字列を SoA に格納できないため、`namePool` への参照だけを保持します。
+   */
+  public setName(value: string): this {
+    this._arena.setName(this.idx, value);
+    return this;
+  }
+  public get name(): string {
+    return this._arena.nameOf(this.idx);
+  }
+
+  /** オブジェクト種別の文字列 (Phaser 互換の type)。 */
+  public get type(): string {
+    return this._arena.kindNameOf(this.idx);
+  }
+
+  // --- tint モード / ブレンドモード (Phaser 互換) ---
+
+  /**
+   * tint のブレンドモードを設定します (Phaser 4 互換の setTintMode)。
+   *
+   * 現在はフラグメントシェーダが `MULTIPLY` のみを実装しています。
+   * 値は保持されるため、シェーダを後から拡張しても API は変わりません。
+   */
+  public setTintMode(mode: number | string): this {
+    const resolved = typeof mode === 'string' ? (TintModeMap[mode] ?? 0) : mode;
+    this._arena.setTintMode(this.idx, resolved);
+    return this;
+  }
+  public get tintMode(): number {
+    return this._arena.tintMode[this.idx];
+  }
+
+  /**
+   * ブレンドモードを設定します (Phaser 互換の setBlendMode)。
+   *
+   * WebGL2 がネイティブにサポートするのは 4 種（Normal / Add / Multiply / Screen）だけなので、
+   * 範囲外は `Normal` に丸められます。
+   * 実際の反映はバッチ分割の実装（Phase 8）まで行われません。
+   */
+  public setBlendMode(mode: number | string): this {
+    const resolved = typeof mode === 'string' ? (BlendModeMap[mode] ?? 0) : mode;
+    this._arena.setBlendMode(this.idx, resolved);
+    return this;
+  }
+  public get blendMode(): number {
+    return this._arena.blendMode[this.idx];
+  }
+
+  // --- 行列 (Phaser 互換) ---
+
+  /**
+   * ローカル変換行列 (a, b, c, d, tx, ty) を `out` へ書き出します。
+   *
+   * Phaser は `Float32Array(4)` を返しますが、
+   * **ヒープ確保を避けるため `out` パラメータを必須**にしています
+   * （SoA 判定コード **D**：Phaser とシグネチャが異なります）。
+   */
+  public getLocalTransformMatrix(out: Float32Array): this {
+    const i = this.idx;
+    const sx = this._arena.scaleX[i];
+    const sy = this._arena.scaleY[i];
+    const rot = this._arena.rotation[i];
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    out[0] = c * sx;
+    out[1] = s * sx;
+    out[2] = -s * sy;
+    out[3] = c * sy;
+    out[4] = this.x;
+    out[5] = this.y;
+    return this;
+  }
+
+  /**
+   * ワールド変換行列を `out` へ書き出します。
+   *
+   * 階層を使っている場合は `computeWorldTransforms()` の結果を使います。
+   * シェーダと同じ計算を CPU 側で行っています。
+   */
+  public getWorldTransformMatrix(out: Float32Array): this {
+    const i = this.idx;
+    const arena = this._arena;
+    const sx = arena.scaleX[i];
+    const sy = arena.scaleY[i];
+    const useWorld = arena.parentId[i] >= 0;
+    const rot = useWorld ? arena.worldRotation[i] : arena.rotation[i];
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    out[0] = c * sx;
+    out[1] = s * sx;
+    out[2] = -s * sy;
+    out[3] = c * sy;
+    out[4] = useWorld ? arena.worldX[i] : arena.posX[i];
+    out[5] = useWorld ? arena.worldY[i] : arena.posY[i];
+    return this;
+  }
+
+  /**
+   * フレームのピクセル寸法を設定します (Phaser 互換の setSize)。
+   * `scale` は倍率なので `width` / `height` には影響しません。
+   */
+  public setSize(width: number, height: number): this {
+    this._arena.setFrameSize(this.idx, width, height);
+    return this;
+  }
+
+  /** 現在のフレーム寸法を `out` へ書き出します (Phaser 互換の getSize)。 */
+  public getSize(out: Float32Array): this {
+    const i = this.idx;
+    out[0] = this._arena.frameWidth[i];
+    out[1] = this._arena.frameHeight[i];
     return this;
   }
 
@@ -110,8 +423,7 @@ export class Sprite {
       this._arena.localX[i] = val;
       this._arena.dirtyHierarchy = true;
     } else {
-      this._arena.posX[i] = val;
-      this._arena.dirtyPos = true;
+      this._arena.setPosX(i, val);
     }
   }
 
@@ -125,8 +437,7 @@ export class Sprite {
       this._arena.localY[i] = val;
       this._arena.dirtyHierarchy = true;
     } else {
-      this._arena.posY[i] = val;
-      this._arena.dirtyPos = true;
+      this._arena.setPosY(i, val);
     }
   }
 
@@ -143,8 +454,7 @@ export class Sprite {
       this._arena.localRotation[i] = val;
       this._arena.dirtyHierarchy = true;
     } else {
-      this._arena.rotation[i] = val;
-      this._arena.dirtyRotation = true;
+      this._arena.setRotation(i, val);
     }
   }
 
@@ -176,44 +486,11 @@ export class Sprite {
     return this;
   }
 
-  public get scale(): number {
-    return this._arena.scale[this.idx];
-  }
-  public set scale(val: number) {
-    this._arena.scale[this.idx] = val;
-    this._arena.dirtyScale = true;
-  }
-
-  /**
-   * X 方向のスケール (Phaser 互換の scaleX)。
-   * pluto-engine の scale は単一値のため、scale と同じ値を返します。
-   */
-  public get scaleX(): number {
-    return this._arena.scale[this.idx];
-  }
-  public set scaleX(val: number) {
-    this._arena.scale[this.idx] = val;
-    this._arena.dirtyScale = true;
-  }
-
-  /**
-   * Y 方向のスケール (Phaser 互換の scaleY)。
-   * pluto-engine の scale は単一値のため、scale と同じ値を返します。
-   */
-  public get scaleY(): number {
-    return this._arena.scale[this.idx];
-  }
-  public set scaleY(val: number) {
-    this._arena.scale[this.idx] = val;
-    this._arena.dirtyScale = true;
-  }
-
   public get facing(): number {
     return this._arena.facing[this.idx];
   }
   public set facing(val: number) {
-    this._arena.facing[this.idx] = val;
-    this._arena.dirtyScale = true;
+    this._arena.setFacing(this.idx, val);
   }
 
   /**
@@ -224,8 +501,7 @@ export class Sprite {
     return this._arena.visible[this.idx] === 1;
   }
   public set visible(val: boolean) {
-    this._arena.visible[this.idx] = val ? 1.0 : 0.0;
-    this._arena.dirtyVisible = true;
+    this._arena.setVisible(this.idx, val ? 1.0 : 0.0);
   }
 
   /**
@@ -251,8 +527,7 @@ export class Sprite {
     return this._arena.depth[this.idx];
   }
   public set depth(val: number) {
-    this._arena.depth[this.idx] = val;
-    this._arena.dirtyDepth = true;
+    this._arena.setDepth(this.idx, val);
   }
 
   public get depthIndex(): number {
@@ -268,8 +543,7 @@ export class Sprite {
     return this._arena.frameIdx[this.idx];
   }
   public set frameIdx(val: number) {
-    this._arena.frameIdx[this.idx] = val;
-    this._arena.dirtyFrameIdx = true;
+    this._arena.setFrameIdx(this.idx, val);
   }
 
   /**
@@ -286,32 +560,28 @@ export class Sprite {
     return this._arena.uvX[this.idx];
   }
   public set uvX(val: number) {
-    this._arena.uvX[this.idx] = val;
-    this._arena.dirtyUv = true;
+    this._arena.setUvX(this.idx, val);
   }
 
   public get uvY(): number {
     return this._arena.uvY[this.idx];
   }
   public set uvY(val: number) {
-    this._arena.uvY[this.idx] = val;
-    this._arena.dirtyUv = true;
+    this._arena.setUvY(this.idx, val);
   }
 
   public get uvW(): number {
     return this._arena.uvW[this.idx];
   }
   public set uvW(val: number) {
-    this._arena.uvW[this.idx] = val;
-    this._arena.dirtyUv = true;
+    this._arena.setUvW(this.idx, val);
   }
 
   public get uvH(): number {
     return this._arena.uvH[this.idx];
   }
   public set uvH(val: number) {
-    this._arena.uvH[this.idx] = val;
-    this._arena.dirtyUv = true;
+    this._arena.setUvH(this.idx, val);
   }
 
   /**
@@ -349,33 +619,76 @@ export class Sprite {
   /**
    * テクスチャアセットを設定し、GPU Texture2DArray の対応レイヤーとフレーム UV を適用します。
    * アセット参照はアリーナ側 (SoA) に格納され、このインスタンスは 32 バイトのまま保たれます。
+   *
+   * テクスチャのフレーム寸法がそのままスプライトの表示サイズになります
+   * （`scale` は倍率なので既定の 1.0 ではフレームそのまま）。
+   * 同時に、テクスチャ未設定の既定は「透明」だったため tint を不透明へ戻します。
    */
   public setTexture(asset: SpriteAssetLike | null, frame: string | number = 0): this {
     const i = this.idx;
     const resolved = asset?.textureAsset ?? asset;
     this._arena.assetRef[i] = resolved;
-    this._arena.frameIdx[i] = resolved?.layerIndex ?? 0;
-    this._arena.dirtyFrameIdx = true;
+    this._arena.setFrameIdx(i, resolved?.layerIndex ?? 0);
+    // テクスチャが確定したので不透明に戻します。
+    if (resolved) {
+      this._arena.setTint(i, (this._arena.tint[i] & 0x00ffffff) | 0xff000000);
+    }
     this.setFrame(frame);
     return this;
   }
 
   /**
+   * テクスチャアセットのフレーム寸法 (px) を `out` へ書き出します。
+   *
+   * `frameWidth` / `frameHeight` が使える場合はそれを使い、
+   * 無ければ画像全体の寸法、それも無ければ `DEFAULT_FRAME_SIZE` です。
+   *
+   * 毎フレーム呼ばれる可能性があるため、戻り値のオブジェクトを
+   * 生成せず使い回しバッファへ書き込みます（Flyweight の掟）。
+   */
+  public getFrameSize(out: Float32Array): this {
+    const i = this.idx;
+    const asset = this._arena.assetRef[i];
+    const resolved = asset?.textureAsset ?? asset;
+    if (resolved !== null && resolved !== undefined) {
+      const fw = resolved.frameWidth;
+      const fh = resolved.frameHeight;
+      if (fw !== undefined && fh !== undefined && fw > 0 && fh > 0) {
+        out[0] = fw;
+        out[1] = fh;
+        return this;
+      }
+      const w = resolved.width;
+      const h = resolved.height;
+      if (w !== undefined && h !== undefined && w > 0 && h > 0) {
+        out[0] = w;
+        out[1] = h;
+        return this;
+      }
+    }
+    out[0] = DEFAULT_FRAME_SIZE;
+    out[1] = DEFAULT_FRAME_SIZE;
+    return this;
+  }
+
+  /**
    * スプライトシート内の 特定コマを設定します。
+   *
+   * コマごとに大きさが異なるアトラスでも追従するよう、
+   * フレーム UV と同時にピクセル寸法も更新します。
    */
   public setFrame(frame: string | number): this {
     const i = this.idx;
     const asset = this._arena.assetRef[i];
     const frames = asset?.frames;
+    const size = _scratchSize;
+    this.getFrameSize(size);
     if (!frames || frames.length === 0) {
-      // アセット未設定時は UV をテキスト全面 へ初期化し、描画可能にする
+      // アセット未設定時は UV をテクスチャ全面 へ初期化し、描画可能にする
       if (this._arena.uvW[i] === 0.0 || this._arena.uvH[i] === 0.0) {
-        this._arena.uvX[i] = 0.0;
-        this._arena.uvY[i] = 0.0;
-        this._arena.uvW[i] = 1.0;
-        this._arena.uvH[i] = 1.0;
-        this._arena.dirtyUv = true;
+        this._arena.setUv4(i, 0.0, 0.0, 1.0, 1.0);
       }
+      this._arena.setFrameSize(i, size[0], size[1]);
       return this;
     }
     // フレームは添字 (数値) で指定します。アニメーションのキーだけが文字列です。
@@ -383,11 +696,8 @@ export class Sprite {
     if (fIdx >= 0 && fIdx < frames.length) {
       this._arena.srcFrame[i] = fIdx;
       const fData = frames[fIdx];
-      this._arena.uvX[i] = fData.uvX;
-      this._arena.uvY[i] = fData.uvY;
-      this._arena.uvW[i] = fData.uvW;
-      this._arena.uvH[i] = fData.uvH;
-      this._arena.dirtyUv = true;
+      this._arena.setUv4(i, fData.uvX, fData.uvY, fData.uvW, fData.uvH);
+      this._arena.setFrameSize(i, size[0], size[1]);
     }
     return this;
   }
@@ -396,8 +706,7 @@ export class Sprite {
    * 水平反転を設定します。
    */
   public setFlipX(flip: boolean): this {
-    this._arena.facing[this.idx] = flip ? -1.0 : 1.0;
-    this._arena.dirtyScale = true;
+    this._arena.setFacing(this.idx, flip ? -1.0 : 1.0);
     return this;
   }
 
@@ -409,16 +718,45 @@ export class Sprite {
     return this._arena.facing[this.idx] < 0;
   }
   public set flipX(val: boolean) {
-    this._arena.facing[this.idx] = val ? -1.0 : 1.0;
-    this._arena.dirtyScale = true;
+    this._arena.setFacing(this.idx, val ? -1.0 : 1.0);
   }
 
   /**
    * 水平反転を反転します (Phaser 互換)。
    */
   public toggleFlipX(): this {
-    this._arena.facing[this.idx] = this._arena.facing[this.idx] < 0 ? 1.0 : -1.0;
-    this._arena.dirtyScale = true;
+    this._arena.setFacing(this.idx, this._arena.facing[this.idx] < 0 ? 1.0 : -1.0);
+    return this;
+  }
+
+  // --- 垂直反転 (Phaser 互換) ---
+
+  /**
+   * 垂直反転を設定します (Phaser 互換の setFlipY)。
+   *
+   * `scaleY` の符号で表現します。負の値にすると上下反転します。
+   * 非等方スケールに対応したため可能になりました。
+   */
+  public setFlipY(flip: boolean): this {
+    const i = this.idx;
+    // 絶対値は保ったまま符号だけ反転します。
+    // scaleY が 0 の場合は反転しても描画されないため 1 に寄せます。
+    const mag = Math.abs(this._arena.scaleY[i]) || 1;
+    this._arena.setScaleY(i, flip ? -mag : mag);
+    return this;
+  }
+
+  /** 垂直反転の状態 (Phaser 互換の flipY)。`scaleY` が負のとき反転しています。 */
+  public get flipY(): boolean {
+    return this._arena.scaleY[this.idx] < 0;
+  }
+  public set flipY(val: boolean) {
+    this.setFlipY(val);
+  }
+
+  /** 垂直反転を反転します (Phaser 互換の toggleFlipY)。 */
+  public toggleFlipY(): this {
+    this.setFlipY(!this.flipY);
     return this;
   }
 
@@ -431,14 +769,11 @@ export class Sprite {
   public getBounds(out: BoundsRect): this {
     const cx = this.x;
     const cy = this.y;
-    // 現在の scale は表示倍率なので、テクスチャの素寸に戻します。
-    const i = this.idx;
-    const asset = this._arena.assetRef[i];
-    const frameW = this._arena.hitWidth[i] > 0 ? this._arena.hitWidth[i] : (asset?.width ?? 0);
-    const frameH = this._arena.hitHeight[i] > 0 ? this._arena.hitHeight[i] : (asset?.height ?? 0);
-    const s = this._arena.scale[i];
-    const halfW = Math.abs(frameW * s) * 0.5;
-    const halfH = Math.abs(frameH * s) * 0.5;
+    // 表示サイズは「フレームのピクセル寸法 × スケール倍率」です。
+    // 当たり判定も `getBounds` も同じ式を使うので、
+    // 画像のサイズを変えればそのまま当たり判定の広さも追従します。
+    const halfW = this.displayWidth * 0.5;
+    const halfH = this.displayHeight * 0.5;
     out.x = cx - halfW;
     out.y = cy - halfH;
     out.width = halfW * 2;
@@ -476,24 +811,27 @@ export class Sprite {
   }
 
   /**
-   * 反転状態を初期状態 (横 反転なし) に戻します (Phaser 互換の resetFlip)。
+   * 反転状態を初期状態 (反転なし) に戻します (Phaser 互換の resetFlip)。
    *
-   * 垂直反転 (flipY) は pluto-engine の scale が単一値のため未対応です。
-   * 横方向のみ戻します。
+   * 横・縦の両方を戻します。縦は `scaleY` の符号で表現されます。
    */
   public resetFlip(): this {
-    this._arena.facing[this.idx] = 1.0;
-    this._arena.dirtyScale = true;
+    const i = this.idx;
+    this._arena.setFacing(i, 1.0);
+    this._arena.setScaleY(i, Math.abs(this._arena.scaleY[i]) || 1);
     return this;
   }
 
   /**
    * 横・縦の反転をまとめて設定します (Phaser 互換の setFlip)。
-   * 縦方向は未対応のため無視されます。
+   *
+   * `flipY` を省略した場合は現在の縦反転状態を維持します。
    */
   public setFlip(flipX: boolean, flipY?: boolean): this {
-    void flipY;
     this.flipX = flipX;
+    if (flipY !== undefined) {
+      this.setFlipY(flipY);
+    }
     return this;
   }
 
@@ -509,8 +847,7 @@ export class Sprite {
       const b = tintHex & 0xff;
       packed = (0xff << 24) | (b << 16) | (g << 8) | r;
     }
-    this._arena.tint[this.idx] = packed;
-    this._arena.dirtyTint = true;
+    this._arena.setTint(this.idx, packed);
     return this;
   }
 
@@ -544,8 +881,7 @@ export class Sprite {
     // ここでは色成分を保持せず、係数を 1.0 として alpha だけを反映します。
     // 真に単色で塗るにはシェーダ側の分岐が必要で、これは将来課題とします。
     void tintHex;
-    this._arena.tint[this.idx] = (a << 24) | 0xffffff;
-    this._arena.dirtyTint = true;
+    this._arena.setTint(this.idx, (a << 24) | 0xffffff);
     return this;
   }
   /**
@@ -555,8 +891,7 @@ export class Sprite {
   public clearTint(): this {
     const i = this.idx;
     const alpha = (this._arena.tint[i] >>> 24) & 0xff;
-    this._arena.tint[i] = (alpha << 24) | 0xffffff;
-    this._arena.dirtyTint = true;
+    this._arena.setTint(i, (alpha << 24) | 0xffffff);
     return this;
   }
 
@@ -574,8 +909,7 @@ export class Sprite {
     const clamped = Math.max(0, Math.min(1, val));
     const byte = Math.round(clamped * 255);
     const i = this.idx;
-    this._arena.tint[i] = ((this._arena.tint[i] & 0x00ffffff) | (byte << 24)) >>> 0;
-    this._arena.dirtyTint = true;
+    this._arena.setTint(i, ((this._arena.tint[i] & 0x00ffffff) | (byte << 24)) >>> 0);
   }
 
   /**
@@ -594,24 +928,17 @@ export class Sprite {
   }
 
   /**
-   * ポインタ操作を有効化します。
-   * 引数を省略した場合は参照中のアセット寸法からヒット領域を補完します。
+   * ポインタ操作を有効化します (Phaser 互換の setInteractive)。
+   *
+   * 引数を省略した場合は**表示サイズ**（フレーム寸法 × スケール倍率）を
+   * ヒット領域として使います。これにより画像の大きさに当たり判定が追従します。
+   * 明示的な寸法を渡した場合はそちらを優先します。
    */
   public setInteractive(hitWidth?: number, hitHeight?: number): this {
     const i = this.idx;
     this._arena.interactive[i] = 1;
-
-    if (hitWidth === undefined) {
-      this._arena.hitWidth[i] = this._arena.assetRef[i]?.width ?? 0;
-    } else {
-      this._arena.hitWidth[i] = hitWidth;
-    }
-
-    if (hitHeight === undefined) {
-      this._arena.hitHeight[i] = this._arena.assetRef[i]?.height ?? 0;
-    } else {
-      this._arena.hitHeight[i] = hitHeight;
-    }
+    this._arena.hitWidth[i] = hitWidth ?? 0;
+    this._arena.hitHeight[i] = hitHeight ?? 0;
     return this;
   }
 
@@ -656,6 +983,8 @@ export class Sprite {
     this._arena.localY[i] = this._arena.posY[i];
     this._arena.localRotation[i] = this._arena.rotation[i];
     this._arena.dirtyHierarchy = true;
+    // 階層時はワールド座標を基準に描画するため、transform ミラーの再送が必要です。
+    this._arena.dirtyTransformGroup = true;
     if (parentId >= 0 && parentIdx >= 0) this._arena.hasHierarchy = true;
     return this;
   }

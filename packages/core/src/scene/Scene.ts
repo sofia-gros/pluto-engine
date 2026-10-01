@@ -289,9 +289,8 @@ export class Scene {
         throw new Error('アリーナの容量に到達しました。');
       }
       const idx = this.arena.idToIndex[id];
-      this.arena.posX[idx] = x;
-      this.arena.posY[idx] = y;
-      this.arena.dirtyPos = true;
+      this.arena.setPosX(idx, x);
+      this.arena.setPosY(idx, y);
 
       const sprite = new Sprite(id, this.arena);
 

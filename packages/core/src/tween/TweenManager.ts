@@ -297,7 +297,8 @@ export class TweenManager {
       case TweenProperty.Y:
         return arena.posY[idx];
       case TweenProperty.SCALE:
-        return arena.scale[idx];
+        // scale は倍率です。tween の開始値・終了値も倍率として扱います。
+        return arena.scaleX[idx];
       case TweenProperty.TINT:
         return arena.tint[idx];
       case TweenProperty.ALPHA:
@@ -500,37 +501,30 @@ export class TweenManager {
 
     switch (this.propType[i] as TweenProperty) {
       case TweenProperty.X:
-        arena.posX[idx] = val;
-        arena.dirtyPos = true;
+        arena.setPosX(idx, val);
         break;
       case TweenProperty.Y:
-        arena.posY[idx] = val;
-        arena.dirtyPos = true;
+        arena.setPosY(idx, val);
         break;
       case TweenProperty.SCALE:
-        arena.scale[idx] = val;
-        arena.dirtyScale = true;
+        arena.setScale(idx, val);
         break;
       case TweenProperty.TINT:
-        arena.tint[idx] = val >>> 0;
-        arena.dirtyTint = true;
+        arena.setTint(idx, val >>> 0);
         break;
       case TweenProperty.ALPHA: {
         // alpha は独立した SoA を持たず、tint の最上位バイト（A チャンネル）を
         // 共有します。そのため頂点属性を 1 個も追加せずに表現できます。
         const packed = arena.tint[idx];
         const byte = Math.max(0, Math.min(255, Math.round(val * 255)));
-        arena.tint[idx] = ((packed & 0x00ffffff) | (byte << 24)) >>> 0;
-        arena.dirtyTint = true;
+        arena.setTint(idx, ((packed & 0x00ffffff) | (byte << 24)) >>> 0);
         break;
       }
       case TweenProperty.ROTATION:
-        arena.rotation[idx] = val;
-        arena.dirtyRotation = true;
+        arena.setRotation(idx, val);
         break;
       case TweenProperty.FLIP_X:
-        arena.facing[idx] = val >= 0.5 ? -1.0 : 1.0;
-        arena.dirtyScale = true;
+        arena.setFacing(idx, val >= 0.5 ? -1.0 : 1.0);
         break;
     }
   }

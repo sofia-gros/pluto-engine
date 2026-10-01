@@ -5,6 +5,19 @@
  * Sparse Set (Swap-Remove) パターンを導入し、アクティブなエンティティが常に 0〜activeCount-1 に密(Dense)に配置されるようにします。
  * また、Dirty Flag を用いて変更があった属性のみをGPUに転送します。
  *
+ * ## SoA と Packed の二重保持
+ *
+ * SoA 配列は CPU 側の真値です。hitTest・物理・AI・Tween・tilemap が
+ * `posX[i]` のように直接読むため、SoA を崩すことはできません。
+ *
+ * 一方 GPU へは「1 枠 = vec4」で詰めた `packed*` ミラーを渡します
+ * （`@pluto-engine/renderer` の `InstanceLayout` がレイアウトの単一の情報源）。
+ * ミラーは**毎フレーム repack しません**。本クラスの write-through セッターが
+ * SoA とミラーの両方へ同時に書き込むため、1 体あたりのコストは O(1) です。
+ *
+ * **SoA 配列へ直接代入してはいけません。** セッターを通さないと
+ * ミラーが腐り、そのスプライトだけが描画されなくなります。
+ *
  * 設計上の掟:
  *  - コンストラクタ以外ではヒープメモリを一切確保しません。
  *  - 親子関係はネストした木ではなく
@@ -13,6 +26,17 @@
  *    ローカル座標をワールド座標へ畳み込みます。
  */
 
+import {
+  BlendMode,
+  DEFAULT_FRAME_SIZE,
+  FlagsLane,
+  OriginLane,
+  ShapeLane,
+  TintMode,
+  TransformLane,
+  UvLane,
+} from '@pluto-engine/renderer';
+
 /**
  * スプライトが参照するテクスチャアセットの最小インターフェース。
  * 実体は TextureManager / LoaderManager が保持する TextureAsset。
@@ -20,8 +44,17 @@
 export interface SpriteAssetLike {
   /** GPU Texture2DArray のレイヤーインデックス */
   layerIndex?: number;
+  /** テクスチャ全体のピクセル幅 */
   width?: number;
+  /** テクスチャ全体のピクセル高さ */
   height?: number;
+  /**
+   * 1 フレームのピクセル幅。
+   * スプライトの表示サイズ（`width`）の基準になります。
+   */
+  frameWidth?: number;
+  /** 1 フレームのピクセル高さ。表示サイズの基準になります。 */
+  frameHeight?: number;
   /** テクスチャキー (Phaser 互換の texture プロパティで返します) */
   key?: string;
   /** スプライトシート内のフレーム UV */
@@ -46,9 +79,61 @@ export class InstanceBufferArena {
   public readonly posX: Float32Array;
   public readonly posY: Float32Array;
   public readonly rotation: Float32Array;
-  public readonly scale: Float32Array;
+  /**
+   * X 方向のスケール**倍率**。
+   * 1.0 ならフレーム寸法そのままの大きさに描画されます。
+   * ピクセル数ではありません。描画サイズは `frameWidth * scaleX` です。
+   */
+  public readonly scaleX: Float32Array;
+  /** Y 方向のスケール倍率。`scaleX` と同じ扱い (1.0 = フレーム寸法そのまま)。 */
+  public readonly scaleY: Float32Array;
+  /**
+   * 現在のフレームのピクセル幅。
+   *
+   * 頂点シェーダはクワッドの大きさを `frameWidth * scaleX` で決めるため、
+   * テクスチャのピクセル寸法が必要です。
+   * テクスチャ未設定時は `DEFAULT_FRAME_SIZE` を入れます。
+   */
+  public readonly frameWidth: Float32Array;
+  /** 現在のフレームのピクセル高さ。`frameWidth` と同じ扱い。 */
+  public readonly frameHeight: Float32Array;
   public readonly facing: Float32Array;
   public readonly depth: Float32Array;
+
+  // --- Phaser 4 互換の追加フィールド ---
+  /**
+   * 描画原点の X 座標 (0.0〜1.0)。
+   *
+   * Phaser の既定は 0.5, 0.5（スプライトの中心）です。
+   * クワッドはこの値を引いてから `frameSize * scale` で拡大するため、
+   * 頂点シェーダ側で処理します。
+   */
+  public readonly originX: Float32Array;
+  /** 描画原点の Y 座標 (0.0〜1.0)。既定 0.5。 */
+  public readonly originY: Float32Array;
+  /**
+   * カメラスクロールの係数 X（パララックス）。
+   *
+   * 描画位置を `x - camera.scrollX * scrollFactorX` で求めるため、
+   * カメラごとに 1 回ずつ計算します。
+   */
+  public readonly scrollFactorX: Float32Array;
+  /** カメラスクロールの係数 Y。既定 1.0。 */
+  public readonly scrollFactorY: Float32Array;
+  /** 1 = update / render の対象、0 = スキップ。Phaser の `active`。 */
+  public readonly active: Uint8Array;
+  /** `TintMode` の値。フラグメントシェーダの分岐に使います。 */
+  public readonly tintMode: Uint8Array;
+  /** `BlendMode` の値。バッチ分割のキーになります。 */
+  public readonly blendMode: Uint8Array;
+  /** `setName` で設定した文字列のスロット番号（-1 = 未設定）。 */
+  public readonly nameSlot: Int32Array;
+  /** `type` の数値表現。文字列は `kindNames` から返します。 */
+  public readonly kind: Uint8Array;
+  /** `nameSlot` が参照する文字列プール。`addName()` で grown します。 */
+  public readonly namePool: string[] = [];
+  /** `kind` が参照する文字列プール。 */
+  public readonly kindNames: string[] = ['Sprite'];
   public readonly uvX: Float32Array;
   public readonly uvY: Float32Array;
   public readonly uvW: Float32Array;
@@ -74,6 +159,28 @@ export class InstanceBufferArena {
    * 同一レイヤー内での「どのコマか」は `srcFrame` が担当する (2バイトで済むため Uint16Array)。
    */
   public readonly srcFrame: Uint16Array;
+
+  // --- Packed Mirrors (GPU 転送用。vec4 単位にまとめたもの) ---
+  /**
+   * `posX, posY, scaleX, scaleY` を 1 インスタンス 16 バイトに詰めたミラー。
+   * `TransformLane` がレーン位置を与えます。
+   */
+  public readonly packedTransform: Float32Array;
+  /** `uvX, uvY, uvW, uvH` を 1 インスタンス 16 バイトに詰めたミラー。 */
+  public readonly packedUv: Float32Array;
+  /** `frameIdx, facing, visible, isText` を 1 インスタンス 16 バイトに詰めたミラー。 */
+  public readonly packedFlags: Float32Array;
+  /** `rotation, frameWidth, frameHeight, depth` を 1 インスタンス 16 バイトに詰めたミラー。 */
+  public readonly packedShape: Float32Array;
+  /** `RGBA` を 1 インスタンス 4 バイト (unorm8x4) で保持するミラー。 */
+  public readonly packedTint: Uint32Array;
+  /** `originX, originY, scrollFactorX, scrollFactorY` を 1 インスタンス 16 バイトに詰めたミラー。 */
+  public readonly packedOrigin: Float32Array;
+  /**
+   * ユーザー拡張用の `vec4` × 4（1 インスタンス 64 バイト）。
+   * エンジンは書き込みません。利用側が `setExt` 経由で使います。
+   */
+  public readonly packedExt: Float32Array;
 
   /**
    * SoA 内の「参照」を保持する密配列。
@@ -118,6 +225,25 @@ export class InstanceBufferArena {
   public dirtyDepth = true;
   public dirtyHierarchy = true;
 
+  // --- Group Dirty Flags (packed ミラーの転送判定に使う) ---
+  /**
+   * `packedTransform` が前回転送時から変化したかどうか。
+   * write-through セッターが自動で立てます。
+   */
+  public dirtyTransformGroup = true;
+  /** `packedUv` が前回転送時から変化したかどうか。 */
+  public dirtyUvGroup = true;
+  /** `packedFlags` が前回転送時から変化したかどうか。 */
+  public dirtyFlagsGroup = true;
+  /** `packedShape` (rotation / frameWidth / frameHeight / depth) が変化したかどうか。 */
+  public dirtyShapeGroup = true;
+  /** `packedOrigin` (originX / originY / scrollFactorX / scrollFactorY) が変化したかどうか。 */
+  public dirtyOriginGroup = true;
+  /** `packedTint` が前回転送時から変化したかどうか。 */
+  public dirtyTintGroup = true;
+  /** `packedExt` が前回転送時から変化したかどうか。 */
+  public dirtyExtGroup = false;
+
   // --- Free List (IDの再利用管理) ---
   private readonly freeList: Int32Array;
   private freeListHead = 0;
@@ -154,9 +280,25 @@ export class InstanceBufferArena {
     this.posX = new Float32Array(maxInstances);
     this.posY = new Float32Array(maxInstances);
     this.rotation = new Float32Array(maxInstances);
-    this.scale = new Float32Array(maxInstances);
+    this.scaleX = new Float32Array(maxInstances).fill(1);
+    this.scaleY = new Float32Array(maxInstances).fill(1);
+    // テクスチャ未設定のスプライトは透明な既定サイズを持ちます。
+    this.frameWidth = new Float32Array(maxInstances).fill(DEFAULT_FRAME_SIZE);
+    this.frameHeight = new Float32Array(maxInstances).fill(DEFAULT_FRAME_SIZE);
     this.facing = new Float32Array(maxInstances);
     this.depth = new Float32Array(maxInstances);
+
+    // Phaser 4 互換の追加フィールド。
+    // origin は Phaser と同じ中央 (0.5, 0.5)、scrollFactor は 1.0 が既定です。
+    this.originX = new Float32Array(maxInstances).fill(0.5);
+    this.originY = new Float32Array(maxInstances).fill(0.5);
+    this.scrollFactorX = new Float32Array(maxInstances).fill(1);
+    this.scrollFactorY = new Float32Array(maxInstances).fill(1);
+    this.active = new Uint8Array(maxInstances).fill(1);
+    this.tintMode = new Uint8Array(maxInstances).fill(TintMode.Multiply);
+    this.blendMode = new Uint8Array(maxInstances).fill(BlendMode.Normal);
+    this.nameSlot = new Int32Array(maxInstances).fill(-1);
+    this.kind = new Uint8Array(maxInstances);
     this.uvX = new Float32Array(maxInstances);
     this.uvY = new Float32Array(maxInstances);
     this.uvW = new Float32Array(maxInstances);
@@ -170,6 +312,25 @@ export class InstanceBufferArena {
     // 必ず Float32Array にします。
     this.visible = new Float32Array(maxInstances).fill(1);
     this.srcFrame = new Uint16Array(maxInstances);
+
+    // Packed ミラー。GPU へはこれらを vec4 単位で転送します。
+    // 総コストは 1 インスタンス 68 バイト + 拡張枠 64 バイトです。
+    this.packedTransform = new Float32Array(maxInstances * 4);
+    this.packedUv = new Float32Array(maxInstances * 4);
+    this.packedFlags = new Float32Array(maxInstances * 4);
+    this.packedShape = new Float32Array(maxInstances * 4);
+    this.packedTint = new Uint32Array(maxInstances).fill(0xffffffff);
+    this.packedOrigin = new Float32Array(maxInstances * 4);
+    this.packedExt = new Float32Array(maxInstances * 16);
+
+    // origin / scrollFactor の既定をミラーへ反映しておきます。
+    for (let i = 0; i < maxInstances; i++) {
+      const base = i * 4;
+      this.packedOrigin[base + OriginLane.OriginX] = 0.5;
+      this.packedOrigin[base + OriginLane.OriginY] = 0.5;
+      this.packedOrigin[base + OriginLane.ScrollFactorX] = 1.0;
+      this.packedOrigin[base + OriginLane.ScrollFactorY] = 1.0;
+    }
 
     // 参照を保持する密配列は new Array を1度だけ行う。.push() は使わない。
     this.assetRef = new Array<SpriteAssetLike | null>(maxInstances).fill(null);
@@ -210,12 +371,28 @@ export class InstanceBufferArena {
     this.posX[idx] = 0.0;
     this.posY[idx] = 0.0;
     this.rotation[idx] = 0.0;
-    this.scale[idx] = 1.0;
+    this.scaleX[idx] = 1.0;
+    this.scaleY[idx] = 1.0;
+    this.frameWidth[idx] = DEFAULT_FRAME_SIZE;
+    this.frameHeight[idx] = DEFAULT_FRAME_SIZE;
     this.facing[idx] = 1.0;
     this.depth[idx] = 0.0;
     this.frameIdx[idx] = 0.0;
+    // UV も明示的にリセットします。
+    // かつては未代入のままで、スロット再利用時に前のスプライトの UV が
+    // 漏れていました（packed ミラー導入時に SoA と既定値がずれる原因とも
+    // なっていたため、ここで両方を 0 に揃えます）。
+    // 0 は UV 面積が 0 = (point sample) となり、レイヤー 0 の白 1 ピクセルを引きます。
+    this.uvX[idx] = 0.0;
+    this.uvY[idx] = 0.0;
+    this.uvW[idx] = 0.0;
+    this.uvH[idx] = 0.0;
     this.srcFrame[idx] = 0;
-    this.tint[idx] = 0xffffffff;
+    // テクスチャ未設定のスプライトは**透明**です (Phaser の `__DEFAULT` 相当)。
+    // 見た目には 32x32 の透明な画像として扱われます。
+    // 実際に画像を設定した時点で `Sprite.setTexture` が不透明へ戻すため、
+    // `add.sprite(x, y)` 単体では白い箱は出ません。
+    this.tint[idx] = 0x00ffffff;
     this.isText[idx] = 0.0;
     this.visible[idx] = 1.0;
     this.assetRef[idx] = null;
@@ -230,6 +407,43 @@ export class InstanceBufferArena {
     this.interactive[idx] = 0;
     this.hitWidth[idx] = 0.0;
     this.hitHeight[idx] = 0.0;
+
+    // Phaser 4 互換フィールドの既定値。
+    this.originX[idx] = 0.5;
+    this.originY[idx] = 0.5;
+    this.scrollFactorX[idx] = 1.0;
+    this.scrollFactorY[idx] = 1.0;
+    this.active[idx] = 1;
+    this.tintMode[idx] = TintMode.Multiply;
+    this.blendMode[idx] = BlendMode.Normal;
+    this.nameSlot[idx] = -1;
+    this.kind[idx] = 0;
+
+    // Packed ミラーも同じ既定値へ揃えます。
+    // SoA とミラーがずれると、その 1 体だけ描画がおかしくなります。
+    const tBase = idx * 4;
+    this.packedTransform[tBase + TransformLane.PosX] = 0.0;
+    this.packedTransform[tBase + TransformLane.PosY] = 0.0;
+    this.packedTransform[tBase + TransformLane.ScaleX] = 1.0;
+    this.packedTransform[tBase + TransformLane.ScaleY] = 1.0;
+    this.packedUv[tBase + UvLane.X] = 0.0;
+    this.packedUv[tBase + UvLane.Y] = 0.0;
+    this.packedUv[tBase + UvLane.W] = 0.0;
+    this.packedUv[tBase + UvLane.H] = 0.0;
+    this.packedFlags[tBase + FlagsLane.FrameIdx] = 0.0;
+    this.packedFlags[tBase + FlagsLane.Facing] = 1.0;
+    this.packedFlags[tBase + FlagsLane.Visible] = 1.0;
+    this.packedFlags[tBase + FlagsLane.IsText] = 0.0;
+    this.packedShape[tBase + ShapeLane.Rotation] = 0.0;
+    this.packedShape[tBase + ShapeLane.FrameWidth] = DEFAULT_FRAME_SIZE;
+    this.packedShape[tBase + ShapeLane.FrameHeight] = DEFAULT_FRAME_SIZE;
+    this.packedShape[tBase + ShapeLane.Depth] = 0.0;
+    this.packedTint[idx] = 0x00ffffff;
+    this.packedOrigin[tBase + OriginLane.OriginX] = 0.5;
+    this.packedOrigin[tBase + OriginLane.OriginY] = 0.5;
+    this.packedOrigin[tBase + OriginLane.ScrollFactorX] = 1.0;
+    this.packedOrigin[tBase + OriginLane.ScrollFactorY] = 1.0;
+    // packedExt はユーザー拡張用のため、ここでは触りません（0 初期化のまま）。
 
     // Allocate時に全属性が変更されるためDirtyフラグを立てる
     this.markAllDirty();
@@ -252,7 +466,10 @@ export class InstanceBufferArena {
       this.posX[idx] = this.posX[lastIdx];
       this.posY[idx] = this.posY[lastIdx];
       this.rotation[idx] = this.rotation[lastIdx];
-      this.scale[idx] = this.scale[lastIdx];
+      this.scaleX[idx] = this.scaleX[lastIdx];
+      this.scaleY[idx] = this.scaleY[lastIdx];
+      this.frameWidth[idx] = this.frameWidth[lastIdx];
+      this.frameHeight[idx] = this.frameHeight[lastIdx];
       this.facing[idx] = this.facing[lastIdx];
       this.depth[idx] = this.depth[lastIdx];
       this.uvX[idx] = this.uvX[lastIdx];
@@ -276,6 +493,33 @@ export class InstanceBufferArena {
       this.interactive[idx] = this.interactive[lastIdx];
       this.hitWidth[idx] = this.hitWidth[lastIdx];
       this.hitHeight[idx] = this.hitHeight[lastIdx];
+      this.originX[idx] = this.originX[lastIdx];
+      this.originY[idx] = this.originY[lastIdx];
+      this.scrollFactorX[idx] = this.scrollFactorX[lastIdx];
+      this.scrollFactorY[idx] = this.scrollFactorY[lastIdx];
+      this.active[idx] = this.active[lastIdx];
+      this.tintMode[idx] = this.tintMode[lastIdx];
+      this.blendMode[idx] = this.blendMode[lastIdx];
+      this.nameSlot[idx] = this.nameSlot[lastIdx];
+      this.kind[idx] = this.kind[lastIdx];
+
+      // Packed ミラーも同じ末尾要素で詰め替えます。
+      // SoA とミラーがずれると、末尾要素のスプライトが化けます。
+      const pBase = idx * 4;
+      const lBase = lastIdx * 4;
+      const eBase = idx * 16;
+      const leBase = lastIdx * 16;
+      for (let k = 0; k < 4; k++) {
+        this.packedTransform[pBase + k] = this.packedTransform[lBase + k];
+        this.packedUv[pBase + k] = this.packedUv[lBase + k];
+        this.packedFlags[pBase + k] = this.packedFlags[lBase + k];
+        this.packedShape[pBase + k] = this.packedShape[lBase + k];
+        this.packedOrigin[pBase + k] = this.packedOrigin[lBase + k];
+      }
+      for (let k = 0; k < 16; k++) {
+        this.packedExt[eBase + k] = this.packedExt[leBase + k];
+      }
+      this.packedTint[idx] = this.packedTint[lastIdx];
 
       this.idToIndex[lastId] = idx;
       this.indexToId[idx] = lastId;
@@ -310,6 +554,391 @@ export class InstanceBufferArena {
     // 同時に転送します。GPU 側と CPU 側で内容が違うままだと描画が壊れます。
     this.dirtyIsText = true;
     this.dirtyVisible = true;
+    // packed ミラーも全グループを再送します。
+    this.dirtyTransformGroup = true;
+    this.dirtyUvGroup = true;
+    this.dirtyFlagsGroup = true;
+    this.dirtyShapeGroup = true;
+    this.dirtyOriginGroup = true;
+    this.dirtyTintGroup = true;
+    this.dirtyExtGroup = true;
+  }
+
+  // ============================================================
+  // Write-through セッター群
+  // ============================================================
+  //
+  // SoA と packed ミラーの両方へ同時に書き込みます。
+  // **SoA 配列へ直接代入しないでください。** セッターを通さないと
+  // ミラーが腐り、そのスプライトだけが描画されなくなります。
+  //
+  // いずれも O(1) です。毎フレームの pack コストは「動いたスプライト数」に
+  // 比例するため、300k 体を毎フレーム書き直すより十分小さいです。
+
+  /** `posX` を書き込みます。 */
+  public setPosX(i: number, v: number): void {
+    this.posX[i] = v;
+    this.packedTransform[i * 4 + TransformLane.PosX] = v;
+    this.dirtyPos = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /** `posY` を書き込みます。 */
+  public setPosY(i: number, v: number): void {
+    this.posY[i] = v;
+    this.packedTransform[i * 4 + TransformLane.PosY] = v;
+    this.dirtyPos = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /** X 方向のスケール**倍率**を書き込みます。1.0 = フレーム寸法そのまま。 */
+  public setScaleX(i: number, v: number): void {
+    this.scaleX[i] = v;
+    this.packedTransform[i * 4 + TransformLane.ScaleX] = v;
+    this.dirtyScale = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /** Y 方向のスケール倍率を書き込みます。1.0 = フレーム寸法そのまま。 */
+  public setScaleY(i: number, v: number): void {
+    this.scaleY[i] = v;
+    this.packedTransform[i * 4 + TransformLane.ScaleY] = v;
+    this.dirtyScale = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /**
+   * スケール倍率をまとめて書き込みます。
+   *
+   * `y` を省略した場合は `x` を両方に適用します（Phaser 互換）。
+   */
+  public setScale(i: number, x: number, y?: number): void {
+    const sy = y === undefined ? x : y;
+    const base = i * 4;
+    this.scaleX[i] = x;
+    this.scaleY[i] = sy;
+    this.packedTransform[base + TransformLane.ScaleX] = x;
+    this.packedTransform[base + TransformLane.ScaleY] = sy;
+    this.dirtyScale = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /**
+   * 現在のフレームのピクセル寸法を書き込みます。
+   *
+   * 頂点シェーダはクワッドの大きさを `frameWidth * scaleX` で決めるため、
+   * テクスチャのピクセル寸法が必要です。
+   *
+   * @param i     SoA スロット番号
+   * @param w     フレーム幅 (px)
+   * @param h     フレーム高 (px)
+   * @param keepScale true なら `scaleX` / `scaleY` を倍率のまま維持します
+   *                  （フレームだけ差し替えたときの見た目を保つため）
+   */
+  public setFrameSize(i: number, w: number, h: number, keepScale = true): void {
+    const base = i * 4;
+    this.frameWidth[i] = w;
+    this.frameHeight[i] = h;
+    this.packedShape[base + ShapeLane.FrameWidth] = w;
+    this.packedShape[base + ShapeLane.FrameHeight] = h;
+    if (!keepScale) {
+      this.scaleX[i] = 1;
+      this.scaleY[i] = 1;
+      this.packedTransform[base + TransformLane.ScaleX] = 1;
+      this.packedTransform[base + TransformLane.ScaleY] = 1;
+    }
+    this.dirtyShapeGroup = true;
+    if (!keepScale) this.dirtyTransformGroup = true;
+  }
+
+  /** `rotation` を書き込みます。 */
+  public setRotation(i: number, v: number): void {
+    this.rotation[i] = v;
+    this.packedShape[i * 4 + ShapeLane.Rotation] = v;
+    this.dirtyRotation = true;
+    this.dirtyShapeGroup = true;
+  }
+
+  /** `uvX` を書き込みます。 */
+  public setUvX(i: number, v: number): void {
+    this.uvX[i] = v;
+    this.packedUv[i * 4 + UvLane.X] = v;
+    this.dirtyUv = true;
+    this.dirtyUvGroup = true;
+  }
+
+  /** `uvY` を書き込みます。 */
+  public setUvY(i: number, v: number): void {
+    this.uvY[i] = v;
+    this.packedUv[i * 4 + UvLane.Y] = v;
+    this.dirtyUv = true;
+    this.dirtyUvGroup = true;
+  }
+
+  /** `uvW` を書き込みます。 */
+  public setUvW(i: number, v: number): void {
+    this.uvW[i] = v;
+    this.packedUv[i * 4 + UvLane.W] = v;
+    this.dirtyUv = true;
+    this.dirtyUvGroup = true;
+  }
+
+  /** `uvH` を書き込みます。 */
+  public setUvH(i: number, v: number): void {
+    this.uvH[i] = v;
+    this.packedUv[i * 4 + UvLane.H] = v;
+    this.dirtyUv = true;
+    this.dirtyUvGroup = true;
+  }
+
+  /** `frameIdx` を書き込みます。 */
+  public setFrameIdx(i: number, v: number): void {
+    this.frameIdx[i] = v;
+    this.packedFlags[i * 4 + FlagsLane.FrameIdx] = v;
+    this.dirtyFrameIdx = true;
+    this.dirtyFlagsGroup = true;
+  }
+
+  /** `facing` を書き込みます。 */
+  public setFacing(i: number, v: number): void {
+    this.facing[i] = v;
+    this.packedFlags[i * 4 + FlagsLane.Facing] = v;
+    this.dirtyScale = true;
+    this.dirtyFlagsGroup = true;
+  }
+
+  /** `visible` を書き込みます。 */
+  public setVisible(i: number, v: number): void {
+    this.visible[i] = v;
+    // `active` が 0 のスプライトは描画されないため、
+    // GPU へは `visible && active` を送ります。
+    // 逆も同様で `setActive` 側で `visible` 側を書き直すため、
+    // どちらを先に呼んでも結果は同じになります。
+    const draw = v !== 0 && this.active[i] !== 0 ? 1.0 : 0.0;
+    this.packedFlags[i * 4 + FlagsLane.Visible] = draw;
+    this.dirtyVisible = true;
+    this.dirtyFlagsGroup = true;
+  }
+
+  /** `isText` を書き込みます。 */
+  public setIsText(i: number, v: number): void {
+    this.isText[i] = v;
+    this.packedFlags[i * 4 + FlagsLane.IsText] = v;
+    if (v !== 0) this.hasText = true;
+    this.dirtyIsText = true;
+    this.dirtyFlagsGroup = true;
+  }
+
+  /** `tint` を書き込みます。 */
+  public setTint(i: number, v: number): void {
+    this.tint[i] = v;
+    this.packedTint[i] = v;
+    this.dirtyTint = true;
+    this.dirtyTintGroup = true;
+  }
+
+  // --- Phaser 4 互換フィールドの write-through セッター ---
+
+  /** 描画原点を書き込みます。Phaser の既定は 0.5, 0.5 です。 */
+  public setOrigin(i: number, x: number, y: number): void {
+    const base = i * 4;
+    this.originX[i] = x;
+    this.originY[i] = y;
+    this.packedOrigin[base + OriginLane.OriginX] = x;
+    this.packedOrigin[base + OriginLane.OriginY] = y;
+    this.dirtyOriginGroup = true;
+  }
+
+  /**
+   * カメラスクロール係数を書き込みます。
+   * パララックス（背景をゆっくり動かす）に使います。
+   */
+  public setScrollFactor(i: number, x: number, y: number): void {
+    const base = i * 4;
+    this.scrollFactorX[i] = x;
+    this.scrollFactorY[i] = y;
+    this.packedOrigin[base + OriginLane.ScrollFactorX] = x;
+    this.packedOrigin[base + OriginLane.ScrollFactorY] = y;
+    this.dirtyOriginGroup = true;
+  }
+
+  /**
+   * update / render の対象フラグ。0 なら描画対象から外します。
+   *
+   * Phaser の `active` は「visible とは独立した概念」ですが、
+   * どちらも「描画するか否か」なので GPU へは AND を取った値を送ります。
+   * 頂点シェーダに新しい属性枠を消費せずに済む点が利点です。
+   */
+  public setActive(i: number, v: number): void {
+    this.active[i] = v;
+    const draw = v !== 0 && this.visible[i] !== 0 ? 1.0 : 0.0;
+    this.packedFlags[i * 4 + FlagsLane.Visible] = draw;
+    this.dirtyFlagsGroup = true;
+  }
+
+  /**
+   * tint のブレンドモードを書き込みます。
+   *
+   * 現状のフラグメントシェーダは `MULTIPLY` のみを実装しています
+   * （分岐を増やさず要件2「WebGPU > WebGL > CPU」を保つため）。
+   * 値としては保持されるので、後からシェーダを拡張neau，而不改变 API。
+   */
+  public setTintMode(i: number, v: number): void {
+    this.tintMode[i] = v;
+  }
+
+  /**
+   * ブレンドモードを書き込みます。
+   *
+   * WebGL2 がネイティブにサポートするのは 4 種（Normal / Add / Multiply / Screen）だけなので、
+   * 範囲外は `BlendMode.Normal` へ丸めます。
+   * 実際の反映はバッチ分割が実装されるまで行われません（Phase 8）。
+   */
+  public setBlendMode(i: number, v: number): void {
+    const clamped = v >= 0 && v < BlendMode.Count ? v : BlendMode.Normal;
+    this.blendMode[i] = clamped;
+  }
+
+  /**
+   * `name` 文字列をスロット化します。
+   *
+   * 文字列を SoA に入れることはできないため、
+   * `namePool` への参照（スロット番号）だけを `Int32Array` に持ちます。
+   *
+   * @returns 確保されたスロット番号
+   */
+  public setName(i: number, name: string): number {
+    let slot = -1;
+    for (let k = 0; k < this.namePool.length; k++) {
+      if (this.namePool[k] === name) {
+        slot = k;
+        break;
+      }
+    }
+    if (slot === -1) {
+      slot = this.namePool.length;
+      this.namePool.push(name);
+    }
+    this.nameSlot[i] = slot;
+    return slot;
+  }
+
+  /** `name` 文字列を取得します（未設定なら空文字）。 */
+  public nameOf(i: number): string {
+    const slot = this.nameSlot[i];
+    if (slot < 0 || slot >= this.namePool.length) return '';
+    return this.namePool[slot];
+  }
+
+  /** `type` の文字列を返します。 */
+  public kindNameOf(i: number): string {
+    return this.kindNames[this.kind[i]] ?? 'Sprite';
+  }
+
+  /**
+   * `depth` を書き込みます。
+   * Z 順ソート用に `packedShape` のレーンへ渡します。
+   */
+  public setDepth(i: number, v: number): void {
+    this.depth[i] = v;
+    this.packedShape[i * 4 + ShapeLane.Depth] = v;
+    this.dirtyDepth = true;
+    this.dirtyShapeGroup = true;
+  }
+
+  /**
+   * 拡張枠 `packedExt` の `vec4` を 1 つ書き込みます。
+   *
+   * @param i    SoA スロット番号
+   * @param slot 0〜3 の拡張枠番号
+   * @param x,y,z,w 書き込む値
+   */
+  public setExt(i: number, slot: number, x: number, y: number, z: number, w: number): void {
+    const base = i * 16 + slot * 4;
+    this.packedExt[base] = x;
+    this.packedExt[base + 1] = y;
+    this.packedExt[base + 2] = z;
+    this.packedExt[base + 3] = w;
+    this.dirtyExtGroup = true;
+  }
+
+  /**
+   * 拡張枠の 1 つの `vec4` を out へ読み出します。
+   * ヒープを割り当てないため、呼び出し側の使い回しバッファへ書き込みます。
+   */
+  public getExt(i: number, slot: number, out: Float32Array): void {
+    const base = i * 16 + slot * 4;
+    out[0] = this.packedExt[base];
+    out[1] = this.packedExt[base + 1];
+    out[2] = this.packedExt[base + 2];
+    out[3] = this.packedExt[base + 3];
+  }
+
+  /**
+   * transform の 4 フィールドをまとめて書き込みます。
+   *
+   * `scaleX` / `scaleY` は倍率です。Y を省略すると X を両方に適用します。
+   */
+  public setTransform4(
+    i: number,
+    posX: number,
+    posY: number,
+    scaleX: number,
+    scaleY?: number,
+  ): void {
+    const sy = scaleY === undefined ? scaleX : scaleY;
+    const base = i * 4;
+    this.posX[i] = posX;
+    this.posY[i] = posY;
+    this.scaleX[i] = scaleX;
+    this.scaleY[i] = sy;
+    this.packedTransform[base + TransformLane.PosX] = posX;
+    this.packedTransform[base + TransformLane.PosY] = posY;
+    this.packedTransform[base + TransformLane.ScaleX] = scaleX;
+    this.packedTransform[base + TransformLane.ScaleY] = sy;
+    this.dirtyPos = true;
+    this.dirtyScale = true;
+    this.dirtyTransformGroup = true;
+  }
+
+  /** 4 フィールドをまとめて `packedUv` へ書き込みます。 */
+  public setUv4(i: number, x: number, y: number, w: number, h: number): void {
+    const base = i * 4;
+    this.uvX[i] = x;
+    this.uvY[i] = y;
+    this.uvW[i] = w;
+    this.uvH[i] = h;
+    this.packedUv[base + UvLane.X] = x;
+    this.packedUv[base + UvLane.Y] = y;
+    this.packedUv[base + UvLane.W] = w;
+    this.packedUv[base + UvLane.H] = h;
+    this.dirtyUv = true;
+    this.dirtyUvGroup = true;
+  }
+
+  /** 4 フィールドをまとめて `packedFlags` へ書き込みます。 */
+  public setFlags4(
+    i: number,
+    frameIdx: number,
+    facing: number,
+    visible: number,
+    isText: number,
+  ): void {
+    const base = i * 4;
+    this.frameIdx[i] = frameIdx;
+    this.facing[i] = facing;
+    this.visible[i] = visible;
+    this.isText[i] = isText;
+    this.packedFlags[base + FlagsLane.FrameIdx] = frameIdx;
+    this.packedFlags[base + FlagsLane.Facing] = facing;
+    this.packedFlags[base + FlagsLane.Visible] = visible;
+    this.packedFlags[base + FlagsLane.IsText] = isText;
+    if (isText !== 0) this.hasText = true;
+    this.dirtyFrameIdx = true;
+    this.dirtyScale = true;
+    this.dirtyVisible = true;
+    this.dirtyIsText = true;
+    this.dirtyFlagsGroup = true;
   }
 
   /**
@@ -319,6 +948,11 @@ export class InstanceBufferArena {
    * 親を先に解決したかどうかはスタンプで判定します。
    * ヒープ割り当ては発生しません。
    * 再帰の深さは階層と同じで、浅くなります。
+   *
+   * 階層を使っている場合、GPU はワールド座標で描画する必要があります。
+   * そのため解決と同時に `packedTransform` へ書き戻します
+   * （階層を使わないシーンでは write-through がそのまま使われるため、
+   * この O(n) パスは走りません）。
    */
   public computeWorldTransforms(): void {
     this._stamp++;
@@ -338,6 +972,18 @@ export class InstanceBufferArena {
       if (this._resolvedStamp[i] === this._stamp) continue;
       this._resolveWorld(i, 0);
     }
+
+    // 解決済みのワールド座標を GPU 転送用のミラーへ反映する。
+    // rotation は transform ではなく shape バッファの担当になりました。
+    for (let i = 0; i < this._activeCount; i++) {
+      const base = i * 4;
+      this.packedTransform[base + TransformLane.PosX] = this.worldX[i];
+      this.packedTransform[base + TransformLane.PosY] = this.worldY[i];
+      this.packedShape[base + ShapeLane.Rotation] = this.worldRotation[i];
+    }
+    this.dirtyTransformGroup = true;
+    this.dirtyShapeGroup = true;
+    // dirtyHierarchy は Scene 側がループ判定で管理するため、ここでは触りません。
   }
 
   /**
@@ -397,8 +1043,15 @@ export class InstanceBufferArena {
 
       const cx = useWorld ? this.worldX[i] : this.posX[i];
       const cy = useWorld ? this.worldY[i] : this.posY[i];
-      const halfW = this.hitWidth[i] * 0.5;
-      const halfH = this.hitHeight[i] * 0.5;
+      // 明示的なヒット領域が指定されていなければ、
+      // 「フレームのピクセル寸法 × スケール倍率」を使います。
+      // これにより当たり判定が画像の大きさに追従します (Phaser 互換)。
+      const hw =
+        this.hitWidth[i] > 0 ? this.hitWidth[i] : this.frameWidth[i] * Math.abs(this.scaleX[i]);
+      const hh =
+        this.hitHeight[i] > 0 ? this.hitHeight[i] : this.frameHeight[i] * Math.abs(this.scaleY[i]);
+      const halfW = hw * 0.5;
+      const halfH = hh * 0.5;
 
       if (px < cx - halfW || px > cx + halfW) continue;
       if (py < cy - halfH || py > cy + halfH) continue;
@@ -431,7 +1084,16 @@ export class InstanceBufferArena {
       // 0 のままだと setVisible(false) の影響が次の生成へ漏れます。
       this.visible[i] = 1.0;
       this.isText[i] = 0.0;
+      // ミラー側も同じ既定値へ戻します。
+      const base = i * 4;
+      this.packedFlags[base + FlagsLane.Visible] = 1.0;
+      this.packedFlags[base + FlagsLane.IsText] = 0.0;
+      this.packedOrigin[base + OriginLane.OriginX] = 0.5;
+      this.packedOrigin[base + OriginLane.OriginY] = 0.5;
+      this.packedOrigin[base + OriginLane.ScrollFactorX] = 1.0;
+      this.packedOrigin[base + OriginLane.ScrollFactorY] = 1.0;
     }
+    this.namePool.length = 0;
     this.markAllDirty();
   }
 }

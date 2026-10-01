@@ -136,38 +136,37 @@ export class Text {
       if (source) {
         const charCode = this._text.charCodeAt(i);
         const adv = source.lookup(charCode, uv);
-        arena.uvX[idx] = uv[0];
-        arena.uvY[idx] = uv[1];
-        arena.uvW[idx] = uv[2];
-        arena.uvH[idx] = uv[3];
+        arena.setUv4(idx, uv[0], uv[1], uv[2], uv[3]);
         if (adv > 0) advance = adv * fontSize + spacing;
       } else {
         // フォント未接続時はアトラス全体を描画する
-        arena.uvX[idx] = 0.0;
-        arena.uvY[idx] = 0.0;
-        arena.uvW[idx] = 1.0;
-        arena.uvH[idx] = 1.0;
+        arena.setUv4(idx, 0.0, 0.0, 1.0, 1.0);
       }
-      arena.frameIdx[idx] = this._layerIndex;
+      arena.setFrameIdx(idx, this._layerIndex);
       arena.srcFrame[idx] = 0;
       // シェーダー側で SDF として解釈させるフラグ
-      arena.isText[idx] = 1.0;
+      arena.setIsText(idx, 1.0);
 
-      arena.posX[idx] = penX;
-      arena.posY[idx] = this._originY;
-      arena.scale[idx] = monospace ? fontSize * 0.5 : fontSize;
-      arena.tint[idx] = color;
+      // グリフは回転しないので rotation は 0 のままにします。
+      //
+      // scale は**倍率**です。ここでは「グリフ 1 文字の表示サイズ」を
+      // フレーム寸法として与え、scale = 1 でそのまま描画させます。
+      // これによりフォントサイズの変更にも表示サイズが自動的に追従します
+      // （以前は scale にピクセル数を渡していました）。
+      const glyphSize = monospace ? fontSize * 0.5 : fontSize;
+      arena.setPosX(idx, penX);
+      arena.setPosY(idx, this._originY);
+      arena.setFrameSize(idx, glyphSize, glyphSize);
+      arena.setScale(idx, 1.0);
+      arena.setTint(idx, color);
 
       penX += advance;
     }
 
     this._count = len;
 
-    arena.dirtyPos = true;
-    arena.dirtyUv = true;
-    arena.dirtyTint = true;
-    arena.dirtyFrameIdx = true;
     // テキストが 1 つでもあれば isText バッファの転送が必要です。
+    // （packed ミラー側は write-through で個別に dirty が立っています）
     arena.hasText = true;
   }
 

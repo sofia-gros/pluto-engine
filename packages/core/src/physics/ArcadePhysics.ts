@@ -188,9 +188,12 @@ export class ArcadePhysics implements Plugin {
     if (!arena) return;
     const count = arena.activeCount;
 
+    // packed ミラーも同時に更新するため、write-through セッターを使います。
+    // read-modify-write なので、値を読み直してから書き戻す形になります
+    // （ここが最も実行回数の多いループですが、SoA 読み込み + ミラー書き込みのみです）。
     for (let i = 0; i < count; i++) {
-      arena.posX[i] += this.velX[i] * dt;
-      arena.posY[i] += this.velY[i] * dt;
+      arena.setPosX(i, arena.posX[i] + this.velX[i] * dt);
+      arena.setPosY(i, arena.posY[i] + this.velY[i] * dt);
     }
   }
 

@@ -133,10 +133,16 @@ export class Tilemap {
           if (active[idx] === -1) {
             const id = this.arena.allocate();
             if (id !== -1) {
-              this.arena.posX[id] = x * this.tileSize + this.tileSize / 2;
-              this.arena.posY[id] = y * this.tileSize + this.tileSize / 2;
-              this.arena.scale[id] = this.tileSize;
+              const dense = this.arena.idToIndex[id];
+              this.arena.setPosX(dense, x * this.tileSize + this.tileSize / 2);
+              this.arena.setPosY(dense, y * this.tileSize + this.tileSize / 2);
+              // scale は倍率です。タイルはテクスチャ未設定 (UV 未割り当て) なので、
+              // フレーム寸法そのものを与えて scale = 1 で 1 タイル分を描画します。
               // UV mapping can be applied here based on tileIndex
+              this.arena.setFrameSize(dense, this.tileSize, this.tileSize, false);
+              // テクスチャ未設定のスプライトは既定で透明のため、
+              // タイルとして描画されるよう不透明へ戻します。
+              this.arena.setTint(dense, 0xffffffff);
               active[idx] = id;
             }
           }

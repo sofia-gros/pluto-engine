@@ -200,12 +200,8 @@ export class AnimationManager {
     if (frameNum < 0 || frameNum >= frames.length) return;
 
     const f = frames[frameNum];
-    this._arena.uvX[idx] = f.uvX;
-    this._arena.uvY[idx] = f.uvY;
-    this._arena.uvW[idx] = f.uvW;
-    this._arena.uvH[idx] = f.uvH;
+    this._arena.setUv4(idx, f.uvX, f.uvY, f.uvW, f.uvH);
     this._arena.srcFrame[idx] = frameNum;
-    this._arena.dirtyUv = true;
   }
 
   public update(dt: number): void {
