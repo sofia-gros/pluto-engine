@@ -176,15 +176,42 @@ describe('Flyweight Sprite: own property footprint', () => {
     expect(Object.keys(sprite).sort()).toEqual(['_arena', 'id']);
   });
 
-  test('setInteractive derives the hit area from the asset when omitted', () => {
+  test('setInteractive with no args derives the hit area from the display size', () => {
     const arena = new InstanceBufferArena(8);
     const id = arena.allocate();
     const sprite = new Sprite(id, arena);
     sprite.setTexture({ layerIndex: 0, width: 32, height: 48 });
     sprite.setInteractive();
 
-    expect(sprite.hitWidth).toBe(32);
-    expect(sprite.hitHeight).toBe(48);
+    // 明示的なヒット領域は指定していません (0 = 自動導出)。
+    // 実際の判定サイズはフレーム寸法 × スケール倍率から導出されます。
+    expect(sprite.hitWidth).toBe(0);
+    expect(sprite.hitHeight).toBe(0);
+    expect(sprite.displayWidth).toBe(32);
+    expect(sprite.displayHeight).toBe(48);
+
+    // 明示指定した場合はそちらが使われる
+    sprite.setInteractive(20, 20);
+    expect(sprite.hitWidth).toBe(20);
+    expect(sprite.hitHeight).toBe(20);
+  });
+
+  test('setInteractive with no args follows the scale multiplier', () => {
+    const arena = new InstanceBufferArena(8);
+    const id = arena.allocate();
+    const sprite = new Sprite(id, arena);
+    sprite.setTexture({ layerIndex: 0, width: 32, height: 32 });
+    sprite.setInteractive();
+    sprite.setScale(3);
+
+    // 当たり判定が画像の大きさに追従します (Phaser 互換)
+    const out = new Int32Array(4);
+    // 中心ちょうどならヒット
+    expect(arena.hitTest(0, 0, out)).toBe(1);
+    // 96x96 なので端ギリギリ (48) は内側
+    expect(arena.hitTest(47, 0, out)).toBe(1);
+    // 48 を超えると外
+    expect(arena.hitTest(49, 0, out)).toBe(0);
   });
 
   test('rotation and depth accessors write through to the arena', () => {

@@ -18,7 +18,8 @@ describe('InstanceBufferArena and Flyweight Sprite', () => {
 
     // デフォルト値の確認
     expect(arena.posX[id1]).toBe(0.0);
-    expect(arena.scale[id1]).toBe(1.0);
+    expect(arena.scaleX[id1]).toBe(1.0);
+    expect(arena.scaleY[id1]).toBe(1.0);
 
     // 解放の確認
     arena.free(id1);
@@ -55,7 +56,8 @@ describe('InstanceBufferArena and Flyweight Sprite', () => {
     // 実際の値がTypedArrayに直書きされているか検証
     expect(arena.posX[id]).toBe(250.5);
     expect(arena.posY[id]).toBe(-10.0);
-    expect(arena.scale[id]).toBe(2.0);
+    expect(arena.scaleX[id]).toBe(2.0);
+    expect(arena.scaleY[id]).toBe(2.0);
     expect(arena.facing[id]).toBe(-1.0);
     expect(arena.tint[id]).toBe(0xff0000ff);
 

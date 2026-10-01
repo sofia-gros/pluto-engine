@@ -9,23 +9,23 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
     for (let i = 0; i < 100; i++) {
       const id = scene.arena.allocate();
       const idx = scene.arena.idToIndex[id];
-      scene.arena.posX[idx] = 1000 + i * 10;
-      scene.arena.posY[idx] = 1000 + i * 10;
-      scene.arena.scale[idx] = 20;
+      scene.arena.setPosX(idx, 1000 + i * 10);
+      scene.arena.setPosY(idx, 1000 + i * 10);
+      scene.arena.setFrameSize(idx, 20, 20, false);
     }
 
     // プレイヤーの近くに2体だけ配置
     const nearId1 = scene.arena.allocate();
     const nearIdx1 = scene.arena.idToIndex[nearId1];
-    scene.arena.posX[nearIdx1] = 50;
-    scene.arena.posY[nearIdx1] = 50;
-    scene.arena.scale[nearIdx1] = 20;
+    scene.arena.setPosX(nearIdx1, 50);
+    scene.arena.setPosY(nearIdx1, 50);
+    scene.arena.setFrameSize(nearIdx1, 20, 20, false);
 
     const nearId2 = scene.arena.allocate();
     const nearIdx2 = scene.arena.idToIndex[nearId2];
-    scene.arena.posX[nearIdx2] = 55;
-    scene.arena.posY[nearIdx2] = 50;
-    scene.arena.scale[nearIdx2] = 20;
+    scene.arena.setPosX(nearIdx2, 55);
+    scene.arena.setPosY(nearIdx2, 50);
+    scene.arena.setFrameSize(nearIdx2, 20, 20, false);
 
     // プレイヤー定義
     const player = {
@@ -57,9 +57,9 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
     // 敵を配置
     const enemyId = scene.arena.allocate();
     const enemyIdx = scene.arena.idToIndex[enemyId];
-    scene.arena.posX[enemyIdx] = 100;
-    scene.arena.posY[enemyIdx] = 100;
-    scene.arena.scale[enemyIdx] = 20;
+    scene.arena.setPosX(enemyIdx, 100);
+    scene.arena.setPosY(enemyIdx, 100);
+    scene.arena.setFrameSize(enemyIdx, 20, 20, false);
 
     // 弾丸配列 (Sprite / PhysicsBody の配列)
     const bullets = [
@@ -86,9 +86,9 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
 
     const enemyId = scene.arena.allocate();
     const enemyIdx = scene.arena.idToIndex[enemyId];
-    scene.arena.posX[enemyIdx] = 200;
-    scene.arena.posY[enemyIdx] = 200;
-    scene.arena.scale[enemyIdx] = 20;
+    scene.arena.setPosX(enemyIdx, 200);
+    scene.arena.setPosY(enemyIdx, 200);
+    scene.arena.setFrameSize(enemyIdx, 20, 20, false);
 
     // 弾丸の SoA TypedArray バッファ
     const bulletBuffer = {
@@ -117,9 +117,9 @@ describe('ArcadePhysics (Phaser-like AABB Culling & Overlap/Collider)', () => {
 
     const enemyId = scene.arena.allocate();
     const enemyIdx = scene.arena.idToIndex[enemyId];
-    scene.arena.posX[enemyIdx] = 50;
-    scene.arena.posY[enemyIdx] = 50;
-    scene.arena.scale[enemyIdx] = 20;
+    scene.arena.setPosX(enemyIdx, 50);
+    scene.arena.setPosY(enemyIdx, 50);
+    scene.arena.setFrameSize(enemyIdx, 20, 20, false);
 
     const player = {
       x: 45,

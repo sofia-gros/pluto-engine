@@ -181,8 +181,8 @@ describe('add.container', () => {
     const parent = scene.add.container(100, 100, [child]);
 
     const pidx = scene.arena.idToIndex[parent.id];
-    scene.arena.posX[pidx] = 150;
-    scene.arena.posY[pidx] = 160;
+    scene.arena.setPosX(pidx, 150);
+    scene.arena.setPosY(pidx, 160);
     scene.arena.dirtyPos = true;
     scene.arena.dirtyHierarchy = true;
     scene.arena.computeWorldTransforms();

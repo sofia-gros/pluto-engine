@@ -1,14 +1,18 @@
+import { DEFAULT_FRAME_SIZE } from '@pluto-engine/renderer';
 import { describe, expect, it } from 'vitest';
 import { InstanceBufferArena } from '../src/arena/InstanceBufferArena';
-import { Sprite, type BoundsRect, type PointLike } from '../src/arena/Sprite';
+import { type BoundsRect, type PointLike, Sprite } from '../src/arena/Sprite';
 
 /** テスト用の最小アセット。layerIndex とフレーム UV を持ちます。 */
-function makeAsset(key: string, width = 32, height = 32, frames = 4) {
+function makeAsset(key: string, width = 32, height = 32, frames = 4, frameSize?: number) {
+  const fw = frameSize ?? Math.min(width, height);
   return {
     key,
     layerIndex: 1,
     width,
     height,
+    frameWidth: fw,
+    frameHeight: fw,
     frames: Array.from({ length: frames }, (_, i) => ({
       uvX: i * 0.25,
       uvY: 0,
@@ -55,30 +59,96 @@ describe('Phaser 互換 - setPosition / setX / setY', () => {
 });
 
 describe('Phaser 互換 - scale / scaleX / scaleY', () => {
-  it('setScale が単一値を設定する', () => {
+  it('scale はフレーム寸法の倍率で、既定は 1.0', () => {
     const arena = new InstanceBufferArena(16);
     const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
+    expect(s.scale).toBe(1);
+    expect(s.width).toBe(32);
+    expect(s.displayWidth).toBe(32);
+  });
+
+  it('setScale が倍率を設定する', () => {
+    const arena = new InstanceBufferArena(16);
+    const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
     expect(s.setScale(3)).toBe(s);
     expect(s.scale).toBe(3);
+    // 倍率なので表示サイズはフレームの 3 倍
+    expect(s.displayWidth).toBe(96);
   });
 
-  it('setScale の第 2 引数は pluto の単一 scale では無視される', () => {
+  it('setScale の第 2 引数は Y の倍率になる (Phaser 互換)', () => {
     const arena = new InstanceBufferArena(16);
     const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
     s.setScale(2);
-    // Y を指定しても scale は 2 のままです（X/Y 共通のため）。
+    // 第 2 引数省略時は X/Y とも 2
+    expect(s.scaleX).toBe(2);
+    expect(s.scaleY).toBe(2);
     s.setScale(2, 8);
-    expect(s.scale).toBe(2);
+    expect(s.scaleX).toBe(2);
+    expect(s.scaleY).toBe(8);
   });
 
-  it('scaleX / scaleY は scale と同一の値を共有する', () => {
+  it('scaleX / scaleY は独立した値を持つ (非等方スケール)', () => {
     const arena = new InstanceBufferArena(16);
     const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
     s.scaleX = 4;
     expect(s.scale).toBe(4);
-    expect(s.scaleY).toBe(4);
+    expect(s.scaleY).toBe(1);
     s.scaleY = 9;
-    expect(s.scale).toBe(9);
+    expect(s.scaleY).toBe(9);
+    expect(s.displayWidth).toBe(128);
+    expect(s.displayHeight).toBe(288);
+  });
+
+  it('setDisplaySize がピクセル数から倍率を逆算する (Phaser 互換)', () => {
+    const arena = new InstanceBufferArena(16);
+    const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
+    s.setDisplaySize(64, 96);
+    expect(s.scaleX).toBeCloseTo(2, 5);
+    expect(s.scaleY).toBeCloseTo(3, 5);
+    expect(s.displayWidth).toBeCloseTo(64, 4);
+    expect(s.displayHeight).toBeCloseTo(96, 4);
+    // フレーム寸法は変わらない（Phaser 互換）
+    expect(s.width).toBe(32);
+  });
+
+  it('flipY は scaleY の符号で表現できる', () => {
+    const arena = new InstanceBufferArena(16);
+    const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
+    expect(s.flipY).toBe(false);
+    s.setFlipY(true);
+    expect(s.flipY).toBe(true);
+    // 絶対値は保たれる
+    expect(Math.abs(s.scaleY)).toBe(1);
+    s.toggleFlipY();
+    expect(s.flipY).toBe(false);
+  });
+});
+
+describe('Phaser 互換 - テクスチャ未設定の既定サイズ', () => {
+  it('フレーム指定が無い場合は DEFAULT_FRAME_SIZE になり透明で描画される', () => {
+    const arena = new InstanceBufferArena(16);
+    const s = makeSprite(arena);
+    expect(s.width).toBe(DEFAULT_FRAME_SIZE);
+    expect(s.height).toBe(DEFAULT_FRAME_SIZE);
+    expect(s.displayWidth).toBe(DEFAULT_FRAME_SIZE);
+    expect(s.hasTexture).toBe(false);
+    // 透明 = tint のアルファが 0
+    expect((arena.tint[s.index] >>> 24) & 0xff).toBe(0);
+  });
+
+  it('テクスチャを設定すると不透明に戻る', () => {
+    const arena = new InstanceBufferArena(16);
+    const s = makeSprite(arena);
+    s.setTexture(makeAsset('a', 32, 32));
+    expect((arena.tint[s.index] >>> 24) & 0xff).toBe(0xff);
+    expect(s.width).toBe(32);
   });
 });
 

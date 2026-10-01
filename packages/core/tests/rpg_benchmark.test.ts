@@ -31,16 +31,16 @@ describe('2D Classic RPG Benchmark (Non-Fluid / Phaser-like Architecture)', () =
 
       // プレイヤー
       const player = scene.add.sprite(500, 500);
-      player.scale = 26;
+      player.setDisplaySize(26, 26);
       player.radius = 14;
 
       // スケール分のモンスターをアリーナに配置
       for (let i = 0; i < scale; i++) {
         const id = scene.arena.allocate();
         const idx = scene.arena.idToIndex[id];
-        scene.arena.posX[idx] = 100 + Math.random() * 800;
-        scene.arena.posY[idx] = 100 + Math.random() * 600;
-        scene.arena.scale[idx] = 24;
+        scene.arena.setPosX(idx, 100 + Math.random() * 800);
+        scene.arena.setPosY(idx, 100 + Math.random() * 600);
+        scene.arena.setFrameSize(idx, 24, 24, false);
       }
 
       // 15フレーム回して平均処理時間を計測
