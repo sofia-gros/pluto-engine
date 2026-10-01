@@ -36,6 +36,7 @@ import {
   TransformLane,
   UvLane,
 } from '@pluto-engine/renderer';
+import type { AnimState } from '../anim/AnimState';
 
 /**
  * スプライトが参照するテクスチャアセットの最小インターフェース。
@@ -67,7 +68,9 @@ export interface SpriteAssetLike {
  * アリーナがアニメーション再生を委譲するための最小インターフェース (AnimationManager が実装)。
  */
 export interface AnimPlayTarget {
-  play(id: number, key: string, ignoreIfPlaying?: boolean): void;
+  play(id: number, key: string, ignoreIfPlaying?: boolean): AnimState | null;
+  playReverse(id: number, key: string, ignoreIfPlaying?: boolean): AnimState | null;
+  getAnimState(id: number): AnimState;
   stop(id: number): void;
 }
 

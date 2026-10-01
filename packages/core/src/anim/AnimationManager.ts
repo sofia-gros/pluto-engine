@@ -10,6 +10,7 @@
  */
 
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
+import { AnimState } from './AnimState';
 
 export interface AnimationConfig {
   key: string;
@@ -52,6 +53,10 @@ export class AnimationManager {
   public readonly currentFrameIdx: Int32Array;
   public readonly repeatCount: Int32Array;
   public readonly elapsed: Float32Array;
+  /** 一時停止中か。update() では時間を進めない */
+  public readonly paused: Uint8Array;
+  /** 逆再生中か (playReverse で立てます) */
+  public readonly reverse: Uint8Array;
 
   // フラット化されたアニメーションデータ
   public readonly refFramesLength: Int32Array;
@@ -68,6 +73,9 @@ export class AnimationManager {
   private readonly freeList: Int32Array;
   private freeListHead = 0;
 
+  /** 生成済みの AnimState ハンドル。スロット番号で添字参照します。 */
+  private readonly _handles: AnimState[] = [];
+
   private _arena: InstanceBufferArena;
 
   constructor(arena: InstanceBufferArena, maxAnims = 10000) {
@@ -80,6 +88,8 @@ export class AnimationManager {
     this.currentFrameIdx = new Int32Array(maxAnims);
     this.repeatCount = new Int32Array(maxAnims);
     this.elapsed = new Float32Array(maxAnims);
+    this.paused = new Uint8Array(maxAnims);
+    this.reverse = new Uint8Array(maxAnims);
 
     this.refFramesLength = new Int32Array(maxAnims);
     this.refFrameDuration = new Float32Array(maxAnims);
@@ -137,46 +147,110 @@ export class AnimationManager {
 
   /**
    * アリーナ ID を指定してアニメーションを再生します。
+   *
    * @param id アリーナの ID
    * @param key アニメーションキー
    * @param ignoreIfPlaying true の場合、既に別のアニメーションを再生中なら何もしない
+   * @returns AnimState ハンドル。キーが未定義やスロット枯渇なら null
    */
-  public play(id: number, key: string, ignoreIfPlaying = false): void {
+  public play(id: number, key: string, ignoreIfPlaying = false): AnimState | null {
+    const playId = this.getSlot(id);
+    return this.playBySlot(playId, id, key, ignoreIfPlaying, false);
+  }
+
+  /**
+   * アリーナ ID を指定して逆再生します (Phaser 互換の `playReverse`)。
+   * 最終コマから先頭へ戻ります。
+   */
+  public playReverse(id: number, key: string, ignoreIfPlaying = false): AnimState | null {
+    const playId = this.getSlot(id);
+    return this.playBySlot(playId, id, key, ignoreIfPlaying, true);
+  }
+
+  /**
+   * 再生スロット番号から、そのエンティティの現在のスロットを探します。
+   *
+   * @returns 再生中であればスロット番号、未再生なら -1
+   *
+   * 走査のみで GC は発生しません。Flyweight (AnimState) は
+   * 「アリーナ ID」ではなくこのスロット番号を保持します。
+   */
+  public getSlot(entityId: number): number {
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.entityId[i] === entityId) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * play / playReverse の共通実装。
+   *
+   * @param playId getSlot の戻り値。-1 なら空きスロットを確保します。
+   * @param reverse true なら逆再生で開始します
+   * @returns AnimState ハンドル。開始できなかったら null
+   */
+  private playBySlot(
+    playId: number,
+    entityId: number,
+    key: string,
+    ignoreIfPlaying: boolean,
+    reverse: boolean,
+  ): AnimState | null {
     const animIndex = this._animKeyToIndex.get(key);
     if (animIndex === undefined) {
       console.warn(`Animation key not found: ${key}`);
-      return;
-    }
-
-    // 再生中のスロットを探す (上限 maxAnims の走査で GC は発生しない)
-    let playId = -1;
-    for (let i = 0; i < this.capacity; i++) {
-      if (this.active[i] === 1 && this.entityId[i] === id) {
-        playId = i;
-        break;
-      }
+      return null;
     }
 
     if (playId !== -1 && ignoreIfPlaying) {
-      return;
+      return this._wrap(playId);
     }
 
     if (playId === -1) {
-      if (this.freeListHead >= this.capacity) return; // 枯渇
+      if (this.freeListHead >= this.capacity) return null; // 枯渇
       playId = this.freeList[this.freeListHead++];
       this.active[playId] = 1;
       this._activeCount++;
-      this.entityId[playId] = id;
+      this.entityId[playId] = entityId;
     }
 
     this.animId[playId] = animIndex;
-    this.currentFrameIdx[playId] = 0;
     this.repeatCount[playId] = 0;
     this.elapsed[playId] = 0.0;
+    this.paused[playId] = 0;
+    this.reverse[playId] = reverse ? 1 : 0;
+
+    // 逆再生なら最終コマから開始します
+    const len = this.refFramesLength[animIndex];
+    this.currentFrameIdx[playId] = reverse ? (len > 0 ? len - 1 : 0) : 0;
 
     // 初期フレームを即座に適用
-    const ptr = this.refFramesPtr[animIndex];
-    this._applyFrame(id, this._flatFrames[ptr]);
+    const ptr = this.refFramesPtr[animIndex] + this.currentFrameIdx[playId];
+    this._applyFrame(entityId, this._flatFrames[ptr]);
+    return this._wrap(playId);
+  }
+
+  /**
+   * スロット番号に対応する Flyweight ハンドルを返します。
+   * 同じスロットなら必ず同じインスタンスを返します。
+   */
+  private _wrap(slot: number): AnimState {
+    if (slot >= this._handles.length) {
+      for (let i = this._handles.length; i <= slot; i++) {
+        this._handles.push(new AnimState(i, this));
+      }
+    }
+    return this._handles[slot];
+  }
+
+  /**
+   * アリーナ ID に対する AnimState ハンドルを返します (Phaser 互換の `sprite.anims`)。
+   *
+   * 再生していない場合は無効なハンドル (slot = -1) を返します。
+   * 毎フレーム new しないよう、内部配列を使い回します。
+   */
+  public getAnimState(entityId: number): AnimState {
+    return this._wrap(this.getSlot(entityId));
   }
 
   private free(id: number): void {
@@ -209,6 +283,8 @@ export class AnimationManager {
 
     for (let i = 0; i < this.capacity; i++) {
       if (this.active[i] === 0) continue;
+      // 一時停止中はコマを進めません
+      if (this.paused[i] === 1) continue;
 
       const eId = this.entityId[i];
       if (eId < 0 || this._arena.idToIndex[eId] < 0) {
@@ -233,19 +309,35 @@ export class AnimationManager {
         this.elapsed[i] -= step;
 
         const len = this.refFramesLength[aId];
-        this.currentFrameIdx[i]++;
-
+        const isReverse = this.reverse[i] === 1;
         let isEnded = false;
 
-        if (this.currentFrameIdx[i] >= len) {
-          const maxRepeat = this.refRepeat[aId];
-          if (maxRepeat === -1) {
-            this.currentFrameIdx[i] = 0;
-          } else if (this.repeatCount[i] < maxRepeat) {
-            this.repeatCount[i]++;
-            this.currentFrameIdx[i] = 0;
-          } else {
-            isEnded = true;
+        if (isReverse) {
+          // 0 未満なら先頭に戻します
+          this.currentFrameIdx[i]--;
+          if (this.currentFrameIdx[i] < 0) {
+            const maxRepeat = this.refRepeat[aId];
+            if (maxRepeat === -1) {
+              this.currentFrameIdx[i] = len > 0 ? len - 1 : 0;
+            } else if (this.repeatCount[i] < maxRepeat) {
+              this.repeatCount[i]++;
+              this.currentFrameIdx[i] = len > 0 ? len - 1 : 0;
+            } else {
+              isEnded = true;
+            }
+          }
+        } else {
+          this.currentFrameIdx[i]++;
+          if (this.currentFrameIdx[i] >= len) {
+            const maxRepeat = this.refRepeat[aId];
+            if (maxRepeat === -1) {
+              this.currentFrameIdx[i] = 0;
+            } else if (this.repeatCount[i] < maxRepeat) {
+              this.repeatCount[i]++;
+              this.currentFrameIdx[i] = 0;
+            } else {
+              isEnded = true;
+            }
           }
         }
 
@@ -264,18 +356,88 @@ export class AnimationManager {
    * 特定のアリーナ ID の再生を停止します。
    */
   public stop(id: number): void {
-    for (let i = 0; i < this.capacity; i++) {
-      if (this.active[i] === 1 && this.entityId[i] === id) {
-        this.free(i);
-        return;
-      }
+    const slot = this.getSlot(id);
+    if (slot >= 0) this.free(slot);
+  }
+
+  // --- Flyweight (AnimState) 向けの公開アクセサ ---
+
+  /** スロットが再生中か */
+  public isSlotActive(slot: number): boolean {
+    return slot >= 0 && slot < this.capacity && this.active[slot] === 1;
+  }
+
+  /** スロットが一時停止中か */
+  public isSlotPaused(slot: number): boolean {
+    return this.isSlotActive(slot) && this.paused[slot] === 1;
+  }
+
+  /** スロットが逆再生中か */
+  public isSlotReverse(slot: number): boolean {
+    return this.isSlotActive(slot) && this.reverse[slot] === 1;
+  }
+
+  /** スロットの現在のコマ位置 */
+  public getSlotFrameIndex(slot: number): number {
+    return this.isSlotActive(slot) ? this.currentFrameIdx[slot] : 0;
+  }
+
+  /** スロットの総コマ数 */
+  public getSlotFrameLength(slot: number): number {
+    if (!this.isSlotActive(slot)) return 0;
+    return this.refFramesLength[this.animId[slot]];
+  }
+
+  /**
+   * スロットの進捗率 (0〜1)。
+   * 現在コマとコマ時間から算出します。逆再生は 1 から 0 へ進みます。
+   */
+  public getSlotProgress(slot: number): number {
+    if (!this.isSlotActive(slot)) return 0;
+    const aId = this.animId[slot];
+    const len = this.refFramesLength[aId];
+    if (len <= 0) return 0;
+    const duration = this.refFrameDuration[aId];
+    const withinFrame = duration > 0 ? this.elapsed[slot] / duration : 0;
+    const p = (this.currentFrameIdx[slot] + (withinFrame > 1 ? 1 : withinFrame)) / len;
+    if (this.reverse[slot] === 1) {
+      return p >= 1 ? 0 : 1 - p;
     }
+    return p > 1 ? 1 : p;
+  }
+
+  /** スロットを一時停止します */
+  public pauseSlot(slot: number): void {
+    if (this.isSlotActive(slot)) this.paused[slot] = 1;
+  }
+
+  /** スロットの一時停止を解除します */
+  public resumeSlot(slot: number): void {
+    if (this.isSlotActive(slot)) this.paused[slot] = 0;
+  }
+
+  /**
+   * スロットの再生方向を切り替えます。
+   * 逆再生中に false を渡すと正再生に戻ります。
+   */
+  public setSlotReverse(slot: number, reverse: boolean): void {
+    if (this.isSlotActive(slot)) this.reverse[slot] = reverse ? 1 : 0;
+  }
+
+  /**
+   * スロットを即座に終了します (Flyweight の `stop`)。
+   * stop(entityId) と違い、走査なしで直接解放します。
+   */
+  public stopSlot(slot: number): void {
+    if (this.isSlotActive(slot)) this.free(slot);
   }
 
   public clear(): void {
     this._activeCount = 0;
     this.freeListHead = 0;
     this.active.fill(0);
+    this.paused.fill(0);
+    this.reverse.fill(0);
     for (let i = 0; i < this.capacity; i++) {
       this.freeList[i] = i;
     }

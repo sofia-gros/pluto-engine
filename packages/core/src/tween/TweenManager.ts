@@ -7,6 +7,7 @@
 
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { EaseKind, evaluateEase, getEaseKind } from './Easing';
+import { Tween } from './Tween';
 
 export enum TweenProperty {
   X = 0,
@@ -104,6 +105,8 @@ export class TweenManager {
   public readonly groupId: Int32Array;
   /** onStart を発火済みかどうか。0 なら未発火 */
   public readonly started: Uint8Array;
+  /** 一時停止中か。update() では時間を進めない */
+  public readonly paused: Uint8Array;
   /**
    * コールバックの格納先。
    * 配列を 1 度だけ capacity 個確保して null で埋め、
@@ -135,6 +138,7 @@ export class TweenManager {
     this.repeatLeft = new Int32Array(maxTweens);
     this.groupId = new Int32Array(maxTweens);
     this.started = new Uint8Array(maxTweens);
+    this.paused = new Uint8Array(maxTweens);
 
     this.callbacks = new Array<TweenCallbacks | null>(maxTweens).fill(null);
 
@@ -174,6 +178,7 @@ export class TweenManager {
     this.yoyo[id] = 0;
     this.direction[id] = 0;
     this.started[id] = 0;
+    this.paused[id] = 0;
     this.callbacks[id] = null;
     this.repeatLeft[id] = 0;
     this.groupId[id] = -1;
@@ -191,34 +196,53 @@ export class TweenManager {
    * 既存の SoA をそのまま使い、1 プロパティにつき 1 スロットを確保します。
    * `props` に 2 つ指定すれば 2 スロットが確保され、常に同じ速度で同期します。
    *
-   * @returns グループ ID。killTweensOf() などに使います
+   * @returns Tween ハンドル。killTweensOfGroup(handle.id) にも使えます
    */
-  public add(config: TweenConfig): number {
+  public add(config: TweenConfig): Tween {
     const g = this._nextGroupId++;
     this._addOne(config, g);
-    return g;
+    return this._wrap(g);
   }
 
   /**
-   * 複数の設定 gaspregistered を順番に実行するチェーンを作ります (Phaser の FadeIn / Chain)。
+   * 複数の設定を順番に実行するチェーンを作ります (Phaser の Chain)。
    *
    * 前の設定が完了してから次を開始するため、チェーンの実行中は
    * 同時に動くスロットは 1 グループ分だけです。
    *
    * @param configs 順番に実行する設定の配列
-   * @returns チェーン ID。killTweensOfGroup() で中断できます
+   * @returns Tween ハンドル
    */
-  public chain(configs: TweenConfig[]): number {
+  public chain(configs: TweenConfig[]): Tween {
     const chainId = this._nextGroupId++;
-    if (configs.length === 0) return chainId;
+    if (configs.length > 0) {
+      this.chainQueue.set(chainId, { list: configs, index: 0 });
+      this._addOne(configs[0], chainId);
+    }
+    return this._wrap(chainId);
+  }
 
-    this.chainQueue.set(chainId, { list: configs, index: 0 });
-    this._addOne(configs[0], chainId);
-    return chainId;
+  /**
+   * グループ ID に対応する Flyweight ハンドルを返します。
+   * 同じグループ ID なら必ず同じインスタンスを返します。
+   */
+  private _wrap(groupId: number): Tween {
+    let h = this._handles.get(groupId);
+    if (h === undefined) {
+      h = new Tween(groupId, this);
+      this._handles.set(groupId, h);
+    }
+    return h;
   }
 
   /** チェーン ID → 実行中のステップ。Map は 1 チェーンにつき 1 エントリです。 */
   private readonly chainQueue = new Map<number, { list: TweenConfig[]; index: number }>();
+
+  /**
+   * グループ ID → Flyweight ハンドル。1 グループにつき 1 エントリで、
+   * 登録時のみ new します。
+   */
+  private readonly _handles = new Map<number, Tween>();
 
   private _nextGroupId = 0;
 
@@ -327,8 +351,13 @@ export class TweenManager {
 
   /**
    * グループ ID 指定でトゥイーンを全て停止します (Phaser 互換の killTweensOfGroup)。
+   *
+   * `add` / `chain` が返す Tween ハンドルもそのまま渡せます。
+   *
+   * @returns 停止したスロット数
    */
-  public killTweensOfGroup(groupId: number): number {
+  public killTweensOfGroup(group: number | Tween): number {
+    const groupId = typeof group === 'number' ? group : group.id;
     let killed = 0;
     for (let i = 0; i < this.capacity; i++) {
       if (this.active[i] === 0) continue;
@@ -344,6 +373,155 @@ export class TweenManager {
    */
   public get count(): number {
     return this._activeCount;
+  }
+
+  // ============================================================
+  // Flyweight (Tween) 向けの公開アクセサ
+  //
+  // Flyweight は「グループ ID」を持ちます。1 つのトゥイーンは
+  // (ターゲット x プロパティ) 個のスロットで構成されるため、
+  // ここでの走査はグループ内のスロット数ぶんの O(n) です。
+  // n は通常 1〜数十程度なので実用上問題になりません。
+  // ============================================================
+
+  /** グループ ID に属するスロットが 1 つでも生存しているか */
+  public isGroupActive(groupId: number): boolean {
+    if (groupId < 0) return false;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.groupId[i] === groupId) return true;
+    }
+    return false;
+  }
+
+  /** グループが再生中か (active と同義。Phaser 互換の別名) */
+  public isGroupPlaying(groupId: number): boolean {
+    return this.isGroupActive(groupId);
+  }
+
+  /**
+   * グループが一時停止中か。
+   * グループ内のスロットが 1 つでも paused なら true とします。
+   */
+  public isGroupPaused(groupId: number): boolean {
+    if (groupId < 0) return false;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.groupId[i] === groupId) return this.paused[i] === 1;
+    }
+    return false;
+  }
+
+  /**
+   * グループの進捗率 (0〜1) を返します。
+   *
+   * 複数スロットがあるグループでは、平均値ではなく
+   * 「最も進んでいるスロット」を返します。Phaser の
+   * `getProgress()` が全プロパティ共通の 1 値を返す挙動に合わせています。
+   * duration が 0 の場合は 0 を返します。
+   */
+  public getGroupProgress(groupId: number): number {
+    if (groupId < 0) return 0;
+    let best = 0;
+    let found = false;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      const d = this.duration[i];
+      const p = d > 0 ? this.elapsed[i] / d : 0;
+      if (p > best) best = p;
+      found = true;
+    }
+    if (!found) return 0;
+    return best > 1 ? 1 : best;
+  }
+
+  /**
+   * グループの経過時間 (ミリ秒) を返します。
+   * 複数スロットがある場合は最大値を返します。
+   */
+  public getGroupElapsed(groupId: number): number {
+    if (groupId < 0) return 0;
+    let best = 0;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      if (this.elapsed[i] > best) best = this.elapsed[i];
+    }
+    return best;
+  }
+
+  /** グループの所要時間 (ミリ秒)。複数スロットでは最大値。 */
+  public getGroupDuration(groupId: number): number {
+    if (groupId < 0) return 0;
+    let best = 0;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      if (this.duration[i] > best) best = this.duration[i];
+    }
+    return best;
+  }
+
+  /** グループ内の全スロットを一時停止します */
+  public pauseGroup(groupId: number): void {
+    if (groupId < 0) return;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.groupId[i] === groupId) this.paused[i] = 1;
+    }
+  }
+
+  /** グループ内の全スロットの一時停止を解除します */
+  public resumeGroup(groupId: number): void {
+    if (groupId < 0) return;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 1 && this.groupId[i] === groupId) this.paused[i] = 0;
+    }
+  }
+
+  /**
+   * グループを停止します (Phaser 互換の `stop`)。
+   * onComplete は呼びません。
+   * @returns 停止したスロット数
+   */
+  public stopGroup(groupId: number): number {
+    let killed = 0;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      this._freeSilent(i);
+      killed++;
+    }
+    return killed;
+  }
+
+  /**
+   * グループを先頭に戻します (Phaser 互換の `reset`)。
+   * 経過時間・方向・繰り返し回数を初期状態に戻し、値を即座に適用します。
+   */
+  public resetGroup(groupId: number): void {
+    if (groupId < 0) return;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      this.elapsed[i] = 0;
+      this.direction[i] = 0;
+      this.started[i] = 0;
+      this.paused[i] = 0;
+      this.repeatLeft[i] = 0;
+      // 開始値へ即座にスナップ移動します
+      this._applyValue(i, 0);
+    }
+  }
+
+  /**
+   * グループを指定ミリ秒位置まで進めます (Phaser 互換の `seek`)。
+   *
+   * 発火はさせず、値を適用したうえで次の update で継続します。
+   * yoyo や繰り返しの方向は考慮せず、単純な線形の位置に置きます。
+   */
+  public seekGroup(groupId: number, ms: number): void {
+    if (groupId < 0) return;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i] === 0 || this.groupId[i] !== groupId) continue;
+      const d = this.duration[i];
+      this.elapsed[i] = ms < 0 ? 0 : ms > d ? d : ms;
+      const t = d > 0 ? this.elapsed[i] / d : 0;
+      this._applyValue(i, t);
+    }
   }
 
   /**
@@ -365,6 +543,7 @@ export class TweenManager {
     if (id < 0 || id >= this.capacity || this.active[id] === 0) return;
 
     this.active[id] = 0;
+    this.paused[id] = 0;
     this.callbacks[id] = null;
     this._activeCount--;
     this.freeList[--this.freeListHead] = id;
@@ -439,6 +618,8 @@ export class TweenManager {
 
     for (let i = 0; i < this.capacity; i++) {
       if (this.active[i] === 0) continue;
+      // 一時停止中は進行させません。遅延の消費も行いません。
+      if (this.paused[i] === 1) continue;
 
       // 遅延中は進行させません。
       // 減算してから判定することで、境界で 1 フレーム分ずれるのを防ぎます。
@@ -477,6 +658,19 @@ export class TweenManager {
 
       if (cb !== null) cb.onUpdate?.();
     }
+  }
+
+  /**
+   * グループを指定ミリ秒位置まで進めます (Phaser 互換の `seek`)。
+   *
+   * 発火はさせず、値を適用したうえで次の update で継続します。
+   * yoyo や繰り返しの方向は考慮せず、単純な線形の位置に置きます。
+   * @param t 0〜1 の線形進行度
+   */
+  private _applyValue(i: number, t: number): void {
+    const eId = this.entityId[i];
+    if (eId < 0) return;
+    this._apply(i, eId, evaluateEase(this.easeKind[i] as EaseKind, t));
   }
 
   /**
@@ -564,10 +758,12 @@ export class TweenManager {
     this._activeCount = 0;
     this.freeListHead = 0;
     this.active.fill(0);
+    this.paused.fill(0);
     this.groupId.fill(-1);
     this.groupLive.clear();
     this.groupCallbacks.clear();
     this.chainQueue.clear();
+    this._handles.clear();
     this.callbacks.fill(null);
     for (let i = 0; i < this.capacity; i++) {
       this.freeList[i] = i;

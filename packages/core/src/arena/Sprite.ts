@@ -11,6 +11,7 @@
  */
 
 import { DEFAULT_FRAME_SIZE } from '@pluto-engine/renderer';
+import type { AnimState } from '../anim/AnimState';
 import type { InstanceBufferArena, SpriteAssetLike } from './InstanceBufferArena';
 
 /** 座標を受け取るための出力先 (Phaser 互換の getBounds 系) */
@@ -998,6 +999,27 @@ export class Sprite {
   public play(key: string, ignoreIfPlaying = false): this {
     this._arena.animTracker?.play(this.id, key, ignoreIfPlaying);
     return this;
+  }
+
+  /**
+   * このスプライトのアニメーション状態ハンドル (Phaser 互換の `sprite.anims`)。
+   *
+   * Flyweight なので毎フレーム new しません。内部配列を使い回し、
+   * 同じスロットなら同じインスタンスを返します。停止中は
+   * slot が -1 の無効ハンドルになります。
+   *
+   * @returns AnimationManager が未初期化なら null
+   */
+  public get anims(): AnimState | null {
+    return this._arena.animTracker?.getAnimState(this.id) ?? null;
+  }
+
+  /**
+   * 逆再生を開始します (Phaser 互換の `playReverse`)。
+   * 最終コマから先頭へ戻ります。
+   */
+  public playReverse(key: string, ignoreIfPlaying = false): AnimState | null {
+    return this._arena.animTracker?.playReverse(this.id, key, ignoreIfPlaying) ?? null;
   }
 
   /**

@@ -243,7 +243,11 @@ export class Scene {
     return (this._timeFacade ??= new TimeFacade(this.engine.time));
   }
 
-  /** アニメーション名 {@link this.anim} の別名 (Phaser 互換) */
+  /**
+   * Phaser 互換のアニメーション门面 (実体は {@link this.anim})。
+   *
+   * `play` / `playReverse` が AnimState ハンドルを返す点が異なります。
+   */
   public get anims(): AnimationManager {
     return this.anim;
   }
