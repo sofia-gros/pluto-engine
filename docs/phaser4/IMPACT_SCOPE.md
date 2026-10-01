@@ -149,21 +149,61 @@ Phaser は多くの API が「オブジェクトを返してlater操作」する
 
 ### 3.3 チェックリスト
 
-- [ ] `Tween` Flyweight を実装（SoA を `TweenManager` 内で参照）
-- [ ] `AnimState` Flyweight を実装
-- [ ] `TimerEvent` Flyweight を実装
-- [ ] `Sound` Flyweight を実装
-- [ ] `Body` Flyweight を実装（`ArcadePhysics` の SoA 配列 12 種を追加）
-- [ ] `World` を SoA で実装（境界矩形 + gravity）
-- [ ] `Group` を Array ベースで実装（SoA 化しない）
-- [ ] `Container` を `parentId` ベースで実装
-- [ ] `ParticleEmitter` Flyweight を実装（`ParticleManager` を拡張）
-- [ ] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array`）
-- [ ] `Pointer` を拡張（`pointerId` / `movementX` / `velocity` / `angle` 等）
-- [ ] `Gamepad` Flyweight を実装
-- [ ] 各 Flyweight の **own property 数**をテストで保証（Flyweight 掟 R-03）
-- [ ] SoA テスト（handle 経由の書き込みが SoA に反映されること）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `Tween` Flyweight を実装（SoA を `TweenManager` 内で参照）
+- [x] `AnimState` Flyweight を実装
+- [x] `TimerEvent` Flyweight を実装
+- [x] `Sound` Flyweight を実装（`SoundHandle` を `voiceIndex` ベースに Flyweight 化）
+- [x] `Body` Flyweight を実装（`ArcadePhysics` の SoA 配列を 12 → 21 種へ拡張）
+- [x] `World` を SoA で実装（境界矩形 + gravity）
+- [x] `Group` を Array ベースで実装（SoA 化しない）
+- [x] `Container` を `parentId` ベースで実装
+- [x] `ParticleEmitter` Flyweight を実装（`ParticleManager` を持続型エミッター化）
+- [x] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array` + 衝突 SoA）
+- [x] `Pointer` を拡張（`pointerId` / `movementX` / `velocity` / `angle` 等）
+- [x] `Gamepad` Flyweight を実装
+- [x] 各 Flyweight の **own property 数**をテストで保証（Flyweight 掟 R-03）
+- [x] SoA テスト（handle 経由の書き込みが SoA に反映されること）
+- [x] `bun run test` / `bun run lint` 通過
+
+### 3.4 実装済み Flyweight 一覧（R-03 準拠）
+
+| クラス | own property | 識別子 | 状態 |
+| --- | --- | --- | --- |
+| `TimerEvent` | `id` + `_manager` | タイマー ID | 実装済 |
+| `GamepadHandle` (`Gamepad`) | `index` + `_input` | コントローラ番号 | 実装済 |
+| `AnimState` | `slot` + `_manager` | 再生スロット番号 | 実装済 |
+| `Tween` | `id` + `_manager` | グループ ID | 実装済 |
+| `Body` | `entityId` + `_physics` | 疎添字 ID | 実装済 |
+| `World` | `_physics` | なし（フィールド 1 個） | 実装済 |
+| `SoundHandle` | `voiceIndex` + `_manager` | ボイス添字 | 実装済 |
+| `Container` | `id` + `_arena` | 疎添字 ID | 実装済 |
+| `ParticleEmitter` | `id` + `_manager` | エミッター ID | 実装済 |
+| `TilemapLayer` | `index` + `_map` | レイヤー番号 | 実装済 |
+| `Pointer` | `_input` + `id` | 固定 0 | 実装済 |
+| `Key` | `code` + `_input` | KeyboardEvent.code | 実装済 |
+| `Group` | `_items` + `_alive` + `_visible` | なし | 判定 D（Array ベース） |
+
+### 3.5 実装中に検出した既存バグ
+
+Phase 2 の実装・テストの中で発見した、Phase 2 とは無関係な既存バグです。
+すべて修正済みです。
+
+| 場所 | 内容 |
+| --- | --- |
+| `ArcadePhysics.setVelocity` / `update` | 疎添字で書き込み、密添字で読み取り。エンティティが 1 体解放されると速度が別のエンティティに適用される |
+| `WebGPUDevice.uploadTexture` | UV をソース画像寸法で正規化。レイヤー寸法 (2048) が正で、実際のケースは壊れていた |
+| `TextureManager.addSpritesheet` | デバイスなし経路がソース画像寸法で正規化。デバイスありの経路 (レイヤー寸法) と不一致 |
+| `TimeStepManager.addEvent` | `config.repeatDelay` が設定項目に含まれているのに一切読まれなかった |
+| `TimeStepManager.update` | `cb(...args)` の spread で毎フレーム配列を生成していた |
+| `InputManager.Pointer.worldX` | 画面座標 (clientX) を返していた。Phaser 互換のワールド座標ではない |
+| `TimeStepManager.delayedCall` | オブジェクトリテラル + 条件付き spread を毎呼び出し生成していた |
+| `AnimationManager.stop` | 走査して最初の 1 件だけ解放していた |
+| `SoundManager.play` | 呼び出しごとに `new SoundHandle`。`SoundHandle` は own property 3 個で R-03 違反 |
+| `SoundManager.playAudioSprite` | オプションのオブジェクト spread を毎回生成していた |
+| `Tilemap` コンストラクタ | 衝突 SoA の確保前に object layer を読んでおり、書き込みが捨てられていた |
+| `Tilemap.updateCulling` | `// UV mapping can be applied here based on tileIndex` のまま未実装。タイルが単色で描画されていた |
+| `Sprite.body` | `bodyFactory` が初回アクセス時にしか登録されず、常に null だった |
+| ワールド境界の反射 | スプライト原点を境界として判定していた（当たり判定矩形の中心が正） |
 
 ---
 
