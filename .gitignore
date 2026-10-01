@@ -5,3 +5,10 @@ dist/
 .env
 .temp/
 __screenshots__/
+
+# 作業用の使い捨てスクリプト（一時計測・一括パッチ用）
+scripts/.shot*.mjs
+scripts/pack.py
+scripts/patch-*.mjs
+scripts/update-ui.mjs
+scripts/bump-version.mjs
