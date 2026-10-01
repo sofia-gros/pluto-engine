@@ -101,13 +101,48 @@ export interface GraphicsDevice {
 
   /**
    * インスタンシング描画用の頂点属性を設定します。
+   *
+   * `buffers` は `InstanceBufferArena` の `packed*` ミラーに対応する
+   * GPU バッファ表です（`INSTANCE_BUFFERS` の name がキーになります）。
+   *
+   * @param buffers      パック済みバッファの表
+   * @param activeCount  描画するインスタンス数
+   * @param baseInstance 描画開始インスタンスのインデックス。
+   *                     可視区間だけを描画したい場合に使います。
+   *                     WebGPU には `firstInstance` 引数がありますが、
+   *                     WebGL2 には無いので `vertexAttribPointer` の
+   *                     `byteOffset` へ加算して実現します。
    */
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void;
+  setupInstancedAttributes(
+    buffers: Record<string, BufferInfo>,
+    activeCount?: number,
+    baseInstance?: number,
+  ): void;
 
   /**
    * インスタンスを描画します。
+   *
+   * @param activeCount  描画するインスタンス数
+   * @param baseInstance 描画開始インスタンスのインデックス
    */
-  drawInstanced(activeCount: number): void;
+  drawInstanced(activeCount: number, baseInstance?: number): void;
+
+  /**
+   * 現在の描画結果を `out` へ読み戻します。
+   *
+   * スクリーンショット取得や、golden テスト（描画の回帰検出）に使います。
+   * GPU 側では毎フレームの定常経路ではないため、遅延確保を許します。
+   *
+   * **左上原点**の RGBA 8bit の tight 配列で返します
+   * （WebGL の `readPixels` は下原点のため、行を反転して渡します）。
+   * キャンバスの設定によりアルファは premultiplied です。
+   *
+   * @param out    `width * height * 4` 要素の受け先（呼び出し側の使い回し配列）
+   * @param width  既定は描画バッファの幅
+   * @param height 既定は描画バッファの高さ
+   * @returns 読み戻せたなら true。対応しないバックエンドやコンテキスト喪失中なら false
+   */
+  readPixels(out: Uint8Array, width?: number, height?: number): boolean;
 
   /**
    * uniform マトリックスを設定します。

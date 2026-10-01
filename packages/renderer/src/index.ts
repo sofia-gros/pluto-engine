@@ -1,5 +1,6 @@
 /// <reference path="./env.d.ts" />
 export * from './GraphicsDevice';
+export * from './InstanceLayout';
 export * from './WebGPUDevice';
 export * from './WebGL2Device';
 

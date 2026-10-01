@@ -4,15 +4,22 @@
  * WebGPU バックエンド。
  *
  * 旧実装は clear / drawInstanced などが空実装で「初期化しても何も描けない」状態でした。
- * ここでは WebGL2Device と同じ頂点レイアウト (13 スカラー属性 + 共有 Quad) で
- * 実際に描画できるようにしています。
+ * ここでは実際に描画できるようにしています。
  *
- * 属性レイアウトは WebGL2Device と同一に揃えています:
- *   Location  0: vertexPos   (vec2, 共有 Quad)
- *   Location  1: vertexUV    (vec2, 共有 Quad)
- *   Location  2-12: インスタンス属性 (各 1 スカラー、stepMode: instance)
- *   Location 13: tint (vec4 unorm8, stepMode: instance)
- *   Location 14: isText (SDF テキストか否か、stepMode: instance)
+ * 頂点レイアウトは `InstanceLayout` を単一の情報源として共有します
+ * （WebGL2Device と完全に同じ vec4 パック形式）:
+ *   Slot 0 / Location 0-1: 共有 Quad (vec2 × 2)
+ *   Slot 1 / Location 2:   iTransform = (posX, posY, scale, rotation)
+ *   Slot 2 / Location 3:   iUv        = (uvX, uvY, uvW, uvH)
+ *   Slot 3 / Location 4:   iFlags     = (frameIdx, facing, visible, isText)
+ *   Slot 4 / Location 5:   iTint      = (r, g, b, a) [unorm8x4]
+ *   Slot 5 / Location 6-9: iExt0..3   = ユーザー拡張 (オプトイン)
+ *
+ * **頂点バッファは 6/8 枠しか使いません。** 以前は SoA 11 本を
+ * 1 本の 64 バイト AoS バッファへ毎フレーム O(n) で interleave していたため、
+ * WebGL2 より大幅に遅くなっていました。パッキングは
+ * `InstanceBufferArena` の write-through セッター側で完了しているため、
+ * このバックエンドは転送 WRITE だけを行います。
  */
 
 import type {
@@ -23,8 +30,19 @@ import type {
   TextureFrame,
   TextureUploadOptions,
 } from './GraphicsDevice';
+import {
+  INSTANCE_BUFFERS,
+  QUAD_LOCATION,
+  QUAD_STRIDE_BYTES,
+  wgslAttributeSpecs,
+  wgslInstanceMembers,
+} from './InstanceLayout';
 
-/** WGSL の頂点シェーダー。WebGPU 経路では WGSL を直接使用します。 */
+/**
+ * WGSL の頂点シェーダー。
+ * インスタンス属性の宣言は `InstanceLayout` から生成するため、
+ * WebGL2Device とレイアウトが食い違うことはありません。
+ */
 const SPRITE_WGSL = /* wgsl */ `
 struct Uniforms {
   projectionMatrix : mat4x4<f32>,
@@ -42,22 +60,9 @@ struct Uniforms {
 @group(0) @binding(2) var textureSampler : sampler;
 
 struct VertexInput {
-  @location(0)  vertexPos  : vec2<f32>,
-  @location(1)  vertexUV   : vec2<f32>,
-  @location(2)  posX       : f32,
-  @location(3)  posY       : f32,
-  @location(4)  scale      : f32,
-  @location(5)  facing     : f32,
-  @location(6)  rotation   : f32,
-  @location(7)  layerDepth : f32,
-  @location(8)  uvX        : f32,
-  @location(9)  uvY        : f32,
-  @location(10) uvW        : f32,
-  @location(11) uvH        : f32,
-  @location(12) frameIdx   : f32,
-  @location(13) tint       : vec4<f32>,
-  // 1.0 のインスタンスは SDF テキスト。0.0 は通常のスプライト。
-  @location(14) isText     : f32,
+  @location(${QUAD_LOCATION.Pos}) vertexPos : vec2<f32>,
+  @location(${QUAD_LOCATION.Uv}) vertexUV  : vec2<f32>,
+${wgslInstanceMembers()}
 };
 
 struct VertexOutput {
@@ -71,17 +76,31 @@ struct VertexOutput {
 @vertex
 fn vs_main(input : VertexInput) -> VertexOutput {
   var out : VertexOutput;
-  let scaled = input.vertexPos * input.scale;
-  let c = cos(input.rotation);
-  let s = sin(input.rotation);
-  let rotated = vec2<f32>(scaled.x * c - scaled.y * s, scaled.x * s + scaled.y * c);
-  let world = vec2<f32>(rotated.x * input.facing, rotated.y) + vec2<f32>(input.posX, input.posY);
+  // iTransform = (posX, posY, scaleX, scaleY)  ※ scale は倍率
+  // iUv        = (uvX, uvY, uvW, uvH)
+  // iFlags     = (frameIdx, facing, visible, isText)
+  // iShape     = (rotation, frameWidth, frameHeight, depth)
+  // iOrigin    = (originX, originY, scrollFactorX, scrollFactorY)
+  // iTint      = (r, g, b, a)
+  //
+  // 描画サイズは「フレームのピクセル寸法 × スケール倍率」です。
+  // scale = 1.0 ならフレームそのままの大きさになります。
+  let frameSize = input.iShape.yz;
+  let displaySize = frameSize * input.iTransform.zw;
+
+  // 原点 (0.5, 0.5 = 中心が既定) を引くとクワッドの位置的原点を再現できます。
+  let local = (input.vertexPos - (input.iOrigin.xy - vec2<f32>(0.5, 0.5))) * displaySize;
+
+  let c = cos(input.iShape.x);
+  let s = sin(input.iShape.x);
+  let rotated = vec2<f32>(local.x * c - local.y * s, local.x * s + local.y * c);
+  let world = vec2<f32>(rotated.x * input.iFlags.y, rotated.y) + input.iTransform.xy;
 
   out.clipPosition = uniforms.projectionMatrix * vec4<f32>(world, 0.0, 1.0);
-  out.uv = input.vertexUV * vec2<f32>(input.uvW, input.uvH) + vec2<f32>(input.uvX, input.uvY);
-  out.layer = input.frameIdx;
-  out.tint = input.tint;
-  out.isText = input.isText;
+  out.uv = input.vertexUV * input.iUv.zw + input.iUv.xy;
+  out.layer = input.iFlags.x;
+  out.tint = input.iTint;
+  out.isText = input.iFlags.w;
   return out;
 }
 
@@ -102,25 +121,12 @@ fn fs_main(input : VertexOutput) -> @location(0) vec4<f32> {
 }
 `;
 
-/** インスタンス属性の定義順。WebGL2Device と共通で使います。 */
-const INSTANCE_ATTRS: { name: string; shaderLocation: number; offset: number }[] = [
-  { name: 'posX', shaderLocation: 2, offset: 0 },
-  { name: 'posY', shaderLocation: 3, offset: 4 },
-  { name: 'scale', shaderLocation: 4, offset: 8 },
-  { name: 'facing', shaderLocation: 5, offset: 12 },
-  { name: 'rotation', shaderLocation: 6, offset: 16 },
-  { name: 'depth', shaderLocation: 7, offset: 20 },
-  { name: 'uvX', shaderLocation: 8, offset: 24 },
-  { name: 'uvY', shaderLocation: 9, offset: 28 },
-  { name: 'uvW', shaderLocation: 10, offset: 32 },
-  { name: 'uvH', shaderLocation: 11, offset: 36 },
-  { name: 'frameIdx', shaderLocation: 12, offset: 40 },
-];
-
 /** PipelineInfo.id はバックエンドごとに型が異なるため here で緩めます。 */
 type GPUProgramHandle = GPURenderPipeline;
 
-const QUAD_VERTICES = new Float32Array([-0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1]);
+const QUAD_VERTICES = new Float32Array([
+  -0.5, -0.5, 0, 0, 0.5, -0.5, 1, 0, -0.5, 0.5, 0, 1, 0.5, 0.5, 1, 1,
+]);
 
 /**
  * WebGPU はバッファサイズを 4 バイト境界へ丸めます。
@@ -144,7 +150,6 @@ export class WebGPUDevice implements GraphicsDevice {
   private sampler: GPUSampler | null = null;
 
   private clearColor = { r: 0, g: 0, b: 0, a: 1 };
-  private hasVertexBuffers = false;
 
   /**
    * SDF テキストの uniform を書き込むためのスクラッチ (threshold, smoothing, pad, pad)。
@@ -152,6 +157,14 @@ export class WebGPUDevice implements GraphicsDevice {
    */
   private readonly _sdfUniforms = new Float32Array(4);
 
+  /** `adapter.limits` から読み取った実制約。レイアウト選択と検証に使います。 */
+  public limits: GPUSupportedLimits | null = null;
+
+  /**
+   * `setupInstancedAttributes` で束縛した GPU バッファ（スロット番号 → バッファ）。
+   * キーには `INSTANCE_BUFFERS` の name を使います。
+   */
+  private _boundBuffers: Record<string, BufferInfo> = {};
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     if (!navigator.gpu) {
@@ -161,6 +174,17 @@ export class WebGPUDevice implements GraphicsDevice {
     if (!adapter) {
       throw new Error('No WebGPU adapter found');
     }
+    // 頂点バッファ数の上限を実際に確認します。
+    // 既定 8 のうち、共有 Quad 1 + インスタンス 4 (+ 拡張 1) を使います。
+    this.limits = adapter.limits;
+    const requiredSlots = INSTANCE_BUFFERS.filter((b) => b.eager).length + 1;
+    if (this.limits.maxVertexBuffers < requiredSlots) {
+      console.warn(
+        `[WebGPUDevice] maxVertexBuffers=${this.limits.maxVertexBuffers} < 必要数 ${requiredSlots}。` +
+          '描画が壊れる可能性があります。',
+      );
+    }
+
     this.device = await adapter.requestDevice();
 
     const context = canvas.getContext('webgpu') as GPUCanvasContext | null;
@@ -207,7 +231,6 @@ export class WebGPUDevice implements GraphicsDevice {
     });
     device.queue.writeBuffer(this.quadBuffer, 0, QUAD_VERTICES);
 
-    // WebGL2 と同じ 2048x2048 を 64 層を持つ 2D 配列として用意します
     this.textureArray = device.createTexture({
       size: { width: 2048, height: 2048, depthOrArrayLayers: 64 },
       format: 'rgba8unorm',
@@ -222,32 +245,23 @@ export class WebGPUDevice implements GraphicsDevice {
 
     const module = device.createShaderModule({ code: SPRITE_WGSL });
 
-    // インスタンス属性は 64 バイトのストライド 1 本にまとめます。
-    // (48 バイトの属性 + 12 バイトのパディング。WebGPU は arrayStride を
-    //  4 の倍数で要求し、16 バイト境界が GPU 側で最も速く処理されます)
-    const instanceLayout: GPUVertexBufferLayout = {
-      arrayStride: 64,
-      stepMode: 'instance',
-      attributes: [
-        ...INSTANCE_ATTRS.map((a) => ({
-          shaderLocation: a.shaderLocation,
-          offset: a.offset,
-          format: 'float32' as GPUVertexFormat,
-        })),
-        // tint は 4 バイトを 4 チャンネルへ割ります
-        {
-          shaderLocation: 13,
-          offset: 44,
-          format: 'unorm8x4' as GPUVertexFormat,
-        },
-        // isText (SDF テキストか否か)
-        {
-          shaderLocation: 14,
-          offset: 48,
-          format: 'float32' as GPUVertexFormat,
-        },
-      ],
-    };
+    // インスタンス属性は `InstanceLayout` の定義どおり「バッファ 1 本 = vec4 1 枠」です。
+    // 属性を 1 枠ずつに分けることで、頂点バッファ枠を 13 → 4 に減らし、
+    // 更新のないグループを丸ごと転送せずに済みます。
+    const attrSpecs = wgslAttributeSpecs();
+    const instanceBuffers: GPUVertexBufferLayout[] = [];
+    for (let b = 0; b < INSTANCE_BUFFERS.length; b++) {
+      const spec = INSTANCE_BUFFERS[b];
+      if (!spec.eager) continue;
+      const attributes = attrSpecs.filter(
+        (a) => a.shaderLocation >= spec.location && a.shaderLocation < spec.location + spec.vectors,
+      );
+      instanceBuffers.push({
+        arrayStride: spec.stride,
+        stepMode: 'instance',
+        attributes,
+      });
+    }
 
     this.pipeline = device.createRenderPipeline({
       layout: 'auto',
@@ -256,14 +270,14 @@ export class WebGPUDevice implements GraphicsDevice {
         entryPoint: 'vs_main',
         buffers: [
           {
-            arrayStride: 16,
+            arrayStride: QUAD_STRIDE_BYTES,
             stepMode: 'vertex',
             attributes: [
-              { shaderLocation: 0, offset: 0, format: 'float32x2' },
-              { shaderLocation: 1, offset: 8, format: 'float32x2' },
+              { shaderLocation: QUAD_LOCATION.Pos, offset: 0, format: 'float32x2' },
+              { shaderLocation: QUAD_LOCATION.Uv, offset: 8, format: 'float32x2' },
             ],
           },
-          instanceLayout,
+          ...instanceBuffers,
         ],
       },
       fragment: {
@@ -282,8 +296,6 @@ export class WebGPUDevice implements GraphicsDevice {
         { binding: 2, resource: this.sampler },
       ],
     });
-
-    this.hasVertexBuffers = false;
   }
 
   createBuffer(size: number): BufferInfo {
@@ -300,12 +312,13 @@ export class WebGPUDevice implements GraphicsDevice {
   }
 
   /**
-   * SoA 配列を GPU へ転送します。
+   * packed ミラー配列を GPU へ転送します。
+   *
    * WebGL2 と同じく subarray を new せず、範囲を直接指定します。
    *
-   * WebGPU の頂点バッファは連続した 1 本を要求するため、
-   * 転送元の配列をここで控えておき、setupInstancedAttributes が
-   * pack 時に参照します (コピーは pack 時の 1 回だけです)。
+   * 転送元の配列は `InstanceBufferArena` の write-through ミラーなので、
+   * **このメソッドは pack を行いません。** 行うのは転送だけです。
+   * そのため 1 フレームあたり O(1) のコマンド発行で済みます。
    */
   updateBuffer(
     bufferInfo: BufferInfo,
@@ -317,8 +330,19 @@ export class WebGPUDevice implements GraphicsDevice {
       throw new Error('Device not initialized');
     }
     const n = length ?? data.length - srcOffset;
-            
-    this._sources.set(bufferInfo, { data, srcOffset, count: n });
+    if (n <= 0) return;
+    const buffer = bufferInfo.buffer as GPUBuffer;
+    // 開始バイトオフセットを先に反映してから転送します。
+    const startBytes = srcOffset * data.BYTES_PER_ELEMENT;
+    const sizeBytes = n * data.BYTES_PER_ELEMENT;
+    const avail = buffer.size - startBytes;
+    this.device.queue.writeBuffer(
+      buffer,
+      startBytes,
+      data.buffer as ArrayBuffer,
+      data.byteOffset,
+      Math.min(sizeBytes, avail),
+    );
   }
 
   /**
@@ -428,122 +452,48 @@ export class WebGPUDevice implements GraphicsDevice {
   }
 
   /**
-   * インスタンス属性を 1 本のバッファへ纏めます。
+   * インスタンス用バッファのバインド内容を記録します。
    *
-   * WebGPU は頂点バッファの仕様上、SoA のままでは属性オフセットが
-   * 連続になりません。そのため 64 バイトのストライドへ pack します。
+   * **pack は行いません。** 転送元は `InstanceBufferArena` の
+   * write-through ミラーで、すでに vec4 単位にまとまっています。
+   * そのためこのメソッドは O(1) の記録のみで済みます。
    *
-   * ゼロアロケーションの掟を守るため、書き込み先は
-   * 確保済みのバッファを再利用します。
+   * `baseInstance` は可視区間の先頭インスタンス番号です。
+   * 実際の `setVertexBuffer` は `drawInstanced` の中で行います
+   * （WebGL2 の VAO と同じ「カメラ単位の属性設定」に合わせます）。
    */
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void {
+  setupInstancedAttributes(
+    buffers: Record<string, BufferInfo>,
+    activeCount?: number,
+    baseInstance = 0,
+  ): void {
+    void activeCount;
+    void baseInstance;
     if (!this.device) {
       throw new Error('Device not initialized');
     }
-    const anyBuf = buffers['posX'];
-    if (!anyBuf) return;
-
-    const capacity = anyBuf.size / 4;
-    const STRIDE_BYTES = 64;
-    const bytes = capacity * STRIDE_BYTES;
-    if (this._instanceStaging === null || this._instanceStaging.byteLength < bytes) {
-      this._instanceStaging = new Float32Array(Math.ceil(bytes / 4));
-      this._stagingU8 = new Uint8Array(this._instanceStaging.buffer);
-      this._instanceBuffer?.destroy();
-      this._instanceBuffer = this.device.createBuffer({
-        size: Math.ceil(bytes / 4) * 4,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-      });
-    }
-
-    const staging = this._instanceStaging;
-    const u8 = this._stagingU8;
-    if (!u8) return;
-
-    // 12 個の float (48 バイト) + tint 4 バイト = 52 バイトを
-    // 16 バイト境界へ切り詰めた 64 バイトのストライドを使います。
-    const FLOATS_PER_INSTANCE = 16;
-    const count = activeCount ?? capacity;
-    
-    // アロケーションと関数呼び出しのオーバーヘッドを避けるため、
-    // 配列の参照を事前に解決しておく
-    const attrArrays: (Float32Array | null)[] = [];
-    const attrOffsets: number[] = [];
-    for (let a = 0; a < INSTANCE_ATTRS.length; a++) {
-      const buf = buffers[INSTANCE_ATTRS[a].name];
-      const src = buf ? this._sources.get(buf) : null;
-      if (src && src.data instanceof Float32Array) {
-        attrArrays.push(src.data);
-        attrOffsets.push(src.srcOffset);
-      } else {
-        attrArrays.push(null);
-        attrOffsets.push(0);
-      }
-    }
-
-    const tintBuf = buffers['tint'];
-    const tintSrc = tintBuf ? this._sources.get(tintBuf) : null;
-    const tintData = (tintSrc && tintSrc.data instanceof Uint32Array) ? tintSrc.data : null;
-    const tintOffset = tintSrc ? tintSrc.srcOffset : 0;
-
-    const isTextBuf = buffers['isText'];
-    const isTextSrc = isTextBuf ? this._sources.get(isTextBuf) : null;
-    const isTextData = (isTextSrc && isTextSrc.data instanceof Float32Array) ? isTextSrc.data : null;
-    const isTextOffset = isTextSrc ? isTextSrc.srcOffset : 0;
-
-    
-    const DUMMY_F32 = new Float32Array(1);
-    
-    const a0 = attrArrays[0] || DUMMY_F32; const o0 = attrArrays[0] ? attrOffsets[0] : 0;
-    const a1 = attrArrays[1] || DUMMY_F32; const o1 = attrArrays[1] ? attrOffsets[1] : 0;
-    const a2 = attrArrays[2] || DUMMY_F32; const o2 = attrArrays[2] ? attrOffsets[2] : 0;
-    const a3 = attrArrays[3] || DUMMY_F32; const o3 = attrArrays[3] ? attrOffsets[3] : 0;
-    const a4 = attrArrays[4] || DUMMY_F32; const o4 = attrArrays[4] ? attrOffsets[4] : 0;
-    const a5 = attrArrays[5] || DUMMY_F32; const o5 = attrArrays[5] ? attrOffsets[5] : 0;
-    const a6 = attrArrays[6] || DUMMY_F32; const o6 = attrArrays[6] ? attrOffsets[6] : 0;
-    const a7 = attrArrays[7] || DUMMY_F32; const o7 = attrArrays[7] ? attrOffsets[7] : 0;
-    const a8 = attrArrays[8] || DUMMY_F32; const o8 = attrArrays[8] ? attrOffsets[8] : 0;
-    const a9 = attrArrays[9] || DUMMY_F32; const o9 = attrArrays[9] ? attrOffsets[9] : 0;
-    const a10 = attrArrays[10] || DUMMY_F32; const o10 = attrArrays[10] ? attrOffsets[10] : 0;
-
-    for (let i = 0; i < count; i++) {
-      const base = i * FLOATS_PER_INSTANCE;
-      
-      staging[base + 0] = a0[o0 + i] || 0;
-      staging[base + 1] = a1[o1 + i] || 0;
-      staging[base + 2] = a2[o2 + i] || 0;
-      staging[base + 3] = a3[o3 + i] || 0;
-      staging[base + 4] = a4[o4 + i] || 0;
-      staging[base + 5] = a5[o5 + i] || 0;
-      staging[base + 6] = a6[o6 + i] || 0;
-      staging[base + 7] = a7[o7 + i] || 0;
-      staging[base + 8] = a8[o8 + i] || 0;
-      staging[base + 9] = a9[o9 + i] || 0;
-      staging[base + 10] = a10[o10 + i] || 0;
-      
-      const tv = tintData ? tintData[tintOffset + i] : 0xffffffff;
-      let o = (base + 11) * 4;
-      u8[o] = tv & 0xff;
-      u8[o + 1] = (tv >> 8) & 0xff;
-      u8[o + 2] = (tv >> 16) & 0xff;
-      u8[o + 3] = (tv >>> 24) & 0xff;
-
-      staging[base + 12] = isTextData ? isTextData[isTextOffset + i] : 0;
-    }
-
-    this.device.queue.writeBuffer(this._instanceBuffer as GPUBuffer, 0, staging.buffer as ArrayBuffer, 0, count * STRIDE_BYTES);
-    this.hasVertexBuffers = true;
+    // バッファ表の実体だけを記録します。drawInstanced が毎.camera 読み直します。
+    this._boundBuffers = buffers;
   }
 
-  /** 転送元から i 番目の値を float として読み戻します */
-  // private _readF32(buf: BufferInfo | undefined, index: number): number { ... }
+  /**
+   * 現在の描画結果を読み戻します。
+   *
+   * WebGPU は `GPUCommandEncoder.copyTextureToBuffer` + `mapAsync` が
+   * **非同期**であるため、この同期インターフェースでは実装できません。
+   * スクリーンショットは非同期版を別途用意する必要があり、
+   * ここでは常に false を返して「未対応」を明示します。
+   */
+  readPixels(out: Uint8Array, width?: number, height?: number): boolean {
+    void out;
+    void width;
+    void height;
+    return false;
+  }
 
-  /** 転送元から i 番目の値を uint32 (tint) として読み戻します */
-  // private _readU32(buf: BufferInfo | undefined, index: number): number { ... }
-
-  drawInstanced(activeCount: number): void {
+  drawInstanced(activeCount: number, baseInstance = 0): void {
     if (!this.device || !this.context || !this.pipeline || !this.bindGroup) return;
-    if (!this.hasVertexBuffers || !this._instanceBuffer || !this.quadBuffer) return;
+    if (!this.quadBuffer) return;
 
     const encoder = this.device.createCommandEncoder();
     const view = this.context.getCurrentTexture().createView();
@@ -561,9 +511,17 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.setVertexBuffer(0, this.quadBuffer);
-    pass.setVertexBuffer(1, this._instanceBuffer);
+    for (let b = 0; b < INSTANCE_BUFFERS.length; b++) {
+      const spec = INSTANCE_BUFFERS[b];
+      if (!spec.eager) continue;
+      const info = this._boundBuffers[spec.name];
+      if (!info) continue;
+      // baseInstance * stride を byteOffset として渡すことで、
+      // firstInstance のない WebGL2 と同じ「可視区間だけ描画」を実現します。
+      pass.setVertexBuffer(spec.slot, info.buffer as GPUBuffer, baseInstance * spec.stride);
+    }
     // 共有 Quad は triangle-strip の 4 頂点です
-    pass.draw(4, activeCount);
+    pass.draw(4, activeCount, 0, 0);
     pass.end();
 
     this.device.queue.submit([encoder.finish()]);
@@ -572,7 +530,13 @@ export class WebGPUDevice implements GraphicsDevice {
   setUniformMatrix4fv(name: string, matrix: Float32Array): void {
     if (!this.device || !this.uniformBuffer) return;
     void name;
-    this.device.queue.writeBuffer(this.uniformBuffer, 0, matrix.buffer as ArrayBuffer, matrix.byteOffset, 64);
+    this.device.queue.writeBuffer(
+      this.uniformBuffer,
+      0,
+      matrix.buffer as ArrayBuffer,
+      matrix.byteOffset,
+      64,
+    );
   }
 
   createPipeline(vertSource: string, fragSource: string): PipelineInfo {
@@ -604,19 +568,6 @@ export class WebGPUDevice implements GraphicsDevice {
       this.device = null;
     }
     this.textures.clear();
-    this._sources.clear();
-    this._instanceStaging = null;
-    this._stagingU8 = null;
-    this._instanceBuffer = null;
+    this._boundBuffers = {};
   }
-
-  /** SoA -> 連続レイアウトの pack 用バッファ (遅延確保) */
-  private _instanceStaging: Float32Array | null = null;
-  private _stagingU8: Uint8Array | null = null;
-  private _instanceBuffer: GPUBuffer | null = null;
-  /** 転送元の SoA 配列。pack 時に読み返します。 */
-  private readonly _sources = new Map<
-    BufferInfo,
-    { data: Float32Array | Uint32Array | Uint8Array; srcOffset: number; count: number }
-  >();
 }

@@ -6,34 +6,27 @@ import type {
   TextureFrame,
   TextureUploadOptions,
 } from './GraphicsDevice';
+import {
+  INSTANCE_BUFFERS,
+  QUAD_LOCATION,
+  QUAD_STRIDE_BYTES,
+  glslInstanceDecl,
+} from './InstanceLayout';
 
 /**
  * WebGL2 スプライト描画用の頂点シェーダー（GLSL ES 3.0）
- * インスタンシング属性を使用し、SoA データを直接処理する。
+ *
+ * インスタンスデータは **vec4 に詰めた 4 バッファ** で渡されます
+ * （`InstanceLayout` がレイアウトの単一の情報源）。
+ * これにより頂点属性の使用数は 15/16 から 6/16 へ、
+ * GPU アップロード単位は 13 本から 4 本へ減ります。
  */
 const SPRITE_VERT_GLSL = `#version 300 es
 precision highp float;
 
-layout(location = 0) in vec2 vertexPos;
-layout(location = 1) in vec2 vertexUV;
-layout(location = 2) in float posX;
-layout(location = 3) in float posY;
-layout(location = 4) in float scale;
-layout(location = 5) in float facing;
-layout(location = 6) in float rotation;
-// 0.0 なら描画をスキップします (Phaser 互換の setVisible)。
-// かつては depth (描画順) をここに渡していましたが、頂点シェーダで
-// 参照されておらず、デッド属性でした。頂点属性には上限 (WebGL2 では 16) が
-// あるため、空いた枠を可視性に使っています。
-layout(location = 7) in float visible;
-layout(location = 8) in float uvX;
-layout(location = 9) in float uvY;
-layout(location = 10) in float uvW;
-layout(location = 11) in float uvH;
-layout(location = 12) in float frameIdx;
-layout(location = 13) in vec4 tint;
-// 1.0 のインスタンスは SDF テキスト。0.0 は通常のスプライト。
-layout(location = 14) in float isText;
+layout(location = ${QUAD_LOCATION.Pos}) in vec2 vertexPos;
+layout(location = ${QUAD_LOCATION.Uv}) in vec2 vertexUV;
+${glslInstanceDecl()}
 
 uniform mat4 projectionMatrix;
 
@@ -44,18 +37,33 @@ out float vIsText;
 out float vVisible;
 
 void main() {
-    // 頂点を中心に scale してから rotation だけ回す
-    vec2 scaled = vertexPos * scale;
-    float c = cos(rotation);
-    float s = sin(rotation);
-    vec2 rotated = vec2(scaled.x * c - scaled.y * s, scaled.x * s + scaled.y * c);
-    vec2 worldPos = vec2(rotated.x * facing, rotated.y) + vec2(posX, posY);
+    // iTransform = (posX, posY, scaleX, scaleY)   ※ scale は倍率
+    // iUv        = (uvX, uvY, uvW, uvH)
+    // iFlags     = (frameIdx, facing, visible, isText)
+    // iShape     = (rotation, frameWidth, frameHeight, depth)
+    // iOrigin    = (originX, originY, scrollFactorX, scrollFactorY)
+    // iTint      = (r, g, b, a)   [unorm8 で正規化済み]
+
+    // 描画サイズは「フレームのピクセル寸法 × スケール倍率」です。
+    // scale = 1.0 ならフレームそのままの大きさになります。
+    vec2 frameSize = iShape.yz;
+    vec2 displaySize = frameSize * iTransform.zw;
+
+    // 原点 (0.5, 0.5 = 中心が既定) を引くとクワッドの位置的原点を再現できます。
+    // vertexPos は -0.5〜0.5 の単位クワッドなので、
+    // (vertexPos - (origin - 0.5)) * displaySize で原点を動かします。
+    vec2 local = (vertexPos - (iOrigin.xy - 0.5)) * displaySize;
+
+    float c = cos(iShape.x);
+    float s = sin(iShape.x);
+    vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
+    vec2 worldPos = vec2(rotated.x * iFlags.y, rotated.y) + iTransform.xy;
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
-    vUV = vertexUV * vec2(uvW, uvH) + vec2(uvX, uvY);
-    vLayer = frameIdx;
-    vTint = tint;
-    vIsText = isText;
-    vVisible = visible;
+    vUV = vertexUV * iUv.zw + iUv.xy;
+    vLayer = iFlags.x;
+    vTint = iTint;
+    vIsText = iFlags.w;
+    vVisible = iFlags.z;
 }
 `;
 
@@ -99,13 +107,32 @@ void main() {
 }
 `;
 
+/** シェーダーの uniform 位置をキャッシュするための入れ物 */
+interface UniformLocations {
+  projectionMatrix: WebGLUniformLocation | null;
+  textureArray: WebGLUniformLocation | null;
+  sdfThreshold: WebGLUniformLocation | null;
+  sdfSmoothing: WebGLUniformLocation | null;
+}
+
 export class WebGL2Device implements GraphicsDevice {
   private gl: WebGL2RenderingContext | null = null;
   private currentPipeline: WebGLProgram | null = null;
 
   private spritePipeline: PipelineInfo | null = null;
-  /** setupInstancedAttributes で使うバッファ表。クロージャを new しないため保持します。 */
-  private _boundBuffers: Record<string, BufferInfo> = {};
+  /**
+   * 頂点属性の指定は VAO に集約します。
+   * VAO を買わないと毎フレーム 15 属性を再指定することになり、
+   * `baseInstance` 対応のために属性を書き直す必要も出てきます。
+   */
+  private vao: WebGLVertexArrayObject | null = null;
+  /** VAO 作成時に 1 度だけ解決する uniform の位置 */
+  private uniforms: UniformLocations = {
+    projectionMatrix: null,
+    textureArray: null,
+    sdfThreshold: null,
+    sdfSmoothing: null,
+  };
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
 
@@ -141,14 +168,20 @@ export class WebGL2Device implements GraphicsDevice {
 
   private textures: Map<string, TextureAsset> = new Map();
 
+  /** setupInstancedAttributes で束縛したバッファ表。保持してクロージャを new しません。 */
+  private _boundBuffers: Record<string, BufferInfo> = {};
+  /** 現在の VAO に束縛済みかどうか。baseInstance 変更時にだけ作り直します。 */
+  private vaoDirty = true;
+  /** 現在の VAO が適用されている baseInstance */
+  private vaoBaseInstance = 0;
+
   async init(canvas: HTMLCanvasElement): Promise<void> {
     // preserveDrawingBuffer は既定で無効です。このままだと
     // 合成後の描画バッファが破棄されるため、.canvas へ drawImage しても
     // 透明な 0 が返り、描画の有無を自動テストで判定できません。
     // URL に ?preserveDrawingBuffer を付けたときだけ有効化します
     // (通常の実行では性能に影響しません)。
-    const params =
-      typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+    const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
     const attributes: WebGLContextAttributes = {
       preserveDrawingBuffer: params?.has('preserveDrawingBuffer') ?? false,
     };
@@ -156,13 +189,13 @@ export class WebGL2Device implements GraphicsDevice {
     // 例: ?textureSize=512 で 512x512x64 = 64 MB。
     const sizeParam = params?.get('textureSize');
     if (sizeParam !== null && sizeParam !== undefined) {
-      const n = parseInt(sizeParam, 10);
+      const n = Number.parseInt(sizeParam, 10);
       if (Number.isFinite(n) && n >= 64 && n <= 4096) {
         this.textureWidth = n;
         this.textureHeight = n;
       } else {
         console.warn(
-          `[WebGL2Device] ?textureSize=${sizeParam} は 64〜4096 の整数で 아닙니다。` +
+          `[WebGL2Device] ?textureSize=${sizeParam} は 64〜4096 の整数でありません。` +
             `既定値 ${this.textureWidth} を使います。`,
         );
       }
@@ -193,6 +226,7 @@ export class WebGL2Device implements GraphicsDevice {
       console.warn('[WebGL2Device] WebGL context restored. Rebuilding the texture array.');
       this.currentLayerCount = 1;
       this.textures.clear();
+      this.vaoDirty = true;
       this.initTextureArray();
     });
 
@@ -401,6 +435,7 @@ export class WebGL2Device implements GraphicsDevice {
   initPipelines(): void {
     this.spritePipeline = this.createPipeline(SPRITE_VERT_GLSL, SPRITE_FRAG_GLSL);
     this.createQuadBuffer();
+    this.cacheUniformLocations();
   }
 
   private createQuadBuffer(): void {
@@ -412,6 +447,20 @@ export class WebGL2Device implements GraphicsDevice {
     this.quadBuffer = this.gl.createBuffer();
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.quadBuffer);
     this.gl.bufferData(this.gl.ARRAY_BUFFER, quadData, this.gl.STATIC_DRAW);
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+  }
+
+  /**
+   * uniform の位置をパイプライン作成時に一度だけ解決します。
+   * 毎フレーム `getUniformLocation` を呼ぶと文字列探索コストがフレームごとに発生します。
+   */
+  private cacheUniformLocations(): void {
+    if (!this.gl || !this.spritePipeline) return;
+    const program = this.spritePipeline.id as WebGLProgram;
+    this.uniforms.projectionMatrix = this.gl.getUniformLocation(program, 'projectionMatrix');
+    this.uniforms.textureArray = this.gl.getUniformLocation(program, 'textureArray');
+    this.uniforms.sdfThreshold = this.gl.getUniformLocation(program, 'sdfThreshold');
+    this.uniforms.sdfSmoothing = this.gl.getUniformLocation(program, 'sdfSmoothing');
   }
 
   createBuffer(size: number): BufferInfo {
@@ -421,12 +470,14 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer);
     this.gl.bufferData(this.gl.ARRAY_BUFFER, size, this.gl.DYNAMIC_DRAW);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    // バッファ実体が入れ替わったので VAO を作り直します。
+    this.vaoDirty = true;
 
     return { buffer, size };
   }
 
   /**
-   * SoA 配列を GPU へ転送します。
+   * packed ミラーを GPU へ転送します。
    *
    * `TypedArray.prototype.subarray()` は呼び出しごとに新しいビューオブジェクトを
    * ヒープへ確保するため、毎フレーム呼ぶとゼロアロケーションの掟に反します。
@@ -468,81 +519,100 @@ export class WebGL2Device implements GraphicsDevice {
       // Texture2DArray をバインド
       this.gl.activeTexture(this.gl.TEXTURE0);
       this.gl.bindTexture(this.gl.TEXTURE_2D_ARRAY, this.textureArray);
-      const program = this.spritePipeline.id as WebGLProgram;
-      const loc = this.gl.getUniformLocation(program, 'textureArray');
-      if (loc !== null) {
-        this.gl.uniform1i(loc, 0);
+      if (this.uniforms.textureArray !== null) {
+        this.gl.uniform1i(this.uniforms.textureArray, 0);
       }
       // SDF テキスト用の閾値。uniform を忘れると未定義値になりグリフが消えます。
-      const t = this.gl.getUniformLocation(program, 'sdfThreshold');
-      if (t !== null) this.gl.uniform1f(t, sdfThreshold);
-      const s = this.gl.getUniformLocation(program, 'sdfSmoothing');
-      if (s !== null) this.gl.uniform1f(s, sdfSmoothing);
+      if (this.uniforms.sdfThreshold !== null) {
+        this.gl.uniform1f(this.uniforms.sdfThreshold, sdfThreshold);
+      }
+      if (this.uniforms.sdfSmoothing !== null) {
+        this.gl.uniform1f(this.uniforms.sdfSmoothing, sdfSmoothing);
+      }
     }
   }
 
-  setupInstancedAttributes(buffers: Record<string, BufferInfo>, activeCount?: number): void {
+  /**
+   * インスタンス属性を VAO へ設定します。
+   *
+   * `baseInstance` を指定すると、可視区間の先頭インスタンスだけを描画できます。
+   * WebGL2 には `firstInstance`  引数が無い代替として、
+   * `vertexAttribPointer` の `byteOffset`（インスタンス index に加算される）を使います。
+   */
+  setupInstancedAttributes(
+    buffers: Record<string, BufferInfo>,
+    activeCount?: number,
+    baseInstance = 0,
+  ): void {
     void activeCount;
     if (!this.gl || !this.spritePipeline) return;
 
-    // 0: vertexPos, 1: vertexUV
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.quadBuffer);
-    this.gl.enableVertexAttribArray(0);
-    this.gl.vertexAttribPointer(0, 2, this.gl.FLOAT, false, 16, 0);
-
-    this.gl.enableVertexAttribArray(1);
-    this.gl.vertexAttribPointer(1, 2, this.gl.FLOAT, false, 16, 8);
-
-    this._boundBuffers = buffers;
-    this._bindAttr(2, 'posX');
-    this._bindAttr(3, 'posY');
-    this._bindAttr(4, 'scale');
-    this._bindAttr(6, 'rotation');
-    // 7: visible (未使用だった枠を可視性フラグとして再利用)
-    this._setDefault(7, 'visible', 1.0);
-
-    this._setDefault(5, 'facing', 1.0);
-    this._setDefault(8, 'uvX', 0.0);
-    this._setDefault(9, 'uvY', 0.0);
-    this._setDefault(10, 'uvW', 1.0);
-    this._setDefault(11, 'uvH', 1.0);
-    this._setDefault(12, 'frameIdx', 0.0);
-
-    if (buffers['tint']) {
-      const b = buffers['tint'];
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-      this.gl.enableVertexAttribArray(13);
-      this.gl.vertexAttribPointer(13, 4, this.gl.UNSIGNED_BYTE, true, 0, 0);
-      this.gl.vertexAttribDivisor(13, 1);
-    } else {
-      this.gl.disableVertexAttribArray(13);
-      this.gl.vertexAttrib4f(13, 1.0, 1.0, 1.0, 1.0);
+    // バッファ表が変わった場合は VAO を作り直します。
+    if (this._boundBuffers !== buffers) {
+      this._boundBuffers = buffers;
+      this.vaoDirty = true;
     }
 
-    // 14: isText (SDF テキストか否か)
-    this._bindAttr(14, 'isText');
+    if (this.vaoDirty || this.vaoBaseInstance !== baseInstance) {
+      this.applyVertexAttribs(baseInstance);
+      this.vaoBaseInstance = baseInstance;
+    }
+    this.gl.bindVertexArray(this.vao);
   }
 
-  /** 単一スカラー属性をインスタンス属性としてバインドします。 */
-  private _bindAttr(loc: number, bufName: string): void {
-    if (!this.gl) return;
-    const b = this._boundBuffers[bufName];
-    if (b) {
-      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, b.buffer);
-      this.gl.enableVertexAttribArray(loc);
-      this.gl.vertexAttribPointer(loc, 1, this.gl.FLOAT, false, 0, 0);
-      this.gl.vertexAttribDivisor(loc, 1);
-    }
-  }
+  /**
+   * VAO を新規作成して全インスタンス属性を指定します。
+   * `baseInstance` を変えたときだけ呼ばれます（毎フレームではありません）。
+   */
+  private applyVertexAttribs(baseInstance: number): void {
+    const gl = this.gl;
+    if (!gl || !this.quadBuffer) return;
 
-  /** バッファが無い属性は定数へバインドします (無効化しません)。 */
-  private _setDefault(loc: number, bufName: string, def: number): void {
-    if (this._boundBuffers[bufName]) {
-      this._bindAttr(loc, bufName);
-    } else if (this.gl) {
-      this.gl.disableVertexAttribArray(loc);
-      this.gl.vertexAttrib1f(loc, def);
+    const vao = gl.createVertexArray();
+    if (!vao) {
+      throw new Error('Failed to create WebGL2 vertex array object');
     }
+    gl.bindVertexArray(vao);
+
+    // 共有 Quad (per-vertex)
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    gl.enableVertexAttribArray(QUAD_LOCATION.Pos);
+    gl.vertexAttribPointer(QUAD_LOCATION.Pos, 2, gl.FLOAT, false, QUAD_STRIDE_BYTES, 0);
+    gl.enableVertexAttribArray(QUAD_LOCATION.Uv);
+    gl.vertexAttribPointer(QUAD_LOCATION.Uv, 2, gl.FLOAT, false, QUAD_STRIDE_BYTES, 8);
+
+    // インスタンス属性 (per-instance)
+    // byteOffset に baseInstance * stride を足すことで、firstInstance を実現します。
+    // WebGL2 には drawArraysInstanced の firstInstance 引数が無いため、
+    // インスタンス index に加算される属性オフセットを利用します。
+    for (let b = 0; b < INSTANCE_BUFFERS.length; b++) {
+      const spec = INSTANCE_BUFFERS[b];
+      if (!spec.eager) continue;
+      const info = this._boundBuffers[spec.name];
+      if (!info) continue;
+      const buf = info.buffer as WebGLBuffer;
+      const instanceOffset = baseInstance * spec.stride;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      for (let v = 0; v < spec.vectors; v++) {
+        const loc = spec.location + v;
+        const attrOffset = instanceOffset + v * (spec.format === 'unorm8x4' ? 4 : 16);
+        gl.enableVertexAttribArray(loc);
+        if (spec.format === 'unorm8x4') {
+          gl.vertexAttribPointer(loc, 4, gl.UNSIGNED_BYTE, true, spec.stride, attrOffset);
+        } else {
+          gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, spec.stride, attrOffset);
+        }
+        gl.vertexAttribDivisor(loc, 1);
+      }
+    }
+
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+    // 作り直しになったので古い VAO を破棄します。
+    if (this.vao !== null && this.vao !== vao) gl.deleteVertexArray(this.vao);
+    this.vao = vao;
+    this.vaoDirty = false;
   }
 
   private compileShader(type: number, source: string): WebGLShader {
@@ -579,6 +649,13 @@ export class WebGL2Device implements GraphicsDevice {
     this.gl.deleteShader(vert);
     this.gl.deleteShader(frag);
 
+    // 別のプログラムへ切り替わったら VAO と uniform のキャッシュを破棄します。
+    this.vaoDirty = true;
+    this.uniforms.projectionMatrix = null;
+    this.uniforms.textureArray = null;
+    this.uniforms.sdfThreshold = null;
+    this.uniforms.sdfSmoothing = null;
+
     return { id: program };
   }
 
@@ -590,19 +667,67 @@ export class WebGL2Device implements GraphicsDevice {
 
   setUniformMatrix4fv(name: string, matrix: Float32Array): void {
     if (!this.gl || !this.currentPipeline) return;
-    const location = this.gl.getUniformLocation(this.currentPipeline, name);
+    if (name !== 'projectionMatrix') return;
+    const location = this.uniforms.projectionMatrix;
     if (location !== null) {
       this.gl.uniformMatrix4fv(location, false, matrix);
     }
   }
 
-  drawInstanced(activeCount: number): void {
+  /**
+   * 現在の描画結果を `out` へ読み戻します。
+   *
+   * WebGL は `readPixels` を合成前に呼ぶ必要があるため、
+   * **フレームの draw と同じタスク内**から呼ぶ必要があります。
+   * ブラウザのスクリーンショット取得は `canvas.toDataURL` を使ってください。
+   */
+  readPixels(out: Uint8Array, width?: number, height?: number): boolean {
+    const gl = this.gl;
+    if (!gl) return false;
+    if (this.contextLost) return false;
+
+    const w = width ?? gl.drawingBufferWidth;
+    const h = height ?? gl.drawingBufferHeight;
+    const need = w * h * 4;
+    if (out.length < need) return false;
+
+    // まず下原点のまま読み、続けて行を反転して左上原点にします。
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, out);
+
+    if (this._flipRow === null || this._flipRow.length < w * 4) {
+      this._flipRow = new Uint8Array(w * 4);
+    }
+    const rowBytes = w * 4;
+    const tmp = this._flipRow;
+    for (let y = 0; y < h >> 1; y++) {
+      const top = y * rowBytes;
+      const bottom = (h - 1 - y) * rowBytes;
+      for (let i = 0; i < rowBytes; i++) tmp[i] = out[top + i];
+      for (let i = 0; i < rowBytes; i++) out[top + i] = out[bottom + i];
+      for (let i = 0; i < rowBytes; i++) out[bottom + i] = tmp[i];
+    }
+    return true;
+  }
+
+  /** readPixels の行反転に使うスクラッチ。スクリーンショット経路のみで使用します。 */
+  private _flipRow: Uint8Array | null = null;
+
+  drawInstanced(activeCount: number, baseInstance = 0): void {
     if (!this.gl) return;
+    if (this.contextLost) return;
+    if (this.vao === null) return;
+    // VAO の属性指定は setupInstancedAttributes 側で済んでいるため、
+    // ここでは draw のみ発行します。
+    void baseInstance;
     this.gl.drawArraysInstanced(this.gl.TRIANGLE_STRIP, 0, 4, activeCount);
   }
 
   destroy(): void {
     if (this.gl) {
+      if (this.vao) {
+        this.gl.deleteVertexArray(this.vao);
+        this.vao = null;
+      }
       const ext = this.gl.getExtension('WEBGL_lose_context');
       if (ext) {
         ext.loseContext();
