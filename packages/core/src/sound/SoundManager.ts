@@ -354,8 +354,7 @@ export class SoundManager {
   constructor(config: AudioConfig = {}) {
     const Ctor =
       window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (Ctor === undefined) {
       throw new Error('Web Audio API が利用できません (AudioContext がありません)');
     }
@@ -383,11 +382,7 @@ export class SoundManager {
     }
     this.masterGain.gain.value = this._defaultVolume;
 
-    this.setListenerPosition(
-      config.listenerX ?? 0,
-      config.listenerY ?? 0,
-      config.listenerZ ?? 100,
-    );
+    this.setListenerPosition(config.listenerX ?? 0, config.listenerY ?? 0, config.listenerZ ?? 100);
   }
 
   // ============================================================
@@ -668,7 +663,7 @@ export class SoundManager {
    * @param y リスナー Y
    * @param z リスナー Z
    */
-  public setListenerPosition(x: number, y: number, z: number = 100): this {
+  public setListenerPosition(x: number, y: number, z = 100): this {
     const listener = this.context.listener;
     if (listener.positionX !== undefined) {
       listener.positionX.value = x;

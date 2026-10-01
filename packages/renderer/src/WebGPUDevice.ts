@@ -161,6 +161,17 @@ export class WebGPUDevice implements GraphicsDevice {
   public limits: GPUSupportedLimits | null = null;
 
   /**
+   * テクスチャ配列 1 レあたりの幅 (ピクセル)。
+   * フレーム UV の正規化基準になります。
+   */
+  public readonly textureWidth = 2048;
+
+  /**
+   * テクスチャ配列 1 レあたりの高さ (ピクセル)。{@link textureWidth} と同じ基準。
+   */
+  public readonly textureHeight = 2048;
+
+  /**
    * `setupInstancedAttributes` で束縛した GPU バッファ（スロット番号 → バッファ）。
    * キーには `INSTANCE_BUFFERS` の name を使います。
    */
@@ -386,16 +397,22 @@ export class WebGPUDevice implements GraphicsDevice {
     );
 
     // フレーム UV の構築。WebGL2 側と同じ規則に揃えます。
+    //
+    // 正規化の基準は **テクスチャ配列のレイヤー寸法** です。
+    // 画像は (0, 0) から配置され、レイヤーより小さい分は未使用領域になるため、
+    // ソース画像寸法で正規化するとサンプル位置がずれます。
     const frames: TextureFrame[] = [];
+    const normW = this.textureWidth;
+    const normH = this.textureHeight;
     const explicit = options?.frames;
     if (explicit !== undefined && explicit.length > 0) {
       for (let i = 0; i < explicit.length; i++) {
         const r = explicit[i];
         frames.push({
-          uvX: r.x / width,
-          uvY: r.y / height,
-          uvW: r.w / width,
-          uvH: r.h / height,
+          uvX: r.x / normW,
+          uvY: r.y / normH,
+          uvW: r.w / normW,
+          uvH: r.h / normH,
         });
       }
     } else {
@@ -406,10 +423,10 @@ export class WebGPUDevice implements GraphicsDevice {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           frames.push({
-            uvX: (c * gridW) / width,
-            uvY: (r * gridH) / height,
-            uvW: gridW / width,
-            uvH: gridH / height,
+            uvX: (c * gridW) / normW,
+            uvY: (r * gridH) / normH,
+            uvW: gridW / normW,
+            uvH: gridH / normH,
           });
         }
       }

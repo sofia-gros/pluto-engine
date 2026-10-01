@@ -37,6 +37,7 @@ import {
   UvLane,
 } from '@pluto-engine/renderer';
 import type { AnimState } from '../anim/AnimState';
+import type { Body } from '../physics/Body';
 
 /**
  * スプライトが参照するテクスチャアセットの最小インターフェース。
@@ -253,6 +254,15 @@ export class InstanceBufferArena {
 
   /** アニメーション再生の委譲先。Scene 構築時に差し込まれる。 */
   public animTracker: AnimPlayTarget | null = null;
+
+  /**
+   * Body ハンドルのファクトリ。Scene が登録します。
+   *
+   * Sprite は Scene 参照を持たないため、Body はこの注入された
+   * ファクトリ経由で取得します。キャッシュは Scene 側にあるため、
+   * 呼び出しごとに new は発生しません。
+   */
+  public bodyFactory: ((entityId: number) => Body) | null = null;
 
   /**
    * 親子関係を持つエンティティが 1 体でも存在するかどうか。

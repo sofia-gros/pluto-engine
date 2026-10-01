@@ -12,6 +12,7 @@
 
 import { DEFAULT_FRAME_SIZE } from '@pluto-engine/renderer';
 import type { AnimState } from '../anim/AnimState';
+import type { Body } from '../physics/Body';
 import type { InstanceBufferArena, SpriteAssetLike } from './InstanceBufferArena';
 
 /** 座標を受け取るための出力先 (Phaser 互換の getBounds 系) */
@@ -1002,7 +1003,7 @@ export class Sprite {
   }
 
   /**
-   * このスプライトのアニメーション状態ハンドル (Phaser 互換の `sprite.anims`)。
+   * アニメーション状態ハンドル (Phaser 互換の `sprite.anims`)。
    *
    * Flyweight なので毎フレーム new しません。内部配列を使い回し、
    * 同じスロットなら同じインスタンスを返します。停止中は
@@ -1012,6 +1013,17 @@ export class Sprite {
    */
   public get anims(): AnimState | null {
     return this._arena.animTracker?.getAnimState(this.id) ?? null;
+  }
+
+  /**
+   * 物理ボディ (Phaser 互換の `sprite.body`)。
+   *
+   * Scene の Body ハンドルキャッシュを経由するため、毎フレーム new は起きません。
+   * Sprite 自身は Scene 参照を持たないため、null の場合は
+   * {@link Scene.getBody} を使ってください。
+   */
+  public get body(): Body | null {
+    return this._arena.bodyFactory?.(this.id) ?? null;
   }
 
   /**

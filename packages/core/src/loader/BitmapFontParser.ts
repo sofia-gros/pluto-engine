@@ -188,7 +188,7 @@ function readNumber(line: string, key: string): number | null {
   const re = new RegExp(`(?:^|\\s)${key}=(-?[0-9.]+)`);
   const m = re.exec(line);
   if (m === null) return null;
-  const v = parseFloat(m[1]);
+  const v = Number.parseFloat(m[1]);
   return Number.isNaN(v) ? null : v;
 }
 

@@ -73,6 +73,19 @@ export interface GraphicsDevice {
   ): void;
 
   /**
+   * テクスチャ配列 1 レあたりの幅 (ピクセル)。
+   *
+   * フレーム UV の正規化はこのレイヤー寸法が基準になります。
+   * ソース画像がレイヤーより小さい場合、画像は左上に寄せて配置され、
+   * 残りは未使用領域となるため、ソース寸法で正規化してはいけません。
+   */
+  readonly textureWidth: number;
+  /**
+   * テクスチャ配列 1 レあたりの高さ (ピクセル)。{@link textureWidth} と同じ基準。
+   */
+  readonly textureHeight: number;
+
+  /**
    * 画像・Canvas・BitmapをGPUのTexture2DArrayに転送し、テクスチャアセットを登録します。
    */
   uploadTexture(

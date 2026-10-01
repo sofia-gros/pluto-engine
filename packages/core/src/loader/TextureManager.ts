@@ -23,6 +23,8 @@ function buildFrames(
   width: number,
   height: number,
   options: TextureUploadOptions,
+  normWidth: number,
+  normHeight: number,
 ): TextureFrame[] {
   const frames: TextureFrame[] = [];
   const explicit = options.frames;
@@ -30,10 +32,10 @@ function buildFrames(
     for (let i = 0; i < explicit.length; i++) {
       const r = explicit[i];
       frames.push({
-        uvX: r.x / width,
-        uvY: r.y / height,
-        uvW: r.w / width,
-        uvH: r.h / height,
+        uvX: r.x / normWidth,
+        uvY: r.y / normHeight,
+        uvW: r.w / normWidth,
+        uvH: r.h / normHeight,
       });
     }
     return frames;
@@ -46,10 +48,10 @@ function buildFrames(
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       frames.push({
-        uvX: (c * gridW) / width,
-        uvY: (r * gridH) / height,
-        uvW: gridW / width,
-        uvH: gridH / height,
+        uvX: (c * gridW) / normWidth,
+        uvY: (r * gridH) / normHeight,
+        uvW: gridW / normWidth,
+        uvH: gridH / normHeight,
       });
     }
   }
@@ -59,6 +61,11 @@ function buildFrames(
 export class TextureManager {
   private device: GraphicsDevice | null = null;
   private textures: Map<string, TextureAsset> = new Map();
+  /**
+   * テクスチャ配列 1 レあたりのサイズ (ピクセル)。
+   * setDevice() でデバイスから受け取ります。未設定は null。
+   */
+  private textureSize: number | null = null;
 
   constructor(device?: GraphicsDevice | null) {
     this.device = device || null;
@@ -69,6 +76,7 @@ export class TextureManager {
    */
   public setDevice(device: GraphicsDevice): void {
     this.device = device;
+    this.textureSize = device.textureWidth;
     for (const [key, asset] of this.textures.entries()) {
       const source = (asset as any)._source;
       if (source && this.device) {
@@ -124,9 +132,14 @@ export class TextureManager {
       return asset;
     }
 
-    // デバイスが無い間も UV を計算しないと Sprite.setFrame() が何もできません。
+    // デバイス未初期化の経路。
+    // テクスチャ配列のレイヤー寸法がわかっている場合はそれを使い、
+    // まだ不明な段階ではソース画像寸法で正規化します
+    // (この値はデバイス初期化後の uploadTexture() で正しい UV へ上書きされます)。
     const width = source.width;
     const height = source.height;
+    const normW = this.textureSize ?? width;
+    const normH = this.textureSize ?? height;
     const asset: TextureAsset = {
       key,
       layerIndex: 0,
@@ -134,7 +147,7 @@ export class TextureManager {
       height,
       frameWidth: options.frameWidth || width,
       frameHeight: options.frameHeight || height,
-      frames: buildFrames(width, height, options),
+      frames: buildFrames(width, height, options, normW, normH),
       ...({ _source: source } as any),
     };
     this.textures.set(key, asset);

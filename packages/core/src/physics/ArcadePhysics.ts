@@ -73,10 +73,58 @@ export class ArcadePhysics implements Plugin {
   public scene?: Scene;
   private arena!: InstanceBufferArena;
 
+  // ============================================================
+  // Body の SoA
+  //
+  // **添字はアリーナの密添字 (dense index) です。**
+  // これらの配列は update() で 0..activeCount-1 を順に走査するため、
+  // 密添字でないと 1 体でも解放された瞬間に値がずれます。
+  // 外部 API (setVelocity / Body など) は **疎添字の ID** を受け取り、
+  // 内部で arena.idToIndex を通します。
+  // ============================================================
   public velX: Float32Array;
   public velY: Float32Array;
   public mass: Float32Array;
   public bounce: Float32Array;
+  /** 加速度 */
+  public accelX: Float32Array;
+  public accelY: Float32Array;
+  /** 空気抵抗 (1 フレームあたりの減衰率、0〜1) */
+  public dragX: Float32Array;
+  public dragY: Float32Array;
+  /** 速度の上限。0 以下は無制限 */
+  public maxVelX: Float32Array;
+  public maxVelY: Float32Array;
+  /** 当たり判定の半径 (0 のときは矩形判定) */
+  public radius: Float32Array;
+  /** 当たり判定矩形の幅と高さ (radius が 0 のときだけ使用) */
+  public bodyWidth: Float32Array;
+  public bodyHeight: Float32Array;
+  /** 当たり判定中心のスプライト中心からのオフセット */
+  public offsetX: Float32Array;
+  public offsetY: Float32Array;
+  /** 押し出されない (1 = immovable) */
+  public immovable: Uint8Array;
+  /** ワールド境界で反弹する (1 = 有効) */
+  public collideWorldBounds: Uint8Array;
+
+  // ============================================================
+  // World (シーン全体で 1 つ)
+  // ============================================================
+  /** ワールド境界の左端 */
+  public boundsX = 0;
+  /** ワールド境界の上端 */
+  public boundsY = 0;
+  /** ワールド境界の幅 */
+  public boundsWidth = 0;
+  /** ワールド境界の高さ */
+  public boundsHeight = 0;
+  /** ワールドが境界を持つか */
+  public hasBounds = false;
+  /** 重力加速度 X */
+  public gravityX = 0;
+  /** 重力加速度 Y */
+  public gravityY = 0;
 
   private _overlapRules: OverlapRule[] = [];
   private _colliderRules: ColliderRule[] = [];
@@ -162,6 +210,20 @@ export class ArcadePhysics implements Plugin {
     this.velY = new Float32Array(maxInstances);
     this.mass = new Float32Array(maxInstances).fill(1.0);
     this.bounce = new Float32Array(maxInstances).fill(0.0);
+    this.accelX = new Float32Array(maxInstances);
+    this.accelY = new Float32Array(maxInstances);
+    this.dragX = new Float32Array(maxInstances);
+    this.dragY = new Float32Array(maxInstances);
+    // 0 は「無制限」を表すので初期値は 0 のままです
+    this.maxVelX = new Float32Array(maxInstances);
+    this.maxVelY = new Float32Array(maxInstances);
+    this.radius = new Float32Array(maxInstances);
+    this.bodyWidth = new Float32Array(maxInstances);
+    this.bodyHeight = new Float32Array(maxInstances);
+    this.offsetX = new Float32Array(maxInstances);
+    this.offsetY = new Float32Array(maxInstances);
+    this.immovable = new Uint8Array(maxInstances);
+    this.collideWorldBounds = new Uint8Array(maxInstances);
   }
 
   /**
@@ -173,27 +235,354 @@ export class ArcadePhysics implements Plugin {
   }
 
   /**
-   * エンティティの速度を設定
+   * 疎添字の ID を密添字へ変換します。
+   *
+   * SoA は密添字で更新するため、外部 API は必ずここを通します。
+   * 存在しない ID は -1 を返します。
    */
-  public setVelocity(id: number, vx: number, vy: number): void {
-    this.velX[id] = vx;
-    this.velY[id] = vy;
+  private _idx(id: number): number {
+    const arena = this.arena;
+    if (!arena || id < 0) return -1;
+    return arena.idToIndex[id];
   }
 
   /**
-   * 物理更新 (位置積分)
+   * エンティティの速度を設定します。
+   * @param id アリーナの疎添字 ID
+   */
+  public setVelocity(id: number, vx: number, vy: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.velX[i] = vx;
+    this.velY[i] = vy;
+  }
+
+  /**
+   * 加速度を設定します (Phaser 互換の `setAcceleration`)。
+   */
+  public setAcceleration(id: number, ax: number, ay: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.accelX[i] = ax;
+    this.accelY[i] = ay;
+  }
+
+  /**
+   * 空気抵抗を設定します (Phaser 互換の `setDrag`)。
+   * 1 フレームごとに速度が drag の割合だけ減衰します。
+   */
+  public setDrag(id: number, drag: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.dragX[i] = drag;
+    this.dragY[i] = drag;
+  }
+
+  /**
+   * 速度の上限を設定します (Phaser 互換の `setMaxVelocity`)。
+   * 0 以下は無制限として扱います。
+   */
+  public setMaxVelocity(id: number, maxVx: number, maxVy: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.maxVelX[i] = maxVx;
+    this.maxVelY[i] = maxVy;
+  }
+
+  /**
+   * 当たり判定の形状を設定します (Phaser 互換の `setCircle`)。
+   */
+  public setCircle(id: number, r: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.radius[i] = r;
+  }
+
+  /**
+   * 当たり判定の形状を設定します (Phaser 互換の `setSize`)。
+   * width/height が 0 の場合は矩形を無効化し、表示寸法へ委ねます。
+   */
+  public setSize(id: number, w: number, h: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.radius[i] = 0;
+    this.bodyWidth[i] = w;
+    this.bodyHeight[i] = h;
+  }
+
+  /**
+   * 当たり判定中心のスプライト中心からのオフセットを設定します。
+   */
+  public setOffset(id: number, ox: number, oy: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.offsetX[i] = ox;
+    this.offsetY[i] = oy;
+  }
+
+  /**
+   * 押し出されないようにします (Phaser 互換の `setImmovable`)。
+   */
+  public setImmovable(id: number, value: boolean): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.immovable[i] = value ? 1 : 0;
+  }
+
+  /**
+   * ワールド境界での反弹を有効にします (Phaser 互換の `setCollideWorldBounds`)。
+   */
+  public setCollideWorldBounds(id: number, value: boolean): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.collideWorldBounds[i] = value ? 1 : 0;
+  }
+
+  /**
+   * ワールド境界を設定します (Phaser 互換の `setBoundsRectangle`)。
+   * @param width / height が 0 以下の場合は境界なしとして扱います   */
+  public setBounds(x: number, y: number, width: number, height: number): void {
+    this.boundsX = x;
+    this.boundsY = y;
+    this.boundsWidth = width > 0 ? width : 0;
+    this.boundsHeight = height > 0 ? height : 0;
+    this.hasBounds = this.boundsWidth > 0 && this.boundsHeight > 0;
+  }
+
+  /**
+   * ワールド境界を無効にします。
+   */
+  public clearBounds(): void {
+    this.hasBounds = false;
+    this.boundsWidth = 0;
+    this.boundsHeight = 0;
+  }
+
+  /**
+   * 当たり判定の半幅を返します。矩形設定がなければ表示寸法の半分を使います。
+   */
+  private _halfWidth(i: number): number {
+    const bw = this.bodyWidth[i];
+    if (bw > 0) return bw * 0.5;
+    const arena = this.arena;
+    return arena.frameWidth[i] * arena.scaleX[i] * 0.5;
+  }
+
+  /** 当たり判定の半高を返します。 */
+  private _halfHeight(i: number): number {
+    const bh = this.bodyHeight[i];
+    if (bh > 0) return bh * 0.5;
+    const arena = this.arena;
+    return arena.frameHeight[i] * arena.scaleY[i] * 0.5;
+  }
+
+  // ============================================================
+  // Flyweight (Body) 向けの読み取りアクセサ
+  // すべて疎添字の ID を受け取り、内部で密添字へ変換します。
+  // 存在しない ID は 0 を返します。
+  // ============================================================
+
+  /** 当たり判定の半幅。矩形設定がなければ表示寸法の半分 */
+  public getHalfWidth(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this._halfWidth(i);
+  }
+
+  /** 当たり判定の半高。矩形設定がなければ表示寸法の半分 */
+  public getHalfHeight(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this._halfHeight(i);
+  }
+
+  /** X 座標 */
+  public getBodyX(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.arena.posX[i];
+  }
+
+  /** X 座標を設定します。 */
+  public setBodyX(id: number, v: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.arena.setPosX(i, v);
+  }
+
+  /** Y 座標 */
+  public getBodyY(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.arena.posY[i];
+  }
+
+  /** Y 座標を設定します。 */
+  public setBodyY(id: number, v: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.arena.setPosY(i, v);
+  }
+
+  /** 水平方向の速度 */
+  public getVelocityX(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.velX[i];
+  }
+
+  /** 垂直方向の速度 */
+  public getVelocityY(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.velY[i];
+  }
+
+  /** 水平方向の加速度 */
+  public getAccelerationX(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.accelX[i];
+  }
+
+  /** 垂直方向の加速度 */
+  public getAccelerationY(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.accelY[i];
+  }
+
+  /** 空気抵抗 */
+  public getDrag(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.dragX[i];
+  }
+
+  /** 反発係数 */
+  public getBounce(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.bounce[i];
+  }
+
+  /** 反発係数を設定します。0〜1 にクランプします。 */
+  public setBounce(id: number, v: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.bounce[i] = v < 0 ? 0 : v > 1 ? 1 : v;
+  }
+
+  /** 質量 */
+  public getMass(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.mass[i];
+  }
+
+  /** 質量を設定します。0 未満は 0 にクランプします。 */
+  public setMass(id: number, v: number): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.mass[i] = v < 0 ? 0 : v;
+  }
+
+  /** 水平方向の速度上限 */
+  public getMaxVelocityX(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.maxVelX[i];
+  }
+
+  /** 垂直方向の速度上限 */
+  public getMaxVelocityY(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.maxVelY[i];
+  }
+
+  /** 当たり判定の半径 */
+  public getRadius(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.radius[i];
+  }
+
+  /** 押し出されないか */
+  public getImmovable(id: number): boolean {
+    const i = this._idx(id);
+    return i >= 0 && this.immovable[i] === 1;
+  }
+
+  /** ワールド境界で反弹するか */
+  public getCollideWorldBounds(id: number): boolean {
+    const i = this._idx(id);
+    return i >= 0 && this.collideWorldBounds[i] === 1;
+  }
+
+  /**
+   * 物理更新 (加速度・空気抵抗・速度上限・ワールド境界の処理を含む積分)。
+   *
+   * 順序は Phaser Arcade Physics に合わせています。
+   * 加速度 → 重力 → 空気抵抗 → 速度上限 → 位置更新 → 境界反射
    */
   public update(dt: number): void {
     const arena = this.arena;
     if (!arena) return;
     const count = arena.activeCount;
+    if (count === 0) return;
+
+    const gx = this.gravityX;
+    const gy = this.gravityY;
+    const hasBounds = this.hasBounds;
+    const bx0 = this.boundsX;
+    const by0 = this.boundsY;
+    const bx1 = bx0 + this.boundsWidth;
+    const by1 = by0 + this.boundsHeight;
 
     // packed ミラーも同時に更新するため、write-through セッターを使います。
     // read-modify-write なので、値を読み直してから書き戻す形になります
     // （ここが最も実行回数の多いループですが、SoA 読み込み + ミラー書き込みのみです）。
     for (let i = 0; i < count; i++) {
-      arena.setPosX(i, arena.posX[i] + this.velX[i] * dt);
-      arena.setPosY(i, arena.posY[i] + this.velY[i] * dt);
+      let vx = this.velX[i];
+      let vy = this.velY[i];
+
+      // 1. 加速度と重力を速度に加算
+      vx += (this.accelX[i] + gx) * dt;
+      vy += (this.accelY[i] + gy) * dt;
+
+      // 2. 空気抵抗。drag は 0〜1 の比率として毎フレーム減衰させます
+      const dx = this.dragX[i];
+      if (dx > 0) vx -= vx * dx;
+      const dy = this.dragY[i];
+      if (dy > 0) vy -= vy * dy;
+
+      // 3. 速度上限。0 以下は無制限
+      const mx = this.maxVelX[i];
+      if (mx > 0 && vx > mx) vx = mx;
+      else if (mx > 0 && vx < -mx) vx = -mx;
+      const my = this.maxVelY[i];
+      if (my > 0 && vy > my) vy = my;
+      else if (my > 0 && vy < -my) vy = -my;
+
+      this.velX[i] = vx;
+      this.velY[i] = vy;
+
+      // 4. 位置積分
+      let px = arena.posX[i] + vx * dt;
+      let py = arena.posY[i] + vy * dt;
+
+      // 5. ワールド境界の反射
+      if (hasBounds && this.collideWorldBounds[i] === 1) {
+        const b = this.bounce[i];
+        // 左
+        if (px < bx0) {
+          px = bx0;
+          if (vx < 0) vx = -vx * b;
+        } else if (px > bx1) {
+          px = bx1;
+          if (vx > 0) vx = -vx * b;
+        }
+        // 上
+        if (py < by0) {
+          py = by0;
+          if (vy < 0) vy = -vy * b;
+        } else if (py > by1) {
+          py = by1;
+          if (vy > 0) vy = -vy * b;
+        }
+        this.velX[i] = vx;
+        this.velY[i] = vy;
+      }
+
+      arena.setPosX(i, px);
+      arena.setPosY(i, py);
     }
   }
 

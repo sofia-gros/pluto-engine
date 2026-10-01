@@ -10,19 +10,16 @@
  */
 
 import type { TextureAsset } from '@pluto-engine/renderer';
+import { type ParsedAtlas, parseAtlasJson } from './AtlasParser';
+import {
+  type ParsedBitmapFont,
+  parseBitmapFontJson,
+  parseBitmapFontText,
+} from './BitmapFontParser';
 import type { TextureManager } from './TextureManager';
-import { parseAtlasJson, type ParsedAtlas } from './AtlasParser';
-import { parseBitmapFontJson, parseBitmapFontText, type ParsedBitmapFont } from './BitmapFontParser';
 
 /** 読み込みの種類。 */
-export type AssetType =
-  | 'image'
-  | 'spritesheet'
-  | 'atlas'
-  | 'bitmapfont'
-  | 'json'
-  | 'csv'
-  | 'yaml';
+export type AssetType = 'image' | 'spritesheet' | 'atlas' | 'bitmapfont' | 'json' | 'csv' | 'yaml';
 
 /** `spritesheet` の設定。Phaser と同じ `{ frameWidth, frameHeight }` 形式です。 */
 export interface SpritesheetConfig {
@@ -116,11 +113,7 @@ export class LoaderManager {
    * @param fn ハンドラ
    * @param context `this` として渡す値
    */
-  public on<K extends keyof LoaderEvents>(
-    event: K,
-    fn: LoaderEvents[K],
-    context?: unknown,
-  ): this {
+  public on<K extends keyof LoaderEvents>(event: K, fn: LoaderEvents[K], context?: unknown): this {
     const bound = context === undefined ? fn : fn.bind(context);
     const list = this._listeners.get(event);
     if (list === undefined) {
@@ -146,7 +139,8 @@ export class LoaderManager {
       // 呼び出し側が決める引数型を持つため、ここでは無参数的関数として扱います。
       const call = fn as unknown as () => void;
       if (context === undefined) call();
-      else call.call(context);    };
+      else call.call(context);
+    };
     return this.on(event, wrapped as unknown as LoaderEvents[K]);
   }
 

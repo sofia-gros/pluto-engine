@@ -6,8 +6,8 @@
  */
 
 import type { PlutoEngine } from '../core/PlutoEngine';
-import type { Scene } from './Scene';
 import { DataRegistry } from '../events/DataRegistry';
+import type { Scene } from './Scene';
 
 export class SceneManager {
   private _scenes = new Map<string, Scene>();

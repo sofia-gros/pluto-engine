@@ -53,7 +53,10 @@ export class TimeFacade {
    */
   public delayedCall(
     delayMs: number,
+    // Phaser 互換のため、コールバックの引数型は any[] のままにします
+    // biome-ignore lint/suspicious/noExplicitAny: Phaser 互換のコールバック引数
     callback: (...args: any[]) => void,
+    // biome-ignore lint/suspicious/noExplicitAny: 呼び出し側が任意の引数を渡す
     args?: any[],
   ): TimerEvent {
     const id = this._time.delayedCall(delayMs * this._time.timeScale, callback, args);
@@ -66,9 +69,11 @@ export class TimeFacade {
    */
   public addEvent(config: {
     delay: number;
+    // biome-ignore lint/suspicious/noExplicitAny: Phaser 互換のコールバック引数
     callback: (...args: any[]) => void;
     loop?: boolean;
     repeatDelay?: number;
+    // biome-ignore lint/suspicious/noExplicitAny: 呼び出し側が任意の引数を渡す
     args?: any[];
   }): TimerEvent {
     const scale = this._time.timeScale;

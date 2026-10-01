@@ -30,5 +30,7 @@ export * from './anim/AnimState';
 export * from './tilemap/Tilemap';
 export * from './particles/ParticleManager';
 export * from './physics/ArcadePhysics';
+export * from './physics/Body';
+export * from './physics/World';
 export * from './sound/SoundManager';
 export const ENGINE_VERSION = '1.1.0';

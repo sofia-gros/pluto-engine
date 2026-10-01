@@ -17,7 +17,7 @@ import type { BoundsRect } from '../arena/Sprite';
 const MAX_EFFECTS = 8;
 
 /** エフェクトの種類 */
-export const enum EffectKind {
+export enum EffectKind {
   Fade = 0,
   Pan = 1,
   Zoom = 2,
@@ -212,8 +212,8 @@ export class Camera {
   /** 画面可視範囲をワールド座標の矩形として out へ書き出します。 */
   public getWorldBounds(out: BoundsRect, viewWidth: number, viewHeight: number): this {
     const z = this.zoom !== 0 ? this.zoom : 1;
-    const halfW = viewWidth * 0.5 / z;
-    const halfH = viewHeight * 0.5 / z;
+    const halfW = (viewWidth * 0.5) / z;
+    const halfH = (viewHeight * 0.5) / z;
     out.x = this.actualX - halfW;
     out.y = this.actualY - halfH;
     out.width = halfW * 2;
@@ -281,13 +281,7 @@ export class Camera {
   }
 
   /** フェードアウトを開始します (Phaser 互換の fadeOut)。 */
-  public fadeOut(
-    duration: number,
-    red = 0,
-    green = 0,
-    blue = 0,
-    callback?: () => void,
-  ): this {
+  public fadeOut(duration: number, red = 0, green = 0, blue = 0, callback?: () => void): this {
     this._fadeColorR = red / 255;
     this._fadeColorG = green / 255;
     this._fadeColorB = blue / 255;

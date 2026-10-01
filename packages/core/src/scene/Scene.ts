@@ -13,6 +13,8 @@ import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
 import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
+import { Body } from '../physics/Body';
+import { World } from '../physics/World';
 import { SoundManager } from '../sound/SoundManager';
 import { Tilemap } from '../tilemap/Tilemap';
 import { TimeFacade } from '../time/TimeFacade';
@@ -62,6 +64,10 @@ export class Scene {
   private _paused = false;
   /** `this.time` の Phaser 互換门面。初回参照時に 1 度だけ生成します。 */
   private _timeFacade: TimeFacade | null = null;
+  /** `this.world` の Flyweight。初回参照時に 1 度だけ生成します。 */
+  private _world: World | null = null;
+  /** Body ハンドルのキャッシュ。疎添字 ID -> Body。 */
+  private readonly _bodyHandles = new Map<number, Body>();
 
   // --- ゼロコスト・サブシステム ---
   // 各マネージャーは初回の参照時にだけ生成され、その参照で
@@ -197,6 +203,53 @@ export class Scene {
       this._active |= Subsystem.Physics;
     }
     return this._physics;
+  }
+
+  /**
+   * Sprite.body が Body ハンドルを取得できるようにファクトリを登録します。
+   *
+   * Sprite は Scene 参照を持たないため、アリーナ経由で注入します。
+   * 実体は {@link Scene.getBody} でキャッシュされます。
+   */
+  private _ensureBodyFactory(): void {
+    if (this.arena.bodyFactory !== null) return;
+    this.arena.bodyFactory = (entityId: number) => this.getBodyById(entityId);
+  }
+
+  /**
+   * 物理ワールド (Phaser 互換の `scene.physics.world`)。
+   *
+   * シーン全体で 1 つだけ生成されます。境界矩形と重力は
+   * {@link this.physics} のスカラーが正本です。
+   */
+  public get world(): World {
+    return (this._world ??= new World(this.physics));
+  }
+
+  /**
+   * スプライトの物理ボディを取得します (Phaser 互換の `sprite.body`)。
+   *
+   * ハンドルなので毎フレーム new しません。同じ ID なら同じ
+   * インスタンスを返します。
+   *
+   * @param target 物理ボディを取得したいスプライト
+   */
+  public getBody(target: { readonly id: number }): Body {
+    return this.getBodyById(target.id);
+  }
+
+  /**
+   * 疎添字 ID から Body ハンドルを取得します。
+   * 内部でキャッシュし、同じ ID なら同じインスタンスを返します。
+   */
+  public getBodyById(entityId: number): Body {
+    this._ensureBodyFactory();
+    let b = this._bodyHandles.get(entityId);
+    if (b === undefined) {
+      b = new Body(entityId, this.physics);
+      this._bodyHandles.set(entityId, b);
+    }
+    return b;
   }
 
   /** ポインタヒットテストの結果を受け取るバッファ (毎フレーム new しない) */
