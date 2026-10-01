@@ -15,6 +15,7 @@ import { ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
 import { SoundManager } from '../sound/SoundManager';
 import { Tilemap } from '../tilemap/Tilemap';
+import { TimeFacade } from '../time/TimeFacade';
 import { TweenManager } from '../tween/TweenManager';
 import type { Camera } from './Camera';
 import { CameraManager } from './CameraManager';
@@ -59,6 +60,8 @@ export class Scene {
   private _plugins: Plugin[] = [];
   private _tilemaps: Tilemap[] = [];
   private _paused = false;
+  /** `this.time` の Phaser 互換门面。初回参照時に 1 度だけ生成します。 */
+  private _timeFacade: TimeFacade | null = null;
 
   // --- ゼロコスト・サブシステム ---
   // 各マネージャーは初回の参照時にだけ生成され、その参照で
@@ -230,8 +233,14 @@ export class Scene {
     return this.scene;
   }
 
-  public get time() {
-    return this.engine.time;
+  /**
+   * エンジン全体の時間 API。Scene 単位ではありません。
+   *
+   * Phaser 互換の门面を別クラスに切り出しており、実体は
+   * {@link this.engine.time} の TimeStepManager です。
+   */
+  public get time(): TimeFacade {
+    return (this._timeFacade ??= new TimeFacade(this.engine.time));
   }
 
   /** アニメーション名 {@link this.anim} の別名 (Phaser 互換) */
@@ -416,7 +425,8 @@ export class Scene {
       // 追従対象の座標をカメラへ渡すため、カメラを先に更新します。
       this.cameras.update(dt, this._followId, this._followX, this._followY);
     }
-    this.input.update();
+    // dt を渡すことで Pointer の移動速度 (velocity) を正しく算出できます。
+    this.input.update(dt);
     if ((active & Subsystem.Tweens) !== 0) {
       // ループの dt は秒ですが、Phaser 互換の `duration` / `delay` はミリ秒です。
       // 変換をこの境界 1 か所に閉じることで、TweenManager 側は ms 前提で

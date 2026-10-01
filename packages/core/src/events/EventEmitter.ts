@@ -135,6 +135,9 @@ export class EventEmitter {
    *
    * - emit 中の `off` は即座に効きます。以降のリスナは呼ばれません。
    * - emit 中の `on` は次回 emit から有効です (スナップショット長で止めるため)。
+   *
+   * 注意: 可変長引数は呼び出しごとに配列を 1 つ生成します。
+   * ホットパス (毎フレーム発火) では `emit1` / `emit2` / `emit3` を使ってください。
    */
   public emit(event: string, ...args: any[]): void {
     const list = this._map.get(event);
@@ -150,6 +153,78 @@ export class EventEmitter {
         fns[i](...args);
       }
     }
+    this._finishEmit(event, list);
+  }
+
+  /**
+   * 引数 1 個で発火します。可変長引数の配列生成を避けます。
+   * ハンドル (Flyweight) を 1 つ通知する場合に使う想定です。
+   */
+  public emit1(event: string, a: unknown): void {
+    const list = this._map.get(event);
+    if (list === undefined || list.count === 0) return;
+    list.emitting++;
+    const fns = list.fns;
+    const n = fns.length;
+    for (let i = 0; i < n; i++) {
+      if (list.live[i] === 1) {
+        fns[i](a);
+      }
+    }
+    this._finishEmit(event, list);
+  }
+
+  /** 引数 2 個で発火します。 */
+  public emit2(event: string, a: unknown, b: unknown): void {
+    const list = this._map.get(event);
+    if (list === undefined || list.count === 0) return;
+    list.emitting++;
+    const fns = list.fns;
+    const n = fns.length;
+    for (let i = 0; i < n; i++) {
+      if (list.live[i] === 1) {
+        fns[i](a, b);
+      }
+    }
+    this._finishEmit(event, list);
+  }
+
+  /** 引数 3 個で発火します。衝突のコールバック (bodyA / bodyB) で使います。 */
+  public emit3(event: string, a: unknown, b: unknown, c: unknown): void {
+    const list = this._map.get(event);
+    if (list === undefined || list.count === 0) return;
+    list.emitting++;
+    const fns = list.fns;
+    const n = fns.length;
+    for (let i = 0; i < n; i++) {
+      if (list.live[i] === 1) {
+        fns[i](a, b, c);
+      }
+    }
+    this._finishEmit(event, list);
+  }
+
+  /**
+   * 引数を 0 個で発火します。引数配列すら生成しません。
+   */
+  public emit0(event: string): void {
+    const list = this._map.get(event);
+    if (list === undefined || list.count === 0) return;
+    list.emitting++;
+    const fns = list.fns;
+    const n = fns.length;
+    for (let i = 0; i < n; i++) {
+      if (list.live[i] === 1) {
+        fns[i]();
+      }
+    }
+    this._finishEmit(event, list);
+  }
+
+  /**
+   * emit 後の共通処理。emitting カウンタを戻し、必要なら compacted 化します。
+   */
+  private _finishEmit(event: string, list: ListenerList): void {
     list.emitting--;
     if (list.emitting === 0) {
       list.compact();

@@ -16,6 +16,8 @@ export * from './scale/ScaleManager';
 export * from './math/Math';
 export * from './input/InputManager';
 export * from './time/TimeStepManager';
+export * from './time/TimerEvent';
+export * from './time/TimeFacade';
 export * from './loader/LoaderManager';
 export * from './loader/AtlasParser';
 export * from './loader/BitmapFontParser';

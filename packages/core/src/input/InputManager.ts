@@ -7,9 +7,7 @@
  * キーボード、ポインタ (マウス/タッチ)、ゲームパッドに対応します。
  */
 
-export interface PointerTransform {
-  (clientX: number, clientY: number, out: Float32Array): void;
-}
+export type PointerTransform = (clientX: number, clientY: number, out: Float32Array) => void;
 
 /**
  * キー 1 個分の参照ハンドル (Phaser 互換の Key)。
@@ -74,13 +72,77 @@ export class Pointer {
   public get y(): number {
     return this._input.pointerY;
   }
-  /** 画面座標の X (CSS ピクセル) */
+  /**
+   * ワールド座標の X。
+   * Phaser 互換のため `x` と同じゲーム座標を返します。
+   * 変換前の画面座標が必要な場合は `screenX` を使ってください。
+   */
   public get worldX(): number {
+    return this._input.pointerX;
+  }
+  /** ワールド座標の Y。`y` と同じゲーム座標を返します */
+  public get worldY(): number {
+    return this._input.pointerY;
+  }
+  /** 変換前の画面座標の X (CSS ピクセル) */
+  public get screenX(): number {
     return this._input.clientX;
   }
-  /** 画面座標の Y (CSS ピクセル) */
-  public get worldY(): number {
+  /** 変換前の画面座標の Y (CSS ピクセル) */
+  public get screenY(): number {
     return this._input.clientY;
+  }
+  /** ポインタ ID。単一ポインタのため常に 0 */
+  public get pointerId(): number {
+    return this._input.pointerId;
+  }
+  /** 前フレームからの移動量 X */
+  public get movementX(): number {
+    return this._input.pointerX - this._input.prevPointerX;
+  }
+  /** 前フレームからの移動量 Y */
+  public get movementY(): number {
+    return this._input.pointerY - this._input.prevPointerY;
+  }
+  /** 前フレームからの移動量 X (`movementX` と同値) */
+  public get dx(): number {
+    return this._input.pointerX - this._input.prevPointerX;
+  }
+  /** 前フレームからの移動量 Y (`movementY` と同値) */
+  public get dy(): number {
+    return this._input.pointerY - this._input.prevPointerY;
+  }
+  /** 移動速度 X (座標 / 秒) */
+  public get velocityX(): number {
+    return this._input.pointerVelocityX;
+  }
+  /** 移動速度 Y (座標 / 秒) */
+  public get velocityY(): number {
+    return this._input.pointerVelocityY;
+  }
+  /** 移動方向 (ラジアン、+X 方向が 0) */
+  public get angle(): number {
+    return this._input.pointerAngle;
+  }
+  /** ボタン押下からの累積移動距離 */
+  public get distance(): number {
+    return this._input.pointerDistance;
+  }
+  /** ボタンが押された位置の X */
+  public get downX(): number {
+    return this._input.downPointerX;
+  }
+  /** ボタンが押された位置の Y */
+  public get downY(): number {
+    return this._input.downPointerY;
+  }
+  /** ボタンが離された位置の X */
+  public get upX(): number {
+    return this._input.upPointerX;
+  }
+  /** ボタンが離された位置の Y */
+  public get upY(): number {
+    return this._input.upPointerY;
   }
   public get isDown(): boolean {
     return this._input.isPointerDown();
@@ -97,6 +159,83 @@ export class Pointer {
   }
 }
 
+/**
+ * Phaser 4 互換のゲームパッドハンドル。
+ *
+ * 設計上の掟 (R-03): own property は `index` と `_input` の 2 個だけ。
+ * 接続状態は InputManager 側の SoA とブラウザの Gamepad 参照が正本です。
+ */
+export class GamepadHandle {
+  /** コントローラー番号 (0 から) */
+  public readonly index: number;
+
+  private readonly _input: InputManager;
+
+  constructor(index: number, input: InputManager) {
+    this.index = index;
+    this._input = input;
+  }
+
+  /** このスロットにゲームパッドが接続されているか */
+  get connected(): boolean {
+    return this._input.getGamepadConnected(this.index);
+  }
+
+  /** 接続済みならブラウザの Gamepad オブジェクトを返す */
+  get native(): Gamepad | null {
+    return this._input.getGamepadNative(this.index);
+  }
+
+  /** ゲームパッドの識別名 (Phaser 互換の `id`) */
+  get id(): string {
+    const pad = this.native;
+    return pad ? pad.id : '';
+  }
+
+  /** ゲームパッドのボタン数 */
+  get buttons(): number {
+    const pad = this.native;
+    return pad ? pad.buttons.length : 0;
+  }
+
+  /** アナログ軸の数 */
+  get axes(): number {
+    const pad = this.native;
+    return pad ? pad.axes.length : 0;
+  }
+
+  /**
+   * ボタンが押されているか (Phaser 互換の `isDown`)。
+   * @param buttonIndex 0=A, 1=B, ...
+   */
+  isDown(buttonIndex: number): boolean {
+    return this._input.isGamepadButtonPressed(this.index, buttonIndex);
+  }
+
+  /** ボタンが今フレームで押されたか */
+  isJustDown(buttonIndex: number): boolean {
+    return this._input.isGamepadButtonJustPressed(this.index, buttonIndex);
+  }
+
+  /** ボタンが今フレームで離されたか */
+  isJustUp(buttonIndex: number): boolean {
+    return this._input.isGamepadButtonJustReleased(this.index, buttonIndex);
+  }
+
+  /**
+   * アナログ軸の値 (0=左X, 1=左Y, 2=右X, 3=右Y)。
+   * デッドゾーン (0.1) は入力側で処理済みです。
+   */
+  getAxis(axisIndex: number): number {
+    return this._input.getGamepadAxis(this.index, axisIndex);
+  }
+
+  /** デバッグ用の文字列表現 */
+  toString(): string {
+    return `Gamepad(${this.index})`;
+  }
+}
+
 export class InputManager {
   // --- Keyboard ---
   private _rawKeys = new Set<string>();
@@ -110,11 +249,32 @@ export class InputManager {
   /** 変換前の画面座標 (CSS ピクセル) */
   public clientX = 0;
   public clientY = 0;
+  /** 前フレームのワールド座標。dx / dy の算出に使う */
+  public prevPointerX = 0;
+  public prevPointerY = 0;
+  /** ボタンが押された位置 (ワールド座標) */
+  public downPointerX = 0;
+  public downPointerY = 0;
+  /** ボタンが離された位置 (ワールド座標) */
+  public upPointerX = 0;
+  public upPointerY = 0;
+  /** 移動速度 (ワールド座標 / 秒) */
+  public pointerVelocityX = 0;
+  public pointerVelocityY = 0;
+  /** ボタン押下からの累積移動距離 (ワールド座標) */
+  public pointerDistance = 0;
+  /** 現在の移動方向 (ラジアン、+X 方向が 0) */
+  public pointerAngle = 0;
+  /** ポインタ ID。単一ポインタのため常に 0 */
+  public pointerId = 0;
   private _rawPointerDown = false;
   private _currentPointerDown = false;
   private _previousPointerDown = false;
   private _rawPointerX = 0;
   private _rawPointerY = 0;
+  /** 押下からの累積距離の基準点。押下中か離された直後だけ有効 */
+  private _distanceOriginX = 0;
+  private _distanceOriginY = 0;
 
   /**
    * 画面座標からゲーム座標へ変換する関数。
@@ -125,9 +285,15 @@ export class InputManager {
 
   // --- Gamepad ---
   // Gamepad API は毎フレーム navigator.getGamepads() をポーリングする仕様です。
+  // ブラウザの Gamepad  型は、同名の Flyweight クラスと衝突するため
+  // globalThis 経由の完全修飾で参照します。
   private _gamepads: (Gamepad | null)[] = [];
   private _currentGamepadButtons: boolean[][] = [];
   private _previousGamepadButtons: boolean[][] = [];
+  /** 生成済みの Gamepad ハンドル。index -> Gamepad の対応です。 */
+  private _gamepadHandles: GamepadHandle[] = [];
+  /** `getAllGamepads` が引数なしで使う返信用バッファ。 */
+  private readonly _gamepadHandleBuffer: (GamepadHandle | null)[] = [];
 
   private _boundOnKeyDown: (e: KeyboardEvent) => void;
   private _boundOnKeyUp: (e: KeyboardEvent) => void;
@@ -230,7 +396,12 @@ export class InputManager {
     this._rawPointerDown = false;
   }
 
-  public update(): void {
+  /**
+   * 毎フレーム 1 回、入力状態を更新します。
+   * @param dtSeconds 前フレームからの経過秒数。速度の算出に使います。
+   *   未指定や 0 の場合は生の移動量を速度として扱います。
+   */
+  public update(dtSeconds = 0): void {
     // Keyboard
     this._previousKeys.clear();
     for (const key of this._currentKeys) this._previousKeys.add(key);
@@ -238,6 +409,8 @@ export class InputManager {
     for (const key of this._rawKeys) this._currentKeys.add(key);
 
     // Pointer: 座標変換はフレーム内で一度だけ行う
+    this.prevPointerX = this.pointerX;
+    this.prevPointerY = this.pointerY;
     this.clientX = this._rawPointerX;
     this.clientY = this._rawPointerY;
     if (this.pointerTransform) {
@@ -251,6 +424,38 @@ export class InputManager {
     }
     this._previousPointerDown = this._currentPointerDown;
     this._currentPointerDown = this._rawPointerDown;
+
+    // 速度・角度・累積距離。Phaser 互換の派生値
+    const dx = this.pointerX - this.prevPointerX;
+    const dy = this.pointerY - this.prevPointerY;
+    if (dtSeconds > 0) {
+      this.pointerVelocityX = dx / dtSeconds;
+      this.pointerVelocityY = dy / dtSeconds;
+    } else {
+      // dt が不明なら生 の移動量をそのまま速度扱いする
+      this.pointerVelocityX = dx;
+      this.pointerVelocityY = dy;
+    }
+    if (dx !== 0 || dy !== 0) {
+      this.pointerAngle = Math.atan2(dy, dx);
+    }
+
+    // 押下したフレームで累積距離の基準をリセットする
+    if (this._currentPointerDown && !this._previousPointerDown) {
+      this.downPointerX = this.pointerX;
+      this.downPointerY = this.pointerY;
+      this._distanceOriginX = this.pointerX;
+      this._distanceOriginY = this.pointerY;
+      this.pointerDistance = 0;
+    } else if (!this._currentPointerDown && this._previousPointerDown) {
+      this.upPointerX = this.pointerX;
+      this.upPointerY = this.pointerY;
+    }
+    if (this._currentPointerDown) {
+      const ddx = this.pointerX - this._distanceOriginX;
+      const ddy = this.pointerY - this._distanceOriginY;
+      this.pointerDistance = Math.sqrt(ddx * ddx + ddy * ddy);
+    }
 
     this.pollGamepads();
   }
@@ -457,4 +662,81 @@ export class InputManager {
     }
     return n;
   }
+
+  // --- Phaser 4 互換のゲームパッド API ---
+
+  /**
+   * 指定スロットにゲームパッドが接続されているか。
+   * Gamepad ハンドルからの参照用に公開しています。
+   */
+  public getGamepadConnected(padIndex: number): boolean {
+    return this._gamepads[padIndex] != null;
+  }
+
+  /**
+   * 指定スロットのブラウザ Gamepad オブジェクトを返す。未接続なら null。
+   * Gamepad ハンドルからの参照用に公開しています。
+   */
+  public getGamepadNative(padIndex: number): Gamepad | null {
+    const pad = this._gamepads[padIndex];
+    return pad === undefined ? null : pad;
+  }
+
+  /**
+   * Gamepad API が利用可能か (Phaser 互換の `input.gamepad.supported`)。
+   * navigator が無い環境 (SSR / テスト) では false を返します。
+   */
+  public get isGamepadSupported(): boolean {
+    return typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function';
+  }
+
+  /**
+   * 接続されているゲームパッドの数 (Phaser 互換の `input.gamepad.total`)。
+   */
+  public get gamepadTotal(): number {
+    return this.getGamepadCount();
+  }
+
+  /**
+   * 指定インデックスの Gamepad ハンドルを返します (Phaser 互換の `getPad`)。
+   *
+   * ハンドルは内部配列を使い回すため、同じインデックスでは常に同じ
+   * インスタンスが返ります。接続されていない場合は null です。
+   */
+  public getGamepad(padIndex: number): GamepadHandle | null {
+    return this._getGamepadHandle(padIndex);
+  }
+
+  /**
+   * 接続されているゲームパッドのハンドルをまとめて返します
+   * (Phaser 互換の `getAll`)。
+   *
+   * @param out 呼び出し側の使い回し配列。省略時は内部のバッファを使います。
+   * @returns 接続中の Gamepad ハンドル (未接続のスロットは null)
+   */
+  public getAllGamepads(out?: (GamepadHandle | null)[]): (GamepadHandle | null)[] {
+    const target = out ?? this._gamepadHandleBuffer;
+    const n = this._gamepads.length;
+    for (let i = 0; i < n; i++) {
+      target[i] = this._getGamepadHandle(i);
+    }
+    target.length = n;
+    return target;
+  }
+
+  /**
+   * 内部バッファを、必要に応じて拡張しつつ Gamepad ハンドルを取得します。
+   */
+  private _getGamepadHandle(padIndex: number): GamepadHandle | null {
+    if (padIndex < 0) return null;
+    if (padIndex >= this._gamepadHandles.length) {
+      for (let i = this._gamepadHandles.length; i <= padIndex; i++) {
+        this._gamepadHandles.push(new GamepadHandle(i, this));
+      }
+    }
+    return this._gamepadHandles[padIndex];
+  }
 }
+
+/** Phaser 4 互換の公開名。内部では GamepadHandle と呼びます。 */
+export { GamepadHandle as Gamepad };
