@@ -71,6 +71,14 @@ export interface EngineConfig {
    * （IMPACT_SCOPE.md の 9.3）。診断用にのみ使う想定です。
    */
   gpuTimestampQuery?: boolean;
+  /**
+   * compute カリング + 間接描画を有効にします (Phase 8 P-02、既定は false)。
+   *
+   * 頂点シェーダ GPU カリング（P-03）と違い、可視インスタンスだけを
+   * 描画します。CPU コストが切れた上に GPU 側も減ります。
+   * WebGPU のみ対応で、compute と indirect draw を使います。
+   */
+  gpuComputeCulling?: boolean;
   scene: (new () => Scene)[];
 }
 
@@ -172,6 +180,7 @@ export class PlutoEngine {
     this.device = await createGraphicsDevice(canvas, {
       backend: this.config.backend,
       timestampQuery: this.config.gpuTimestampQuery === true,
+      computeCulling: this.config.gpuComputeCulling === true,
     });
     this.device.initPipelines();
 
@@ -238,6 +247,11 @@ export class PlutoEngine {
    * （Phase 8 P-03 の計測でこれを区別する必要がありました）。
    */
   public gpuCullingActive = false;
+  /**
+   * 直近のフレームで compute カリング（間接描画）が実際に使われたか。
+   * `gpuCullingActive` と同じ理由で、設定値ではなく実測値を報告します。
+   */
+  public computeCullingActive = false;
 
   /** 登録済みインスタンス総数（カリング前） */
   public totalInstanceCount = 0;
@@ -293,11 +307,18 @@ export class PlutoEngine {
         this.drawTimeMs = performance.now() - tFrameStart;
         return;
       }
-
+      const useComputeCull =
+        this.config.gpuComputeCulling === true &&
+        this.device?.beginComputeCulling !== undefined &&
+        this.device?.isComputeCullingSupported?.() === true &&
+        camCount === 1;
       const useGpuCull =
-        this.config.gpuCulling === true && this.device?.setCullRect !== undefined && camCount === 1;
+        !useComputeCull &&
+        this.config.gpuCulling === true &&
+        this.device?.setCullRect !== undefined &&
+        camCount === 1;
+      this.computeCullingActive = useComputeCull;
       this.gpuCullingActive = useGpuCull;
-
       /**
        * カリングは「先頭から連続した区間」として描画するため、
        * 可視インスタンスを先頭へ寄せる partitionVisible を使います。
@@ -310,8 +331,22 @@ export class PlutoEngine {
        */
       const tCullStart = performance.now();
       let maxVisible = totalCount;
-      let renderCount2 = totalCount;
-      if (useGpuCull) {
+      if (useComputeCull) {
+        /**
+         * compute カリング（Phase 8 P-02）。
+         * 可視インスタンスだけを間接描画するため、CPU 側の詰め替えも
+         * 頂点シェーダでの縮退三角形も不要です。
+         */
+        const cam0 = this._activeCameras[0];
+        const rect0 = this._cameraRect(cam0, w, h, this._camRect);
+        const dispatched = this.device?.beginComputeCulling?.(rect0, totalCount) === true;
+        if (dispatched) {
+          maxVisible = totalCount;
+        } else {
+          // dispatch に失敗したら頂点シェーダ経路へ落とします
+          this.computeCullingActive = false;
+        }
+      } else if (useGpuCull) {
         // GPU 側描画します。全件をそのまま draw します。
         const cam = this._activeCameras[0];
         const rect = this._cameraRect(cam, w, h, this._camRect);
@@ -327,8 +362,7 @@ export class PlutoEngine {
         }
       }
       this.cullTimeMs = performance.now() - tCullStart;
-      renderCount2 = maxVisible;
-      renderCount = renderCount2;
+      renderCount = maxVisible;
       this.renderCount = renderCount;
 
       // CPU 系列のベンチモードでは、GPU への転送と draw を省きます。

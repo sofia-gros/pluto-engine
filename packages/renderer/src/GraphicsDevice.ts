@@ -192,6 +192,34 @@ export interface GraphicsDevice {
   resolveGpuTimeMs?(): number;
 
   /**
+   * compute カリングを実行し、間接描画引数を更新します (Phase 8 P-02)。
+   *
+   * 頂点シェーダによる GPU カリング（P-03）と違い、**可視インスタンスだけを
+   * 描画します**。CPU コスト，切れない上に GPU 側も減るため、両方の 利得を
+   * 同時に得られます。コストは画面外も compute が 1 件ずつ判定する点です。
+   *
+   * 対応していないバックエンドでは何もしず false を返します（optional）。
+   *
+   * @param rect 可視矩形 (minX, minY, maxX, maxY)
+   * @param instanceCount 判定対象のインスタンス数
+   * @returns dispatch を行ったか
+   */
+  beginComputeCulling?(rect: Float32Array, instanceCount: number): boolean;
+
+  /** compute カリングが使える状態か (Phase 8 P-02)。 */
+  isComputeCullingSupported?(): boolean;
+
+  /**
+   * compute カリングで数えた可視インスタンス数を返します (Phase 8 P-02)。
+   *
+   * **間接描画は CPU から見た描画数を返さないため、.compute カリングの
+   * 実効性を示す唯一の証拠です。** ベンチはこれを報告します。
+   *
+   * 読み出しは非同期です。実測できるフレームまで -1 を返します。
+   */
+  resolveVisibleCount?(): number;
+
+  /**
    * シェーダーパイプラインを作成します。
    */
   createPipeline(vertSource: string, fragSource: string): PipelineInfo;

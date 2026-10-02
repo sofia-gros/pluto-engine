@@ -65,7 +65,6 @@ const RAW_BACKEND = strParam('backend', 'auto');
 const CPU_ONLY = RAW_BACKEND === 'cpu';
 const BACKEND = CPU_ONLY ? 'auto' : RAW_BACKEND;
 /** `cull=gpu` で頂点シェーダ カリングを有効にします (Phase 8 P-03)。 */
-const GPU_CULL = strParam('cull', 'cpu') === 'gpu';
 /** `tsq=1` で WebGPU timestamp query を有効化します (Phase 8 P-02、診断用)。 */
 const TSQ = strParam('tsq', '0') === '1';
 /**
@@ -81,6 +80,15 @@ const TSQ = strParam('tsq', '0') === '1';
  * 可視が増えてしまい、`renderCount` が変化しなくなります。
  */
 const VISIBLE_FRAC = Math.min(1, Math.max(0.01, Number(strParam('visible', '1')) || 1));
+/**
+ * `cull=compute` で compute カリング + 間接描画を有効にします (Phase 8 P-02)。
+ *
+ * `cull=gpu`（頂点シェーダの縮退三角形）と違い、可視インスタンスだけを
+ * 描画するため CPU コストも GPU コストも減るはずです。
+ */
+const CULL_MODE = strParam('cull', 'cpu');
+const GPU_CULL = CULL_MODE === 'gpu';
+const COMPUTE_CULL = CULL_MODE === 'compute';
 
 const status = document.getElementById('status') as HTMLDivElement;
 
@@ -121,6 +129,7 @@ async function main(): Promise<void> {
     backend: BACKEND as 'auto' | 'webgpu' | 'webgl2',
     cpuOnly: CPU_ONLY,
     gpuCulling: GPU_CULL,
+    gpuComputeCulling: COMPUTE_CULL,
     gpuTimestampQuery: TSQ,
     scene: [BenchScene],
   });
@@ -181,6 +190,8 @@ async function main(): Promise<void> {
     upload: number;
     draw: number;
     gpu: number;
+    /** compute カリングが数えた可視数。非同期読み出しなので -1 が混ざります。 */
+    visible: number;
   }> {
     const t0 = performance.now();
     clock += 1000 / 60;
@@ -201,9 +212,15 @@ async function main(): Promise<void> {
       upload: engine.uploadTimeMs,
       draw: CPU_ONLY ? tEnd - tStep : engine.drawTimeMs,
       gpu: engine.device?.resolveGpuTimeMs?.() ?? -1,
+      /**
+       * compute カリングが数えた可視数。非同期読み出しなので -1 が混ざります。
+       * 実測できた値だけを採用するため、毎フレーム取ります。
+       */
+      visible: engine.device?.resolveVisibleCount?.() ?? -1,
     };
   }
 
+  const visibleDrawnSamples: number[] = [];
   for (let i = 0; i < FRAMES; i++) {
     const m = await measureFrame();
     frameTotal.push(m.frame);
@@ -211,6 +228,7 @@ async function main(): Promise<void> {
     upload.push(m.upload);
     draw.push(m.draw);
     if (m.gpu >= 0) gpuMs.push(m.gpu);
+    if (m.visible >= 0) visibleDrawnSamples.push(m.visible);
   }
 
   const result = {
@@ -218,8 +236,10 @@ async function main(): Promise<void> {
     actualBackend,
     cpuOnly: CPU_ONLY,
     gpuCulling: GPU_CULL,
-    /** 設定値ではなく、実際に GPU カリング経路が走ったか。 */
+    computeCulling: COMPUTE_CULL,
+    /** 設定値ではなく、実際に各カリング経路が走ったか。 */
     gpuCullingActive: engine.gpuCullingActive,
+    computeCullingActive: engine.computeCullingActive,
     entities: ENTITIES,
     /** 実際に 1 フレームで描画されたインスタンス数。
      *  これが 0 だとカリングが全部落としており、比較になりません。 */
@@ -256,6 +276,15 @@ async function main(): Promise<void> {
     /** 読み出しが失敗したときの理由。切り分け用。 */
     timestampError:
       (engine.device as { lastTimestampError?: () => string })?.lastTimestampError?.() ?? '',
+    /**
+     * compute カリングが実際に数えた可視インスタンス数。
+     *
+     * 間接描画は CPU から描画数が返らないため、**これが唯一の証拠**です。
+     * -1 なら非対応・非同期読み出し未完了です。
+     */
+    visibleDrawn: visibleDrawnSamples.length
+      ? visibleDrawnSamples[visibleDrawnSamples.length - 1]
+      : -1,
     /** 生読できた timestamp の生値 (診断用)。読めていなければ -1。 */
     timestampRaw: (() => {
       const buf = new Float64Array(2);

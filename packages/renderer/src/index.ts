@@ -24,6 +24,16 @@ export interface CreateDeviceOptions {
    * 詳細は IMPACT_SCOPE.md の 9.3 を参照してください。
    */
   timestampQuery?: boolean;
+  /**
+   * compute カリング（間接描画）を有効化します (Phase 8 P-02、既定は false)。
+   *
+   * 頂点シェーダ GPU カリング（P-03）とは別物で、可視インスタンスだけを
+   * 描画します。WebGPU の compute と indirect draw を使います。
+   *
+   * ストレージバッファを compute stage で 4 本使うため
+   * `maxStorageBuffersPerShaderStage < 4` の環境では自動的に無効になります。
+   */
+  computeCulling?: boolean;
 }
 
 /**
@@ -50,6 +60,7 @@ export async function createGraphicsDevice(
     try {
       const device = new WebGPUDevice();
       if (options.timestampQuery === true) device.enableTimestampQuery();
+      if (options.computeCulling === true) device.enableComputeCulling();
       await device.init(canvas);
       // パイプラインが組めない場合は描画できないため WebGL2 へ戻します
       device.initPipelines();

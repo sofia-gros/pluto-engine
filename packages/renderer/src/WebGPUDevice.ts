@@ -39,6 +39,102 @@ import {
 } from './InstanceLayout';
 
 /**
+ * compute カリング + 可視インスタンス詰替シェーダー (Phase 8 P-02)。
+ *
+ * 1 インスタンスずつ可視矩形を判定し、可視なら
+ * **出力バッファの先頭へ詰oupledえ的同时に** 間接描画引数の instanceCount を
+ * atomic で加算します。
+ *
+ * ## なぜ「数えるだけ」でだめなのか
+ *
+ * `drawIndirect` は第 1  引数の instanceCount 体（= 添字 0..N-1）を描きます。
+ * 可視判定だけ synd implementingして instanceCount を_BITS的增长させても、
+ * 詰替をしないと **swap 前の配列の先頭 N 体** が描かれてしまいます
+ * （可視率 100% では偶然一致するため気づきにくい）。
+ *
+ * そのため可視の 1 体ごとに全属性を出力バッファへ書き写し、
+ * 描画側は出力バッファを vertex buffer として参照します。
+ *
+ * 入力:
+ * - transform : (posX, posY, scaleX, scaleY)
+ * - shape     : (rotation, frameWidth, frameHeight, depth)
+ * - flags     : (frameIdx, facing, visible, isText)
+ * - uv / tint / origin : 描画_other属性（そのまま写す）
+ * - params    : (rectMinX, rectMinY, rectMaxX, rectMaxY, instanceCount, pad, pad, pad)
+ * - indirect  : [0]=vertexCount [1]=instanceCount(atomic) [2]=firstIndex [3]=baseVertex
+ */
+/**
+ * compute stage で使う storage buffer の本数。
+ *
+ * 入力 6（transform / shape / flags / uv / tint / origin）+ 出力 6 + atomic 1。
+ * WebGPU の既定上限は 8 なので、これを満たす adapter では
+ * `requestDevice` に明示的に要求する必要があります。
+ */
+const CULL_STORAGE_BUFFER_COUNT = 13;
+
+const CULL_WGSL = /* wgsl */ `
+struct CullParams {
+  rect : vec4<f32>,
+  // x に instanceCount を入れます、残りはパディング
+  misc : vec4<u32>,
+};
+
+@group(0) @binding(0) var<uniform> params : CullParams;
+@group(0) @binding(1) var<storage, read> inTransform : array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> inShape : array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> inFlags : array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read> inUv : array<vec4<f32>>;
+@group(0) @binding(5) var<storage, read> inTint : array<u32>;
+@group(0) @binding(6) var<storage, read> inOrigin : array<vec4<f32>>;
+@group(0) @binding(7) var<storage, read_write> indirect : array<atomic<u32>>;
+@group(0) @binding(8) var<storage, read_write> outTransform : array<vec4<f32>>;
+@group(0) @binding(9) var<storage, read_write> outUv : array<vec4<f32>>;
+@group(0) @binding(10) var<storage, read_write> outFlags : array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read_write> outShape : array<vec4<f32>>;
+@group(0) @binding(12) var<storage, read_write> outTint : array<u32>;
+@group(0) @binding(13) var<storage, read_write> outOrigin : array<vec4<f32>>;
+
+fn cullOut(center : vec2<f32>, half : vec2<f32>) -> bool {
+  return center.x + half.x < params.rect.x
+      || center.x - half.x > params.rect.z
+      || center.y + half.y < params.rect.y
+      || center.y - half.y > params.rect.w;
+}
+
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= params.misc.x) {
+    return;
+  }
+  let f = inFlags[i];
+  // 非表示 / 非 active は描かないのでカウンタも増やしません
+  if (f.z < 0.5) {
+    return;
+  }
+  let t = inTransform[i];
+  let s = inShape[i];
+  let display = vec2<f32>(abs(t.z) * s.y, abs(t.w) * s.z);
+  // 回転は外接矩形（角速度と同じ）で判定します
+  let c = abs(cos(s.x));
+  let sn = abs(sin(s.x));
+  let ext = vec2<f32>(c * display.x + sn * display.y,
+                      sn * display.x + c * display.y) * 0.5;
+  if (cullOut(t.xy, ext)) {
+    return;
+  }
+  // 可視分を先頭へ詰替えます。atomicAdd の戻り値がそのまま出力添字です。
+  let slot = atomicAdd(&indirect[1], 1u);
+  outTransform[slot] = t;
+  outShape[slot] = s;
+  outFlags[slot] = f;
+  outUv[slot] = inUv[i];
+  outTint[slot] = inTint[i];
+  outOrigin[slot] = inOrigin[i];
+}
+`;
+
+/**
  * WGSL の頂点シェーダー。
  * インスタンス属性の宣言は `InstanceLayout` から生成するため、
  * WebGL2Device とレイアウトが食い違うことはありません。
@@ -248,10 +344,31 @@ export class WebGPUDevice implements GraphicsDevice {
       );
     }
 
+    /**
+     * compute カリング（Phase 8 P-02）は入力 6 + 出力 6 + atomic 1 = 13 本の
+     * storage buffer を compute stage で使います。WebGPU の既定上限は 8 なので、
+     * adapter が対応している分だけ明示的に要求します。
+     *
+     * 要求过多すると requestDevice が失敗するため、adapter の実測値でクランプします。
+     */
+    const wantedStorage = CULL_STORAGE_BUFFER_COUNT;
+    const availableStorage = this.limits.maxStorageBuffersPerShaderStage;
+    const requiredLimits =
+      availableStorage >= wantedStorage
+        ? ({ maxStorageBuffersPerShaderStage: wantedStorage } as Record<string, number>)
+        : ({} as Record<string, number>);
+
     this.device = await adapter.requestDevice({
       requiredFeatures: [...requiredFeatures] as unknown as GPUFeatureName[],
+      requiredLimits,
     });
     this._setupTimestampQuery();
+    // 上限が足りなければ compute カリングは使わず、頂点シェーダ経路に落とします
+    this._computeCullingSupported =
+      this._computeCullingEnabled && this.limits.maxStorageBuffersPerShaderStage >= 13;
+    if (this._computeCullingSupported) {
+      this._setupComputeCulling();
+    }
 
     const context = canvas.getContext('webgpu') as GPUCanvasContext | null;
     if (!context) {
@@ -363,6 +480,9 @@ export class WebGPUDevice implements GraphicsDevice {
         { binding: 2, resource: this.sampler },
       ],
     });
+
+    // compute カリングのパイプラインは描画パイプラインと同じタイミングで用意します。
+    this._initComputeCulling();
   }
 
   createBuffer(size: number): BufferInfo {
@@ -373,7 +493,10 @@ export class WebGPUDevice implements GraphicsDevice {
     const aligned = alignBufferSize(size);
     const buffer = this.device.createBuffer({
       size: aligned,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+      // STORAGE は compute カリング（Phase 8 P-02）が packed ミrror を
+      // storage buffer として読むために必要です。付けないと compute 側の
+      // bind group が不正になり、dispatch が黙って何も描かなくなります。
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE,
     });
     return { buffer, size: aligned };
   }
@@ -565,6 +688,287 @@ export class WebGPUDevice implements GraphicsDevice {
   }
 
   /**
+   * compute カリングのリソースを用意します (Phase 8 P-02)。
+   *
+   * `packedTransform` / `packedShape` / `packedFlags` を
+   * storage buffer として読み、間接描画引数へ可視数を atomic で加算します。
+   *
+   * storage buffer を compute stage で 4 本使うため
+   * `maxStorageBuffersPerShaderStage` が必要です。非対応環境では
+   * false を返して CPU / 頂点シェーダ経路にフォールバックします。
+   */
+  private _setupComputeCulling(): void {
+    const dev = this.device;
+    if (!dev) return;
+    // 入力 6 + 出力 6 + atomic 1 = 13 本の storage を compute stage で使います
+    if (dev.limits.maxStorageBuffersPerShaderStage < 4) return;
+    try {
+      this._cullParams = dev.createBuffer({
+        size: 32,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      // [0]=vertexCount [1]=instanceCount [2]=firstIndex [3]=baseVertex
+      this._cullIndirect = dev.createBuffer({
+        size: 16,
+        // COPY_SRC は resolveVisibleCount が instanceCount を読み戻すために必要
+        usage:
+          GPUBufferUsage.STORAGE |
+          GPUBufferUsage.INDIRECT |
+          GPUBufferUsage.COPY_DST |
+          GPUBufferUsage.COPY_SRC,
+      });
+      // 初回の instanceCount を 0 にします。以後は compute が加算します。
+      dev.queue.writeBuffer(this._cullIndirect, 0, new Uint32Array([4, 0, 0, 0]).buffer);
+    } catch {
+      this._cullParams = null;
+      this._cullIndirect = null;
+    }
+  }
+
+  private _cullParams: GPUBuffer | null = null;
+  private _cullIndirect: GPUBuffer | null = null;
+  private _cullPipeline: GPUComputePipeline | null = null;
+  private _cullBindGroup: GPUBindGroup | null = null;
+  /** compute カリングを有効にするか（既定は false）。 */
+  private _computeCullingEnabled = false;
+  /** ストレージ 4 本を使えるか。 */
+  private _computeCullingSupported = false;
+  /** bind group を構築済みか。バッファが替わるたびに作り直します。 */
+  private _cullBindGroupBuilt = false;
+  /** 詰替先バッファ（compute が書き、描画は vertex buffer として読む）。 */
+  private readonly _cullOutBuffers: Partial<Record<string, GPUBuffer>> = {};
+  /** 直近のフレームで compute dispatch を行ったか。 */
+  private _computeCullingDispatched = false;
+  /** 直近の dispatch で渡した可視矩形。 */
+  private readonly _cullRectBuf = new Float32Array(4);
+  private readonly _cullParamsBuf = new ArrayBuffer(32);
+  private readonly _cullParamsF32 = new Float32Array(this._cullParamsBuf);
+  private readonly _cullParamsU32 = new Uint32Array(this._cullParamsBuf);
+
+  /**
+   * compute カリングを有効化します (Phase 8 P-02、既定は false)。
+   *
+   * 有効化は `init()` より前に呼ぶ必要があります
+   * （バッファと feature を先に用意する必要があるためです）。
+   */
+  enableComputeCulling(): void {
+    this._computeCullingEnabled = true;
+  }
+
+  /**
+   * compute bind group を必要になった時点で構築します。
+   *
+   * インスタンスバッファは描画ごとに差し替わることがあるため、
+   * 束縛したバッファ集合が変わったら作り直します。
+   */
+  private _ensureCullBindGroup(): boolean {
+    const dev = this.device;
+    if (!dev || !this._cullPipeline || !this._cullParams || !this._cullIndirect) return false;
+    if (this._cullBindGroup && this._cullBindGroupBuilt) return true;
+
+    const src = (name: string): GPUBuffer | undefined =>
+      this._boundBuffers[name]?.buffer as GPUBuffer | undefined;
+    const transform = src('packedTransform');
+    const shape = src('packedShape');
+    const flags = src('packedFlags');
+    const uv = src('packedUv');
+    const tint = src('packedTint');
+    const origin = src('packedOrigin');
+    if (!transform || !shape || !flags || !uv || !tint || !origin) return false;
+
+    try {
+      /**
+       * 詰替先バッファは入力と同じ容量で作ります。
+       *
+       * 可視数は入力.instanc数以下なので、入力と同じあれば十分です。
+       * 容量が変わった（アリーナが伸びた）ときだけ作り直します。
+       */
+      const ensureOut = (name: string, source: GPUBuffer): GPUBuffer | null => {
+        const existing = this._cullOutBuffers[name];
+        if (existing && existing.size === source.size) return existing;
+        existing?.destroy();
+        const created = dev.createBuffer({
+          size: source.size,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
+        });
+        this._cullOutBuffers[name] = created;
+        return created;
+      };
+      const outTransform = ensureOut('packedTransform', transform);
+      const outShape = ensureOut('packedShape', shape);
+      const outFlags = ensureOut('packedFlags', flags);
+      const outUv = ensureOut('packedUv', uv);
+      const outOrigin = ensureOut('packedOrigin', origin);
+      const outTint = ensureOut('packedTint', tint);
+      if (!outTransform || !outShape || !outFlags || !outUv || !outOrigin || !outTint) {
+        return false;
+      }
+
+      this._cullBindGroup = dev.createBindGroup({
+        layout: this._cullPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this._cullParams } },
+          { binding: 1, resource: { buffer: transform } },
+          { binding: 2, resource: { buffer: shape } },
+          { binding: 3, resource: { buffer: flags } },
+          { binding: 4, resource: { buffer: uv } },
+          { binding: 5, resource: { buffer: tint } },
+          { binding: 6, resource: { buffer: origin } },
+          { binding: 7, resource: { buffer: this._cullIndirect } },
+          { binding: 8, resource: { buffer: outTransform } },
+          { binding: 9, resource: { buffer: outUv } },
+          { binding: 10, resource: { buffer: outFlags } },
+          { binding: 11, resource: { buffer: outShape } },
+          { binding: 12, resource: { buffer: outTint } },
+          { binding: 13, resource: { buffer: outOrigin } },
+        ],
+      });
+      this._cullBindGroupBuilt = true;
+      return true;
+    } catch {
+      this._cullBindGroup = null;
+      this._cullBindGroupBuilt = false;
+      return false;
+    }
+  }
+
+  /**
+   * compute カリングの初期化 (Phase 8 P-02)。
+   *
+   * 有効化する場合のみ呼ばれます。`initPipelines` から呼びます。
+   */
+  private _initComputeCulling(): void {
+    const dev = this.device;
+    if (!dev || !this._computeCullingEnabled || !this._cullParams || !this._cullIndirect) return;
+    try {
+      const module = dev.createShaderModule({ code: CULL_WGSL });
+      // シェーダが失敗しても dispatch は黙って何もしないため、
+      // コンパイル 결과를明示的に取り出して報告します。
+      void module.getCompilationInfo?.().then((info) => {
+        for (const m of info.messages) {
+          if (m.type === 'error') {
+            console.error(`[computeCulling] WGSL ${m.lineNum}:${m.linePos} ${m.message}`);
+          }
+        }
+      });
+      dev.pushErrorScope('validation');
+      this._cullPipeline = dev.createComputePipeline({
+        layout: 'auto',
+        compute: { module, entryPoint: 'cs_main' },
+      });
+      void dev.popErrorScope().then((err) => {
+        if (err) console.error('[computeCulling] pipeline:', err.message);
+      });
+    } catch {
+      this._cullPipeline = null;
+    }
+    this._cullBindGroup = null;
+    this._cullBindGroupBuilt = false;
+  }
+
+  /** compute カリングが使える状態か。 */
+  isComputeCullingSupported(): boolean {
+    return this._computeCullingSupported && this._cullPipeline !== null;
+  }
+
+  /**
+   * compute カリングを実行し、間接描画引数を更新します (Phase 8 P-02)。
+   *
+   * @param rect 可視矩形 (minX, minY, maxX, maxY)
+   * @param instanceCount 判定対象のインスタンス数
+   * @returns dispatch を行ったか
+   */
+  beginComputeCulling(rect: Float32Array, instanceCount: number): boolean {
+    const dev = this.device;
+    const indirectBuf = this._cullIndirect;
+    const paramsBuf = this._cullParams;
+    const pipeline = this._cullPipeline;
+    const bindGroup = this._cullBindGroup;
+    this._computeCullingDispatched = false;
+    if (!dev || instanceCount <= 0) return false;
+    if (!indirectBuf || !paramsBuf || !pipeline || !bindGroup) return false;
+    if (!this._ensureCullBindGroup()) return false;
+    // _ensureCullBindGroup が bind group を作り直すため、その実体をここで確定します
+    const group = this._cullBindGroup;
+    if (!group) return false;
+
+    // 間接描画引数の instanceCount を毎回 0 に戻します
+    dev.queue.writeBuffer(indirectBuf, 4, new Uint32Array([0]).buffer);
+    this._cullRectBuf.set(rect);
+    this._cullParamsF32.set(rect, 0);
+    this._cullParamsU32[4] = instanceCount;
+    dev.queue.writeBuffer(paramsBuf, 0, this._cullParamsBuf);
+
+    dev.pushErrorScope('validation');
+    const encoder = dev.createCommandEncoder();
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, group);
+    pass.dispatchWorkgroups(Math.ceil(instanceCount / 64));
+    pass.end();
+    dev.queue.submit([encoder.finish()]);
+    void dev.popErrorScope().then((err) => {
+      if (err) console.warn('[computeCulling]', err.message);
+    });
+    this._computeCullingDispatched = true;
+    return true;
+  }
+
+  /**
+   * 直近の compute カリングで数えた可視インスタンス数を返します (Phase 8 P-02)。
+   *
+   * **間接描画は CPU から見た描画数を返さないため、この値が唯一の
+   * 「本当に何体描いたか」の証拠になります。** ベンチはこれを必ず報告します。
+   *
+   * 読み出しは非同期です。実測できるフレームまで -1 を返します。
+   */
+  resolveVisibleCount(): number {
+    const dev = this.device;
+    const indirect = this._cullIndirect;
+    if (!dev || !indirect) return -1;
+    if (!this._visibleCountReadback) {
+      this._visibleCountReadback = dev.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+    }
+    const dst = this._visibleCountReadback;
+    if (this._visibleCountMapping) return this._lastVisibleCount;
+
+    const enc = dev.createCommandEncoder();
+    enc.copyBufferToBuffer(indirect, 4, dst, 0, 4);
+    dev.queue.submit([enc.finish()]);
+
+    this._visibleCountMapping = true;
+    void dst
+      .mapAsync(GPUMapMode.READ)
+      .then(() => {
+        this._lastVisibleCount = new Uint32Array(dst.getMappedRange(0, 4))[0] ?? -1;
+        dst.unmap();
+      })
+      .catch(() => {
+        this._lastVisibleCount = -1;
+      })
+      .finally(() => {
+        this._visibleCountMapping = false;
+      });
+    return this._lastVisibleCount;
+  }
+
+  private _visibleCountReadback: GPUBuffer | null = null;
+  private _visibleCountMapping = false;
+  private _lastVisibleCount = -1;
+
+  /**
+   * 直近の compute dispatch 状態を踏まえて、間接描画を使うか決めます。
+   *
+   * compute カリングが走っていないフレーム（0 体など）は通常描画に戻します。
+   */
+  private _shouldUseIndirect(): boolean {
+    return this._cullIndirect !== null && this._computeCullingDispatched;
+  }
+
+  /**
    * timestamp query のリソースを用意します。
    *
    * バッファは `MAP_READ | COPY_DST`、クエリセットは 2 エントリです。
@@ -666,17 +1070,33 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
     pass.setVertexBuffer(0, this.quadBuffer);
+    // compute カリング時は詰替先（出力バッファ）を描画データとして使います。
+    // 入力バッファは swap 前の並びなので、そのまま描くと「先頭 N 体」になります。
+    const indirectDraw = this._shouldUseIndirect();
     for (let b = 0; b < INSTANCE_BUFFERS.length; b++) {
       const spec = INSTANCE_BUFFERS[b];
       if (!spec.eager) continue;
       const info = this._boundBuffers[spec.name];
       if (!info) continue;
+      const bound = indirectDraw
+        ? (this._cullOutBuffers[spec.name] ?? (info.buffer as GPUBuffer))
+        : (info.buffer as GPUBuffer);
       // baseInstance * stride を byteOffset として渡すことで、
       // firstInstance のない WebGL2 と同じ「可視区間だけ描画」を実現します。
-      pass.setVertexBuffer(spec.slot, info.buffer as GPUBuffer, baseInstance * spec.stride);
+      pass.setVertexBuffer(spec.slot, bound, baseInstance * spec.stride);
     }
     // 共有 Quad は triangle-strip の 4 頂点です
-    pass.draw(4, activeCount, 0, 0);
+    if (indirectDraw) {
+      // 可視数は compute が間接描画引数へ加算済みです
+      const indirectBuf = this._cullIndirect;
+      if (indirectBuf) {
+        pass.drawIndirect(indirectBuf, 0);
+      } else {
+        pass.draw(4, activeCount, 0, 0);
+      }
+    } else {
+      pass.draw(4, activeCount, 0, 0);
+    }
     pass.end();
 
     if (useTs) {

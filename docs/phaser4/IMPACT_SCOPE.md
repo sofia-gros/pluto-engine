@@ -499,7 +499,7 @@ Phase 7 は工作量が多いため、次の 4 分割で進めました。
 | # | タスク | 状態 |
 | --- | --- | --- |
 | P-01 | WebGPU bench harness | **完了**（`apps/demo/backend-bench/`） |
-| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手**（GPU 時間計測は完成 / 9.3 参照） |
+| P-02 | WebGPU compute（culling / indirect draw） | **完了**（9.4 参照。culling + 詰替 + indirect draw） |
 | P-03 | WebGL2 culling（byteOffset による baseInstance） | **一部完了**（頂点シェーダ GPU カリング / 9.2 参照） |
 | P-04 | Filter を WebGPU のみに限定 | 未着手 |
 | P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **完了**（`scripts/gpu-benchmark.mjs`） |
@@ -700,10 +700,96 @@ P-02 本体（WebGPU compute によるカリング / Morton sort / indirect draw
 
 - カメラ `zoom` がカリング矩形にどう影響するかを検証し、
   「ほぼ全部画面外」の構成を作れるようにする
-- そこで **P-03 の交差点**（GPU カリングと CPU カリングの速さolinắ switch）を測る
+- そこで **P-03 の交差点**（GPU カリングと CPU カリングの速さの切り替わり）を測る
 - それが済んでから P-02 本体（compute カリング / Morton sort / indirect draw）に入る
 - その際、compute カリングなら GPU 上でインデックス列を作るので
   **WebGPU の indirect draw が必須**になる（WebGL2 側は P-03 の byteOffset で代替）
+
+### 9.4 P-02 — WebGPU compute カリング + indirect draw（完了）
+
+#### 9.4.1 実装内容
+
+`packages/renderer/src/WebGPUDevice.ts` に `CULL_WGSL` を追加し、
+compute パスで「可視判定 → 可視インスタンスの詰替 → 間接描画引数への加算」を行います。
+
+- `packed*`（transform / shape / flags / uv / tint / origin）を
+  **storage buffer として読み**、可視の 1 体ごとに**出力バッファの先頭へ詰替えます**
+- 詰替先は `atomicAdd(&indirect[1], 1u)` の戻り値（= 可視添字）をそのまま使います
+- 描画側は**詰替先バッファを vertex buffer として** `drawIndirect` します
+- 有効化は `CreateDeviceOptions.computeCulling` → `PlutoEngineConfig.gpuComputeCulling`。
+  **既定は false**（未検証経路を描画に載せないため）
+- WebGL2 は compute 非対応のため `isComputeCullingSupported()` が false を返し、
+  そのまま P-03（頂点シェーダ経路）か CPU カリングへ落ちます
+
+#### 9.4.2 「数えるだけ」では壊れる（実測で判明）
+
+最初は instanceCount の加算だけで実装し、出力を検証したところ、
+**可視率 100% では画面が一致する一方で 10% / 1% でほぼ空の画面**になりました。
+
+原因は `drawIndirect` が **添字 0..instanceCount-1 （＝ swap 前の配列の先頭 N 体）** を
+描くためでした。可視率 100% では「全部」が「先頭 N 体」と一致するので偶然通り、
+可視率が下がると即座に壊れます。可視インスタンスの**詰替が必須**です。
+
+#### 9.4.3 実測（300000 体 / 1280x720 / WebGPU / 可視率で比較）
+
+`visibleDrawn` は compute が GPU 上で数えた可視数です
+（間接描画は CPU から描画数が返らないため、これが唯一の証拠になります）。
+
+| 可視率 | CPU cull: frame / GPU | GPU cull(P-03): frame / GPU | compute(P-02): frame / GPU | compute の `visibleDrawn` | CPU cull の描画数 |
+| --- | --- | --- | --- | --- | --- |
+| 100% | 4.450ms / 0.353ms | 0.200ms / 0.353ms | 0.200ms / 0.354ms | 300000 | 300000 |
+| 10%  | 8.700ms / 0.091ms | 0.200ms / 0.352ms | 0.200ms / 0.100ms | 81915 | 81915 |
+| 1%   | 4.500ms / 0.015ms | 0.200ms / 0.351ms | 0.200ms / 0.019ms | 8349 | 8349 |
+
+読み取れること:
+
+- **compute が数えた可視数は CPU カリングの描画数と全点で完全一致**しています。
+  独立した 2 実装が同じ答えを出しているため、カリング判定自体は正しいと判断できます。
+- CPU frame は 4.5ms → 0.2ms（**22x**）で、GPU 時間はほぼ同等です。
+  つまり **compute カリングは GPU コストを増やさずに CPU コストだけを消します**
+  （P-03 と違い、GPU 側の縮退三角形も不要）。
+- GPU 時間が可視率で変わるのは「実際に描く数が変わる」ためで、
+  compute と CPU カリングは同じ描画数なら同じ GPU 時間になります。
+
+出力の照合（canvas のスクリーンショット PNG サイズ）:
+
+| 可視率 | cpu | gpu (P-03) | compute (P-02) |
+| --- | --- | --- | --- |
+| 100% | 16828B | 16613B | 16729B |
+| 10%  | 26128B | 25231B | 25397B |
+| 1%   | 22604B | 22175B | 22226B |
+
+compute は基準（cpu）に対して 1〜3% 以内で、参照実装自身の実行間変動
+（cpu だけで 16719〜16968B ばらつく）と同程度です。
+**厳密なバイト一致は比較になりません**（シーンが別セッションでアニメーションするため）。
+そのため一致の根拠は「サイズの一致」＋「可視数の一致」の 2 点です。
+
+#### 9.4.4 実装中に見つけた 3 つの実バグ
+
+いずれも**無言で壊れる**種別であり、pageerror には出ません
+（WebGPU の validation error は `uncapturederror` 経由でしか通知されないため）。
+
+1. **`createBuffer` に `STORAGE` が無かった**
+   compute 側の bind group が不正になり、dispatch が何もしないまま
+   カウントが 0 のままになります。`packed*` を storage として読めないためです。
+2. **間接バッファに `COPY_SRC` が無かった**
+   `copyBufferToBuffer` のコピー元には `COPY_SRC` が必須です。
+3. **`maxStorageBuffersPerShaderStage` の既定は 8**
+   詰替には入力 6 + 出力 6 + atomic 1 = **13 本**必要なので、
+   `requestDevice` に `requiredLimits` で明示的に要求する必要があります。
+
+この 3 つはいずれも**「エラーが出ないのに描画されない」**ため、
+GPU 時間の実測値だけを見ていると**何も描いていない空の draw を
+高速と誤認**します（P-02 実装の初期は実際に 0.002ms を記録していました）。
+
+#### 9.4.5 計測の運用（定性的な教訓）
+
+- ベンチは `pageerror` に加えて **console の error / warning を必ず収集**します
+- 間接描画を採用するなら、**GPU 上で数えた描画数を読み戻す API** を用意します
+  （`GraphicsDevice.resolveVisibleCount()`）。これがないと実描画数は検証できません
+- 描画出力を検証するなら、**同一条件でスクリーンショットを取って比較**します。
+  `drawImage` で WebGPU キャンバスを 2D に写す方法は空になるため使えません
+  （ブラウザの合成結果を PNG で取る必要があります）
 
 ### 9.2 RenderGraph / Filter
 
@@ -722,10 +808,10 @@ P-02 本体（WebGPU compute によるカリング / Morton sort / indirect draw
 
 ### 9.3 チェックリスト
 
-- [ ] WebGPU bench harness を構築（P-01）
-- [ ] WebGPU compute で culling を実装（P-02）
+- [x] WebGPU bench harness を構築（P-01）
+- [x] WebGPU compute で culling を実装（P-02 / 9.4）
 - [ ] WebGPU compute で Morton sort を実装（P-02）
-- [ ] WebGPU で indirect draw を実装（P-02）
+- [x] WebGPU で indirect draw を実装（P-02 / 9.4）
 - [ ] WebGL2 で byteOffset による culling を実装（P-03）
 - [ ] `RenderGraph` を新設（複数パス）
 - [ ] `Filter` 基盤を新設（`filters.internal` / `filters.external`）

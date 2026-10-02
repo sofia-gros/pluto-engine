@@ -55,7 +55,7 @@ const SERIES = [
  * `cpu` は SoA を詰め替える従来経路、`gpu` は頂点シェーダで縮退三角形に
  * して破棄する経路（Phase 8 P-03）です。
  */
-const CULL_MODES = (process.env.CULL_MODES ?? 'cpu,gpu').split(',');
+const CULL_MODES = (process.env.CULL_MODES ?? 'cpu,gpu,compute').split(',');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -178,6 +178,9 @@ for (const series of SERIES) {
         if (cull === 'gpu') {
           backends[`${series.key}#gpucull`] ??= {};
           backends[`${series.key}#gpucull`][String(entities)] = value;
+        } else if (cull === 'compute') {
+          backends[`${series.key}#computecull`] ??= {};
+          backends[`${series.key}#computecull`][String(entities)] = value;
         } else {
           backends[series.key] ??= {};
           backends[series.key][String(entities)] = value;
@@ -187,11 +190,25 @@ for (const series of SERIES) {
         const gpu = value.gpuMsMedian;
         console.log(
           `rendered=${drawn}/${entities} gpucull=${effective} ` +
+            `compute=${value.computeCullingActive} drawn=${value.visibleDrawn} ` +
             `cpu frame=${value.frameMsMedian.toFixed(3)}ms cull=${value.cullMsMedian.toFixed(3)}ms ` +
             `gpu=${gpu >= 0 ? gpu.toFixed(3) + 'ms' : 'n/a'}`,
         );
         if (cull === 'gpu' && !effective) {
           console.log('  (警告: GPU カリングが有効になっていません)');
+        }
+        /**
+         * compute カリングは間接描画なので `renderCount`（= 全インスタンス数）では
+         * 「本当に何体描いたか」を分かりません。GPU が数えた可視数で照合します。
+         * ここが 0 なら何も描いておらず、GPU 時間の比較は無意味です。
+         */
+        if (cull === 'compute') {
+          if (!value.computeCullingActive) {
+            console.log('  (警告: compute カリングが有効になっていません)');
+          }
+          if (value.visibleDrawn === 0) {
+            console.log('  (警告: 可視 0 体です。描けていません。比較には使えません)');
+          }
         }
         if (drawn === 0 && !CPU_ONLY) {
           // 全スプライトがカリングで落ちているため比較になりません
