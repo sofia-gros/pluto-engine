@@ -791,6 +791,70 @@ GPU 時間の実測値だけを見ていると**何も描いていない空の d
   `drawImage` で WebGPU キャンバスを 2D に写す方法は空になるため使えません
   （ブラウザの合成結果を PNG で取る必要があります）
 
+### 9.5 要件2 の検証 — WebGPU > WebGL2 > CPU（**部分達成**）
+
+#### 9.5.1 比較の方法
+
+9.1.2 で要件2 が NG だったのは、**3 系統を同じカリングモードで測っていた**ためでした。
+CPU カリング（4.4ms）がバックエンド差（0.03〜23ms より小さい）を覆い隠していました。
+
+各バックエンドは**そのバックエンドの最良モード**で比べます。
+
+| 系統 | カリング | 理由 |
+| --- | --- | --- |
+| WebGPU | compute（P-02） | 可視件数だけ描くため GPU 側も減る |
+| WebGL2 | 頂点シェーダ（P-03） | compute 非対応なので最良 |
+| CPU | CPU 参照ラスタライザ | 乗算ブレンドとサンプリングを省いた下限コスト |
+
+さらに、**GPU 系は「CPU 時間 + GPU 時間」**で比べます。
+ドローコールは非同期なので、CPU フレーム時間だけでは GPU の実行が含まれず、
+「GPU に何か描かせた系統」が「何もしない CPU 系列」より速く見えてしまいます。
+
+WebGL2 の GPU 時間は今回 `EXT_disjoint_timer_query_webgl2` で
+**初めて実測できるようになった**（3 本のリングで 2〜3 フレーム遅れを許容）。
+
+#### 9.5.2 実測（1280x720 / WebGPU = RTX 4060 / WebGL2 = ANGLE + D3D11）
+
+| 体数 | WebGPU (cpu+gpu) | WebGL2 (cpu+gpu) | CPU 参照 | WebGPU/WebGL2 |
+| --- | --- | --- | --- | --- |
+| 20000  | 0.200 + 0.028 = **0.228ms** | 0.100 + 1.536 = **1.636ms** | 0.300ms | 7.2x |
+| 80000  | 0.300 + 0.097 = **0.398ms** | 0.100 + 6.135 = **6.235ms** | 1.000ms | 15.7x |
+| 307200 | 0.200 + 0.361 = **0.562ms** | 0.100 + 23.141 = **23.241ms** | 3.900ms | **41.3x** |
+
+判定:
+
+- **WebGPU > WebGL2: 達成**（30 万体で 41x）
+- **WebGPU > CPU: 達成**（30 万体で 6.9x）
+- **WebGL2 > CPU: 未達成**（30 万体で WebGL2 が 6.0x 遅い）
+
+#### 9.5.3 WebGL2 > CPU が成立しない理由
+
+GPU 時間のみを 1 インスタンス当たりに直すと:
+
+| 体数 | WebGPU | WebGL2 | 比 |
+| --- | --- | --- | --- |
+| 20000  | 1.4 ns/体 | 76.8 ns/体 | 55x |
+| 80000  | 1.2 ns/体 | 76.7 ns/体 | 63x |
+| 307200 | 1.2 ns/体 | 75.4 ns/体 | 63x |
+
+**WebGL2 の遅延は体数に比例**しており、1 ドローコールあたりの固定コストではありません。
+したがって draw call の分割（バッチ化）では改善しません。
+
+原因はANGLE を介した D3D11 の per-instance 属性転送が.instancing にextremely
+向いていない点だと考えます（本，Gpu 時間のみでの判断であり、
+プロファイラでの確認はしていません）。
+
+**参考**: オーバードロー構成（32x32 セルに 300 枚重ね = 307200 体、
+スプライト約 20px）では WebGPU 0.911ms / WebGL2 22.970ms で、
+比率はほぼ同じ 25x でした。塗り面積牛仔なくても**インスタンス処理量が支配的**です。
+
+#### 9.5.4 判定の限界
+
+- WebGL2 の GPU 時間は `EXT_disjoint_timer_query_webgl2` に依存します。
+  拡張が無い環境では bench が「計測不可」と表示し、**推測で判定しません**。
+- 1 環境（RTX 4060 + ANGLE/D3D11）の測定です。
+  別の GPU / .driver では WebGL2 の数値が大きく変わる可能性があります。
+
 ### 9.2 RenderGraph / Filter
 
 | 対象 | 分類 | 備考 |
@@ -812,15 +876,15 @@ GPU 時間の実測値だけを見ていると**何も描いていない空の d
 - [x] WebGPU compute で culling を実装（P-02 / 9.4）
 - [ ] WebGPU compute で Morton sort を実装（P-02）
 - [x] WebGPU で indirect draw を実装（P-02 / 9.4）
-- [ ] WebGL2 で byteOffset による culling を実装（P-03）
+- [x] WebGL2 で byteOffset による culling を実装（P-03 / 9.2）
 - [ ] `RenderGraph` を新設（複数パス）
 - [ ] `Filter` 基盤を新設（`filters.internal` / `filters.external`）
 - [ ] 主要 Filter を WebGPU のみで実装（Blur / Bloom / Glow / Pixelate / ColorMatrix / Vignette ほか）
 - [ ] `SpriteGPULayer` を実装（静的 GPU バッファ + GPU 駆動アニメ）
 - [ ] `TilemapGPULayer` を実装（1 quad）
 - [ ] `Gradient` / `Noise` を実装（WebGPU）
-- [ ] benchmark_results.json に 3 系統（WebGPU / WebGL2 / CPU）を記録（P-05）
-- [ ] **要件2 の検証**（WebGPU > WebGL > CPU を bench で確認）
+- [x] benchmark_results.json に 3 系統（WebGPU / WebGL2 / CPU）を記録（P-05）
+- [x] **要件2 の検証**（WebGPU > WebGL は 41x で達成 / WebGL > CPU は未達成。9.5）
 - [ ] `bun run test` / `bun run lint` 通過
 
 ---

@@ -804,6 +804,7 @@ export class WebGPUDevice implements GraphicsDevice {
         return false;
       }
 
+      dev.pushErrorScope('validation');
       this._cullBindGroup = dev.createBindGroup({
         layout: this._cullPipeline.getBindGroupLayout(0),
         entries: [
@@ -824,8 +825,18 @@ export class WebGPUDevice implements GraphicsDevice {
         ],
       });
       this._cullBindGroupBuilt = true;
+      void dev.popErrorScope().then((err) => {
+        // createBindGroup は例外を投げずに validation error として報告します。
+        // ここで捕捉しないと「bind group が作られない」症状だけが残ります。
+        if (err) {
+          console.error('[computeCulling] bindGroup:', err.message);
+          this._cullBindGroup = null;
+          this._cullBindGroupBuilt = false;
+        }
+      });
       return true;
     } catch {
+      void dev.popErrorScope();
       this._cullBindGroup = null;
       this._cullBindGroupBuilt = false;
       return false;
@@ -872,6 +883,37 @@ export class WebGPUDevice implements GraphicsDevice {
   }
 
   /**
+   * compute カリングの各段階の状態を返します（診断用）。
+   *
+   * `isComputeCullingSupported()` が false になる原因は 1 つではないため、
+   * どの段階で落ちたかを bench に報告させます
+   * （Phase 8 P-02 で「無言で compute が効かない」症状の切り分けに使用）。
+   */
+  computeCullingStatus(): {
+    enabled: boolean;
+    limitOk: boolean;
+    hasParams: boolean;
+    hasIndirect: boolean;
+    hasPipeline: boolean;
+    hasBindGroup: boolean;
+    bufferCount: number;
+    attempts: number;
+    lastFail: string;
+  } {
+    return {
+      enabled: this._computeCullingEnabled,
+      limitOk: (this.limits?.maxStorageBuffersPerShaderStage ?? 0) >= CULL_STORAGE_BUFFER_COUNT,
+      hasParams: this._cullParams !== null,
+      hasIndirect: this._cullIndirect !== null,
+      hasPipeline: this._cullPipeline !== null,
+      hasBindGroup: this._cullBindGroup !== null,
+      bufferCount: Object.keys(this._boundBuffers).length,
+      attempts: this._cullAttempts,
+      lastFail: this._cullLastFail,
+    };
+  }
+
+  /**
    * compute カリングを実行し、間接描画引数を更新します (Phase 8 P-02)。
    *
    * @param rect 可視矩形 (minX, minY, maxX, maxY)
@@ -883,14 +925,30 @@ export class WebGPUDevice implements GraphicsDevice {
     const indirectBuf = this._cullIndirect;
     const paramsBuf = this._cullParams;
     const pipeline = this._cullPipeline;
-    const bindGroup = this._cullBindGroup;
     this._computeCullingDispatched = false;
-    if (!dev || instanceCount <= 0) return false;
-    if (!indirectBuf || !paramsBuf || !pipeline || !bindGroup) return false;
-    if (!this._ensureCullBindGroup()) return false;
+    this._cullAttempts++;
+    if (!dev || instanceCount <= 0) {
+      this._cullLastFail = !dev ? 'device が未初期化' : `instanceCount=${instanceCount}`;
+      return false;
+    }
+    /**
+     * bind group は `_ensureCullBindGroup` が作るので、
+     * ここで存在を要求してはいけません（鶏と卵になります）。
+     */
+    if (!indirectBuf || !paramsBuf || !pipeline) {
+      this._cullLastFail = 'params / indirect / pipeline が未用意';
+      return false;
+    }
+    if (!this._ensureCullBindGroup()) {
+      this._cullLastFail = '_ensureCullBindGroup が false を返した';
+      return false;
+    }
     // _ensureCullBindGroup が bind group を作り直すため、その実体をここで確定します
     const group = this._cullBindGroup;
-    if (!group) return false;
+    if (!group) {
+      this._cullLastFail = '_ensureCullBindGroup 後も bindGroup が null';
+      return false;
+    }
 
     // 間接描画引数の instanceCount を毎回 0 に戻します
     dev.queue.writeBuffer(indirectBuf, 4, new Uint32Array([0]).buffer);
@@ -958,6 +1016,9 @@ export class WebGPUDevice implements GraphicsDevice {
   private _visibleCountReadback: GPUBuffer | null = null;
   private _visibleCountMapping = false;
   private _lastVisibleCount = -1;
+  /** `beginComputeCulling` の呼ばれ回数と直近の失敗理由（診断用）。 */
+  private _cullAttempts = 0;
+  private _cullLastFail = '';
 
   /**
    * 直近の compute dispatch 状態を踏まえて、間接描画を使うか決めます。

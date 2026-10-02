@@ -77,6 +77,9 @@ function parseArgs(argv) {
     warmup: DEFAULT_WARMUP,
     headed: false,
     tsq: false,
+    cols: 0,
+    overdraw: 1,
+    size: 32,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -94,6 +97,12 @@ function parseArgs(argv) {
     } else if (a === '--tsq') {
       // WebGPU timestamp query を有効にします (Phase 8 P-02 の診断用)。
       out.tsq = true;
+    } else if (a === '--cols') {
+      out.cols = Number.parseInt(String(argv[++i]), 10) || 0;
+    } else if (a === '--overdraw') {
+      out.overdraw = Number.parseInt(String(argv[++i]), 10) || 1;
+    } else if (a === '--size') {
+      out.size = Number.parseInt(String(argv[++i]), 10) || 32;
     }
   }
   if (out.entities.length === 0) out.entities = DEFAULT_ENTITY_COUNTS;
@@ -163,7 +172,10 @@ for (const series of SERIES) {
         const url =
           `http://localhost:${PORT}/backend-bench/index.html` +
           `?backend=${series.backend}&cull=${cull}&entities=${entities}` +
-          `&frames=${args.frames}&warmup=${args.warmup}&tsq=${args.tsq ? 1 : 0}`;
+          `&frames=${args.frames}&warmup=${args.warmup}&tsq=${args.tsq ? 1 : 0}` +
+          (args.cols ? `&cols=${args.cols}` : '') +
+          (args.overdraw > 1 ? `&overdraw=${args.overdraw}` : '') +
+          (args.size !== 32 ? `&size=${args.size}` : '');
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
         const result = await page.waitForFunction(
@@ -205,6 +217,9 @@ for (const series of SERIES) {
         if (cull === 'compute') {
           if (!value.computeCullingActive) {
             console.log('  (警告: compute カリングが有効になっていません)');
+            if (value.computeCullingStatus) {
+              console.log(`    status: ${JSON.stringify(value.computeCullingStatus)}`);
+            }
           }
           if (value.visibleDrawn === 0) {
             console.log('  (警告: 可視 0 体です。描けていません。比較には使えません)');
@@ -229,30 +244,53 @@ server.close();
 /**
  * 要件2 の検証: WebGPU > WebGL2 > CPU が成立するか。
  *
- * **フレーム全体と draw のみの 2 つを見ます。**
- * 現状の設計ではカリングが CPU 側にあるため、フレーム全体は
- * カリング時間が支配的になって 3 系統almost同値になります。
- * バックエンド差が現れるのは draw 部分だけなので、両方を併記します。
+ * ## 各バックエンドは「そのバックエンドの最良モード」で比較します
+ *
+ * - WebGPU : compute カリング（Phase 8 P-02 / `?cull=compute`）
+ * - WebGL2 : 頂点シェーダカリング（Phase 8 P-03 / `?cull=gpu`）
+ * - CPU    : CPU 参照ラスタライザ（`?cull=cpu`）
+ *
+ * 3 つを同じカリングモードで测ると、**CPU カリングの時間が差を覆い隠す**ため
+ * 比較になりません（それが 9.1.2 で要件2 が NG になっていた原因です）。
+ *
+ * ## GPU 系は「CPU 時間 + GPU 時間」で比べます
+ *
+ * ドローコールは非同期なので、CPU 側のフレーム時間には GPU 実行が含まれません。
+ * GPU 時間まで足さないと、GPU に何か描かせたバックエンドが
+ * 「何もしない CPU 系列」より速く見えてしまいます。
  */
 function checkRequirement2(data) {
   const rows = [];
   for (const entities of args.entities) {
     const k = String(entities);
-    const g = data.webgpu?.[k];
-    const l = data.webgl2?.[k];
+    // GPU カリングの行を優先します（同じ backend でも cull で速さが変わるため）
+    const g = data['webgpu#computecull']?.[k] ?? data['webgpu#gpucull']?.[k] ?? data.webgpu?.[k];
+    const l = data['webgl2#gpucull']?.[k] ?? data.webgl2?.[k];
     const c = data.cpu?.[k];
     if (!g || !l || !c) continue;
+
+    // GPU 時間が測れない場合は CPU 時間のみを並べる（推測はしません）
+    const total = (r) => r.frameMsMedian + (r.gpuMsMedian >= 0 ? r.gpuMsMedian : 0);
+    const gTotal = total(g);
+    const lTotal = total(l);
+    const cTotal = c.frameMsMedian;
+    const gpuTimeKnown = g.gpuMsMedian >= 0 && l.gpuMsMedian >= 0;
+
     rows.push({
       entities: Number(entities),
+      webgpuCulling: g.computeCullingActive ? 'compute' : g.gpuCullingActive ? 'gpu' : 'cpu',
+      webgl2Culling: l.gpuCullingActive ? 'gpu' : 'cpu',
       webgpuFrameMs: g.frameMsMedian,
+      webgpuGpuMs: g.gpuMsMedian,
+      webgpuTotalMs: gTotal,
       webgl2FrameMs: l.frameMsMedian,
+      webgl2GpuMs: l.gpuMsMedian,
+      webgl2TotalMs: lTotal,
       cpuFrameMs: c.frameMsMedian,
-      webgpuDrawMs: g.drawMsMedian,
-      webgl2DrawMs: l.drawMsMedian,
-      cpuDrawMs: c.drawMsMedian,
-      cullMs: g.cullMsMedian,
-      frameOk: g.frameMsMedian < l.frameMsMedian && l.frameMsMedian < c.frameMsMedian,
-      drawOk: g.drawMsMedian < l.drawMsMedian && l.drawMsMedian < c.drawMsMedian,
+      /** GPU 時間が両系列で取れたときだけ判定します */
+      gpuTimeKnown,
+      totalOk: gpuTimeKnown && gTotal < lTotal && lTotal < cTotal,
+      cpuOnlyOk: gTotal < cTotal,
     });
   }
   return rows;
@@ -324,15 +362,25 @@ await writeFile(RESULT_PATH, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
 console.log('');
 console.log('=== 要件2 (WebGPU > WebGL2 > CPU) ===');
 for (const row of payload.requirement2) {
-  console.log(`  ${String(row.entities).padStart(7)} 体 (cull=${row.cullMs.toFixed(3)}ms)`);
   console.log(
-    `    frame: webgpu=${row.webgpuFrameMs.toFixed(3)} webgl2=${row.webgl2FrameMs.toFixed(3)} ` +
-      `cpu=${row.cpuFrameMs.toFixed(3)} -> ${row.frameOk ? 'OK' : 'NG'}`,
+    `  ${String(row.entities).padStart(7)} 体 ` +
+      `(webgpu=${row.webgpuCulling} / webgl2=${row.webgl2Culling} のカリング)`,
+  );
+  const fmt = (v) => (v >= 0 ? `${v.toFixed(3)}` : '計測不可');
+  console.log(`    cpu  : ${row.cpuFrameMs.toFixed(3)}ms ` + `(参照ラスタライザ / カリング込み)`);
+  console.log(
+    `    webgl2: cpu ${fmt(row.webgl2FrameMs)}ms + gpu ${fmt(row.webgl2GpuMs)}ms ` +
+      `= ${row.webgl2TotalMs.toFixed(3)}ms`,
   );
   console.log(
-    `    draw : webgpu=${row.webgpuDrawMs.toFixed(3)} webgl2=${row.webgl2DrawMs.toFixed(3)} ` +
-      `cpu=${row.cpuDrawMs.toFixed(3)} -> ${row.drawOk ? 'OK' : 'NG'}`,
+    `    webgpu: cpu ${fmt(row.webgpuFrameMs)}ms + gpu ${fmt(row.webgpuGpuMs)}ms ` +
+      `= ${row.webgpuTotalMs.toFixed(3)}ms`,
   );
+  if (!row.gpuTimeKnown) {
+    console.log('    -> 判定不可（GPU 時間を測定できていないため推測しません）');
+  } else {
+    console.log(`    -> WebGPU > WebGL2 > CPU: ${row.totalOk ? 'OK' : 'NG'}`);
+  }
 }
 if (payload.gpuCulling.length > 0) {
   console.log('');

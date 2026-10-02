@@ -166,6 +166,15 @@ interface UniformLocations {
   gpuCull: WebGLUniformLocation | null;
 }
 
+/**
+ * timestamp query のリングバッファ長。
+ *
+ * 1 本では結果が返るまで次の draw を出せず Moreover、フレームを止めると
+ * 時刻測定そのものがボトルネックになります。3 本で「2〜3 フレーム遅れ」を許容し、
+ * 中央値でなら影響しません。
+ */
+const TSQ_RING = 3;
+
 export class WebGL2Device implements GraphicsDevice {
   private gl: WebGL2RenderingContext | null = null;
   private currentPipeline: WebGLProgram | null = null;
@@ -259,6 +268,8 @@ export class WebGL2Device implements GraphicsDevice {
       throw new Error('WebGL2 is not supported');
     }
     this.gl = gl;
+    // GPU 時間計測の拡張はここで要求します（それより後で createQuery できません）
+    this._setupTimestampQuery();
 
     // コンテキスト喪失を検出します。
     // 喪失中は一切描画せず、黙って 60 FPS を走り続けます
@@ -796,8 +807,150 @@ export class WebGL2Device implements GraphicsDevice {
     // VAO の属性指定は setupInstancedAttributes 側で済んでいるため、
     // ここでは draw のみ発行します。
     void baseInstance;
+    const query = this._beginGpuTimer();
     this.gl.drawArraysInstanced(this.gl.TRIANGLE_STRIP, 0, 4, activeCount);
+    this._endGpuTimer(query);
   }
+
+  // ---------------------------------------------------------------------
+  // GPU 時間計測 (Phase 8 P-02)
+  //
+  // WebGPU の timestamp query に対応する WebGL2 側の実装です。
+  // `EXT_disjoint_timer_query_webgl2` が無ければ計測できないので、
+  // 非対応環境では -1 を返します（比較表には「計測不可」と出ます）。
+  //
+  // 查询は 1 本では再利用できません（結果が返るまで次のフレームを出せないため）。
+  // そのため 3 本をリングバッファにして、**2〜3 フレーム遅れのサンプル**を
+  // 受けます。中央値を取るため 1〜2 フレームの遅れは測定に影響しません。
+  // ---------------------------------------------------------------------
+
+  /** GPU 時間計測が有効か（`enableTimestampQuery` 後かつ拡張が存在） */
+  isTimestampQuerySupported(): boolean {
+    return this._tsqSupported;
+  }
+
+  /** 読み出しに失敗したときの理由（切り分け用） */
+  lastTimestampError(): string {
+    return this._tsqError;
+  }
+
+  /**
+   * 直近に読み出せた GPU 時間 (ms) を返します。計測できなければ -1。
+   *
+   * `GPU_DISJOINT_EXT` が立ったフレームの値は破棄します
+   * （timer query の値は交差時に不正になるためです）。
+   */
+  resolveGpuTimeMs(): number {
+    const gl = this.gl;
+    if (!gl || !this._tsqSupported || this._tsqError) return -1;
+    const ext = this._tsqExt;
+    if (!ext) return -1;
+
+    // 完了済みのサンプルから最も新しいものを 1 つだけ採用します。
+    let taken = false;
+    for (let k = 0; k < TSQ_RING; k++) {
+      const slot = (this._tsqNext + k) % TSQ_RING;
+      const query = this._tsqQueries[slot];
+      if (!query || this._tsqPending[slot] !== true) continue;
+      const available = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) as boolean;
+      if (!available) continue;
+      // GPU 側が別の作業中なら値は信用できません
+      const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT) as boolean;
+      if (disjoint) {
+        this._tsqPending[slot] = false;
+        continue;
+      }
+      const ns = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
+      this._tsqPending[slot] = false;
+      if (!taken) {
+        this._lastGpuMs = ns / 1e6;
+        taken = true;
+      }
+      // 読み終えたスロットは次のサンプルに再利用します
+      this._tsqReusable.push(slot);
+    }
+    return this._lastGpuMs;
+  }
+
+  /**
+   * 直近の draw の計測を開始します。
+   *
+   * リングに空きが無ければ計測をスキップします
+   * （强制性で待たせると 오히려 計測そのものがボトルネックになるため）。
+   */
+  private _beginGpuTimer(): WebGLQuery | null {
+    const gl = this.gl;
+    if (!gl || !this._tsqSupported || this.contextLost) return null;
+    const slot = this._tsqReusable.pop();
+    if (slot === undefined) return null;
+    const query = this._tsqQueries[slot];
+    if (!query) return null;
+    const gl2 = gl as WebGL2RenderingContext;
+    gl2.beginQuery(this._tsqExt!.TIME_ELAPSED_EXT, query);
+    this._tsqPending[slot] = true;
+    this._tsqActive = slot;
+    return query;
+  }
+
+  private _endGpuTimer(query: WebGLQuery | null): void {
+    const gl = this.gl;
+    if (!gl || !query || this._tsqActive === -1) return;
+    const gl2 = gl as WebGL2RenderingContext;
+    gl2.endQuery(this._tsqExt!.TIME_ELAPSED_EXT);
+    this._tsqNext = (this._tsqActive + 1) % TSQ_RING;
+    this._tsqActive = -1;
+  }
+
+  /** timestamp query を有効化します。`init()` より前に呼ぶ必要があります。 */
+  enableTimestampQuery(): void {
+    this._tsqEnabled = true;
+  }
+
+  /**
+   * `init()` の中で拡張を要求します。
+   *
+   * 拡張の要求は `init()` の后才有效地行えます
+   * （WebGPU の timestamp-query feature と同じ制約です）。
+   */
+  private _setupTimestampQuery(): void {
+    const gl = this.gl;
+    if (!gl || !this._tsqEnabled) {
+      this._tsqSupported = false;
+      return;
+    }
+    // WebGL2 版という名前の拡張が標準です（旧来の WebGL1 名は使えません）
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as {
+      TIME_ELAPSED_EXT: number;
+      GPU_DISJOINT_EXT: number;
+      QUERY_COUNTER_BITS_EXT: number;
+    } | null;
+    if (!ext) {
+      this._tsqSupported = false;
+      this._tsqError = 'EXT_disjoint_timer_query_webgl2 がありません';
+      return;
+    }
+    this._tsqExt = ext;
+    for (let k = 0; k < TSQ_RING; k++) {
+      this._tsqQueries[k] = gl.createQuery();
+      this._tsqReusable.push(k);
+    }
+    this._tsqSupported = true;
+  }
+
+  private _tsqEnabled = false;
+  private _tsqSupported = false;
+  private _tsqExt: {
+    TIME_ELAPSED_EXT: number;
+    GPU_DISJOINT_EXT: number;
+    QUERY_COUNTER_BITS_EXT: number;
+  } | null = null;
+  private _tsqQueries: (WebGLQuery | null)[] = new Array(TSQ_RING).fill(null);
+  private _tsqPending: boolean[] = new Array(TSQ_RING).fill(false);
+  private _tsqReusable: number[] = [];
+  private _tsqNext = 0;
+  private _tsqActive = -1;
+  private _lastGpuMs = -1;
+  private _tsqError = '';
 
   destroy(): void {
     if (this.gl) {

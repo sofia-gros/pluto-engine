@@ -51,6 +51,8 @@ export async function createGraphicsDevice(
 
   if (backend === 'webgl2') {
     const device = new WebGL2Device();
+    // 拡張の要求は init() より前に行う必要があります
+    if (options.timestampQuery === true) device.enableTimestampQuery();
     await device.init(canvas);
     return device;
   }
@@ -76,6 +78,7 @@ export async function createGraphicsDevice(
   }
 
   const device = new WebGL2Device();
+  if (options.timestampQuery === true) device.enableTimestampQuery();
   await device.init(canvas);
   return device;
 }

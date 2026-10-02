@@ -90,6 +90,25 @@ const CULL_MODE = strParam('cull', 'cpu');
 const GPU_CULL = CULL_MODE === 'gpu';
 const COMPUTE_CULL = CULL_MODE === 'compute';
 
+/**
+ * グリッドの列数。0 なら `sqrt(count)` から自動決定します。
+ *
+ * `?cols=32&overdraw=300` のように指定すると、32x32 のセルに
+ * 300 枚ずつ重ねて配置するため、描画数と塗り面積を同時に増やせます。
+ */
+const GRID_COLS = Math.max(0, Number(strParam('cols', '0')) || 0);
+
+/**
+ * 1 セルあたりの重なり枚数。1 が通常配置、大きいほどオーバードローです。
+ */
+const OVERDRAW = Math.max(1, Number(strParam('overdraw', '1')) || 1);
+
+/** 1 スプライトのフレーム辺長 (px)。`?size=` で変更できます。 */
+const SPRITE_SIZE = Math.max(1, Number(strParam('size', '32')) || 32);
+
+/** セル間隔 (px)。`?spacing=` で変更できます。 */
+const SPRITE_SPACING = Math.max(1, Number(strParam('spacing', '64')) || 64);
+
 const status = document.getElementById('status') as HTMLDivElement;
 
 /** 1x1 の白テクスチャで全スプライトを描画します。 */
@@ -240,6 +259,9 @@ async function main(): Promise<void> {
     /** 設定値ではなく、実際に各カリング経路が走ったか。 */
     gpuCullingActive: engine.gpuCullingActive,
     computeCullingActive: engine.computeCullingActive,
+    /** compute カリングがどの段階で落ちたか（診断用）。 */
+    computeCullingStatus:
+      (engine.device as { computeCullingStatus?: () => unknown })?.computeCullingStatus?.() ?? null,
     entities: ENTITIES,
     /** 実際に 1 フレームで描画されたインスタンス数。
      *  これが 0 だとカリングが全部落としており、比較になりません。 */
@@ -339,19 +361,29 @@ class BenchScene extends Scene {
    */
   spawn(count: number): void {
     const arena = this.arena;
-    const cols = Math.ceil(Math.sqrt(count));
-    const spacing = 64;
+    // cols を指定すると「重なり枚数（overdraw）」で負荷を掛けられます。
+    const cols = GRID_COLS > 0 ? GRID_COLS : Math.ceil(Math.sqrt(count));
+    const spacing = SPRITE_SPACING;
     const tex = this.textures.get('__bench-white');
 
+    /**
+     * グリッドのセル数に対して count を割り当てる総当たり写法です。
+     *
+     * セルを重复して使うことで **オーバードロー**を作れます。
+     * 30 万体を 1280x720 に「重なりなく」収めると 1 スプライトが 0.6px に
+     * なりサブピクセル化するため、GPU の処理量がインスタンス数に比例しません。
+     * セル重复なら「描画数」と「塗り面積」を同時に増やせます。
+     */
     for (let i = 0; i < count; i++) {
-      const x = (i % cols) * spacing;
-      const y = ((i / cols) | 0) * spacing;
+      const cell = OVERDRAW > 1 ? i % (cols * cols || 1) : i;
+      const x = (cell % cols) * spacing;
+      const y = ((cell / cols) | 0) * spacing;
       const id = arena.allocate();
       if (id === -1) break;
       const idx = arena.idToIndex[id];
       arena.setPosX(idx, x);
       arena.setPosY(idx, y);
-      arena.setFrameSize(idx, 32, 32, false);
+      arena.setFrameSize(idx, SPRITE_SIZE, SPRITE_SIZE, false);
       if (tex) {
         arena.assetRef[idx] = tex;
         arena.setFrameIdx(idx, tex.layerIndex ?? 0);
@@ -359,8 +391,9 @@ class BenchScene extends Scene {
       arena.setTint(idx, 0xff8888ff);
     }
 
+    const rows = Math.ceil((OVERDRAW > 1 ? cols * cols : count) / cols);
     this.worldWidth = cols * spacing;
-    this.worldHeight = Math.ceil(count / cols) * spacing;
+    this.worldHeight = rows * spacing;
 
     // 全スプライトが画面に収まる最大ズーム（90% を加えて余裕を持たせます）
     // Camera.zoom は大きいほど拡大 = 可視範囲が狭くなります。
