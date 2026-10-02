@@ -169,6 +169,80 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 }
 `;
 
+const SORT_WGSL = /* wgsl */ `
+struct SortParams {
+  h: u32,
+  q: u32,
+  pad0: u32,
+  pad1: u32,
+};
+struct CullParams {
+  rect : vec4<f32>,
+  misc : vec4<u32>,
+};
+
+@group(0) @binding(0) var<uniform> cullParams : CullParams;
+@group(0) @binding(1) var<storage, read> inTransform : array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> inShape : array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> inFlags : array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read> inUv : array<vec4<f32>>;
+@group(0) @binding(5) var<storage, read> inTint : array<u32>;
+@group(0) @binding(6) var<storage, read> inOrigin : array<vec4<f32>>;
+@group(0) @binding(7) var<storage, read_write> indirect : array<atomic<u32>>;
+@group(0) @binding(8) var<storage, read_write> outTransform : array<vec4<f32>>;
+@group(0) @binding(9) var<storage, read_write> outUv : array<vec4<f32>>;
+@group(0) @binding(10) var<storage, read_write> outFlags : array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read_write> outShape : array<vec4<f32>>;
+@group(0) @binding(12) var<storage, read_write> outTint : array<u32>;
+@group(0) @binding(13) var<storage, read_write> outOrigin : array<vec4<f32>>;
+
+@group(1) @binding(0) var<uniform> sortParams : SortParams;
+
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let global_id = gid.x;
+  let active_count = atomicLoad(&indirect[1]);
+  
+  let h = sortParams.h;
+  let q = sortParams.q;
+  
+  let i = (global_id / q) * (q * 2u) + (global_id % q);
+  let j = i + q;
+  
+  let y_i = select(9999999.0, outTransform[i].y, i < active_count);
+  let y_j = select(9999999.0, outTransform[j].y, j < active_count);
+  
+  let asc = (i & h) == 0u;
+  let swap = select(y_i < y_j, y_i > y_j, asc);
+  
+  if (swap) {
+     let tempTransform = outTransform[i];
+     outTransform[i] = outTransform[j];
+     outTransform[j] = tempTransform;
+     
+     let tempUv = outUv[i];
+     outUv[i] = outUv[j];
+     outUv[j] = tempUv;
+     
+     let tempFlags = outFlags[i];
+     outFlags[i] = outFlags[j];
+     outFlags[j] = tempFlags;
+     
+     let tempShape = outShape[i];
+     outShape[i] = outShape[j];
+     outShape[j] = tempShape;
+     
+     let tempTint = outTint[i];
+     outTint[i] = outTint[j];
+     outTint[j] = tempTint;
+     
+     let tempOrigin = outOrigin[i];
+     outOrigin[i] = outOrigin[j];
+     outOrigin[j] = tempOrigin;
+  }
+}
+`;
+
 /**
  * WGSL の頂点シェーダー。
  * インスタンス属性の宣言は `InstanceLayout` から生成するため、
@@ -802,10 +876,16 @@ export class WebGPUDevice implements GraphicsDevice {
   /** 直近のフレームで compute dispatch を行ったか。 */
   private _computeCullingDispatched = false;
   /** 直近の dispatch で渡した可視矩形。 */
-  private readonly _cullRectBuf = new Float32Array(4);
+  private _cullRectBuf = new Float32Array(4);
   private readonly _cullParamsBuf = new ArrayBuffer(32);
   private readonly _cullParamsF32 = new Float32Array(this._cullParamsBuf);
   private readonly _cullParamsU32 = new Uint32Array(this._cullParamsBuf);
+
+  private _sortPipeline: GPUComputePipeline | null = null;
+  private _sortParamsBuffer: GPUBuffer | null = null;
+  private _sortBindGroup: GPUBindGroup | null = null;
+  private _sortParamsCapacity = 0;
+  private _sortParamsData: Uint32Array | null = null;
 
   /**
    * compute カリングを有効化します (Phase 8 P-02、既定は false)。
@@ -845,12 +925,17 @@ export class WebGPUDevice implements GraphicsDevice {
        * 可視数は入力.instanc数以下なので、入力と同じあれば十分です。
        * 容量が変わった（アリーナが伸びた）ときだけ作り直します。
        */
+      const nextPow2 = (n: number) => Math.pow(2, Math.ceil(Math.log2(n)));
+      const capacity = transform.size / 16;
+      const requiredCapacity = nextPow2(capacity);
+
       const ensureOut = (name: string, source: GPUBuffer): GPUBuffer | null => {
+        const requiredSize = (source.size / capacity) * requiredCapacity;
         const existing = this._cullOutBuffers[name];
-        if (existing && existing.size === source.size) return existing;
+        if (existing && existing.size === requiredSize) return existing;
         existing?.destroy();
         const created = dev.createBuffer({
-          size: source.size,
+          size: requiredSize,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
         });
         this._cullOutBuffers[name] = created;
@@ -932,10 +1017,34 @@ export class WebGPUDevice implements GraphicsDevice {
       void dev.popErrorScope().then((err) => {
         if (err) console.error('[computeCulling] pipeline:', err.message);
       });
+
+      const sortModule = dev.createShaderModule({ code: SORT_WGSL });
+      dev.pushErrorScope('validation');
+      const sortGroup1Layout = dev.createBindGroupLayout({
+        entries: [
+          {
+            binding: 0,
+            visibility: GPUShaderStage.COMPUTE,
+            buffer: { type: 'uniform', hasDynamicOffset: true },
+          },
+        ],
+      });
+      const sortPipelineLayout = dev.createPipelineLayout({
+        bindGroupLayouts: [this._cullPipeline.getBindGroupLayout(0), sortGroup1Layout],
+      });
+      this._sortPipeline = dev.createComputePipeline({
+        layout: sortPipelineLayout,
+        compute: { module: sortModule, entryPoint: 'cs_main' },
+      });
+      void dev.popErrorScope().then((err) => {
+        if (err) console.error('[computeCulling] sort pipeline:', err.message);
+      });
     } catch {
       this._cullPipeline = null;
+      this._sortPipeline = null;
     }
     this._cullBindGroup = null;
+    this._sortBindGroup = null;
     this._cullBindGroupBuilt = false;
   }
 
@@ -1524,6 +1633,56 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.setBindGroup(0, group);
     pass.dispatchWorkgroups(Math.ceil(instanceCount / 64));
     pass.end();
+
+    if (this._sortPipeline) {
+      const nextPow2 = (n: number) => Math.pow(2, Math.ceil(Math.log2(n)));
+      const N = Math.max(2, nextPow2(instanceCount));
+      const stages = Math.log2(N);
+      const steps: { h: number; q: number }[] = [];
+      for (let i = 0; i < stages; i++) {
+        for (let j = 0; j <= i; j++) {
+          steps.push({ h: 1 << (i + 1), q: 1 << (i - j) });
+        }
+      }
+      const alignment = dev.limits.minUniformBufferOffsetAlignment || 256;
+      if (this._sortParamsCapacity < steps.length) {
+        this._sortParamsBuffer?.destroy();
+        this._sortParamsBuffer = dev.createBuffer({
+          size: steps.length * alignment,
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        const group1Layout = this._sortPipeline.getBindGroupLayout(1);
+        this._sortBindGroup = dev.createBindGroup({
+          layout: group1Layout,
+          entries: [{ binding: 0, resource: { buffer: this._sortParamsBuffer, size: 16 } }],
+        });
+        this._sortParamsCapacity = steps.length;
+        this._sortParamsData = new Uint32Array((steps.length * alignment) / 4);
+      }
+      if (this._sortParamsData && this._sortParamsBuffer && this._sortBindGroup) {
+        for (let i = 0; i < steps.length; i++) {
+          this._sortParamsData[i * (alignment / 4) + 0] = steps[i].h;
+          this._sortParamsData[i * (alignment / 4) + 1] = steps[i].q;
+        }
+        dev.queue.writeBuffer(
+          this._sortParamsBuffer,
+          0,
+          this._sortParamsData.buffer,
+          0,
+          steps.length * alignment,
+        );
+
+        const sortPass = encoder.beginComputePass();
+        sortPass.setPipeline(this._sortPipeline);
+        sortPass.setBindGroup(0, group);
+        for (let i = 0; i < steps.length; i++) {
+          sortPass.setBindGroup(1, this._sortBindGroup, [i * alignment]);
+          sortPass.dispatchWorkgroups(Math.max(1, N / 128));
+        }
+        sortPass.end();
+      }
+    }
+
     dev.queue.submit([encoder.finish()]);
     void dev.popErrorScope().then((err) => {
       if (err) console.warn('[computeCulling]', err.message);

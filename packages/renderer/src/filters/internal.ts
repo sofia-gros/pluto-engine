@@ -586,7 +586,7 @@ function glow(): GlowFilter {
       u[13] = colorG; // params[3].y
       u[14] = colorB; // params[3].z
       u[15] = colorA; // params[3].w
-      
+
       for (let t = 0; t < BLUR_TAPS; t++) {
         const x = t - half;
         u[4 + t] = Math.exp(-(x * x) / (2 * sigma * sigma));

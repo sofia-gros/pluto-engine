@@ -234,7 +234,9 @@ export class TextureManager {
     textureKey: string,
     frameKey?: number | string,
   ): import('@pluto-engine/renderer').TextureFrame | null {
-    const tex = this.get(textureKey) as (import('@pluto-engine/renderer').TextureAsset & { frameNames?: Record<string, number> });
+    const tex = this.get(textureKey) as import('@pluto-engine/renderer').TextureAsset & {
+      frameNames?: Record<string, number>;
+    };
     if (!tex || !tex.frames) return null;
     if (typeof frameKey === 'string') {
       const idx = tex.frameNames?.[frameKey];
