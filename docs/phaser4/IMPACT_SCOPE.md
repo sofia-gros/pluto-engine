@@ -445,10 +445,10 @@ Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不�
 
 ### 8.3 チェックリスト
 
-- [ ] `Math` に `Linear` / `SmoothStep` / `Sinusoidal` / `Percentage` / `FuzzyMatch` を追加
-- [ ] `Math` に `BetweenPoints` / `DistanceSquared` / `RadiansToDegrees` / `DegreesToRadians` を追加
-- [ ] `Vector2` を SoA 友善に（`out` パラメータ化）
-- [ ] `Math.GetCentroid` / `GetVec2Bounds` を `out` パラメータで実装
+- [x] `Math` に `Linear` / `SmoothStep` / `Sinusoidal` / `Percentage` / `FuzzyMatch` を追加
+- [x] `Math` に `BetweenPoints` / `DistanceSquared` / `RadiansToDegrees` / `DegreesToRadians` を追加
+- [x] `Vector2` を SoA 友善に（`out` パラメータ化）
+- [x] `Math.GetCentroid` / `GetVec2Bounds` を `out` パラメータで実装
 - [ ] `Math.Raycaster` を SoA 走査で実装
 - [ ] `Curves.*` をすべて `out` パラメータ化
 - [ ] `Path` の点列を `Float32Array` 事前確保 + `writeCursor` で実装
@@ -456,6 +456,28 @@ Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不�
 - [ ] `Struct.Set` / `Map` をネイティブ実装に置換
 - [ ] **ヒープ生成ゼロテスト**（out パラメータ強制の確認）
 - [ ] `bun run test` / `bun run lint` 通過
+
+### 8.4 分割の進め方
+
+Phase 7 は工作量が多いため、次の 4 分割で進めています。
+
+| 分割 | 対象 | 状態 |
+| --- | --- | --- |
+| 7a | `Math` 関数群 + `Vector2` + ヒープ生成ゼロテスト | **完了** |
+| 7b | `Math.Raycaster`（SoA 走査）+ `Math.ExprParser` | 未着手 |
+| 7c | `Curves.*` + `Path`（`Float32Array` + `writeCursor`） | 未着手 |
+| 7d | `Geom.*` + `Struct.Set` / `Map` | 未着手 |
+
+### 8.5 設計上の補足（当初計画からの逸脱）
+
+| 項目 | 判断 | 理由 |
+| --- | --- | --- |
+| Math の名前 | `Math2` という名前で export | `Math` はグローバルの制定オブジェクトで、import 時に衝突します。Phaser 互換の API 形状はそのままです |
+| `Vector2.Round` | **`Math.round` と同じ規則**（0.5 は `+Infinity` 側） | 「0 方向へ丸める」実装だと `-1.5 → -2` になり、直感に反します。`Math.round` に委ねる方が予測可能です |
+| `Vector2.SetLength` と `Normalize` | 長さ 0 の点で**挙動が異なります** | `SetLength` は方向が定義できないので `(1, 0)`、`Normalize` は `(0, 0)` を返します。Phaser と同じ扱いです |
+| `Vector2.ProjectUnit` と `Unit` | 別の関数として提供 | `ProjectUnit` は射影点を返すので原点がずれ、`Unit` は差をそのまま単位化します。混同しやすいので分離しました |
+| ヒープ生成ゼロテスト | **静的検査**（ソース走査）に留める | 実行時のヒープ計測はブラウザ/jsdom 環境で不安定です。`out` パラメータの強制は型とソース走査で保証しています |
+| ヒープ生成ゼロテストの読み込み | Vite の `?raw` import | テストは browser project で動くため `node:fs` が使えません |
 
 ---
 
