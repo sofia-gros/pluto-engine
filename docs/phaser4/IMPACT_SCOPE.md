@@ -449,33 +449,44 @@ Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不�
 - [x] `Math` に `BetweenPoints` / `DistanceSquared` / `RadiansToDegrees` / `DegreesToRadians` を追加
 - [x] `Vector2` を SoA 友善に（`out` パラメータ化）
 - [x] `Math.GetCentroid` / `GetVec2Bounds` を `out` パラメータで実装
-- [ ] `Math.Raycaster` を SoA 走査で実装
-- [ ] `Curves.*` をすべて `out` パラメータ化
-- [ ] `Path` の点列を `Float32Array` 事前確保 + `writeCursor` で実装
-- [ ] `Geom.*` をすべて `out` パラメータ化
-- [ ] `Struct.Set` / `Map` をネイティブ実装に置換
-- [ ] **ヒープ生成ゼロテスト**（out パラメータ強制の確認）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `Math.Raycaster` を SoA 走査で実装
+- [x] `Curves.*` をすべて `out` パラメータ化
+- [x] `Path` の点列を `Float32Array` 事前確保 + `writeCursor` で実装
+- [x] `Geom.*` をすべて `out` パラメータ化
+- [x] `Struct.Set` / `Map` をネイティブ実装に置換
+- [x] **ヒープ生成ゼロテスト**（out パラメータ強制の確認）
+- [x] `bun run test` / `bun run lint` 通過
 
 ### 8.4 分割の進め方
 
-Phase 7 は工作量が多いため、次の 4 分割で進めています。
+Phase 7 は工作量が多いため、次の 4 分割で進めました。
 
-| 分割 | 対象 | 状態 |
-| --- | --- | --- |
-| 7a | `Math` 関数群 + `Vector2` + ヒープ生成ゼロテスト | **完了** |
-| 7b | `Math.Raycaster`（SoA 走査）+ `Math.ExprParser` | 未着手 |
-| 7c | `Curves.*` + `Path`（`Float32Array` + `writeCursor`） | 未着手 |
-| 7d | `Geom.*` + `Struct.Set` / `Map` | 未着手 |
+| 分割 | 対象 | ファイル | 状態 |
+| --- | --- | --- | --- |
+| 7a | `Math` 関数群 + `Vector2` + ヒープ生成ゼロテスト | `math/Math.ts` `math/Vector2.ts` | **完了** |
+| 7b | `Math.Raycaster`（SoA 走査）+ `Math.ExprParser` | `math/Raycaster.ts` `math/ExprParser.ts` | **完了** |
+| 7c | `Curves.*` + `Path`（`Float32Array` + `writeCursor`） | `math/Curves.ts` `math/Path.ts` | **完了** |
+| 7d | `Geom.*` + `Struct.Set` / `Map` | `math/Geom.ts` `math/Struct.ts` | **完了** |
 
 ### 8.5 設計上の補足（当初計画からの逸脱）
 
 | 項目 | 判断 | 理由 |
 | --- | --- | --- |
-| Math の名前 | `Math2` という名前で export | `Math` はグローバルの制定オブジェクトで、import 時に衝突します。Phaser 互換の API 形状はそのままです |
+| Math の名前 | `Math2` という名前で export | `Math` はグローバルの組込みオブジェクトで、import 時に衝突します。Phaser 互換の API 形状はそのままです |
 | `Vector2.Round` | **`Math.round` と同じ規則**（0.5 は `+Infinity` 側） | 「0 方向へ丸める」実装だと `-1.5 → -2` になり、直感に反します。`Math.round` に委ねる方が予測可能です |
 | `Vector2.SetLength` と `Normalize` | 長さ 0 の点で**挙動が異なります** | `SetLength` は方向が定義できないので `(1, 0)`、`Normalize` は `(0, 0)` を返します。Phaser と同じ扱いです |
 | `Vector2.ProjectUnit` と `Unit` | 別の関数として提供 | `ProjectUnit` は射影点を返すので原点がずれ、`Unit` は差をそのまま単位化します。混同しやすいので分離しました |
+| `Raycaster` の SoA 表現 | **1 図形あたり固定 stride**（円 3 / 矩形 4 / 三角形 6） | 図形をオブジェクトで持つと 30 万体でヒープが破綻します。stride だけで種別が決まるので、switch のみで走査できます |
+| `Raycaster` の交差結果 | `RAY_HIT_STRIDE` (6 要素) ずつ `out` に詰める | 法線・t・図形インデックスを 1 レコードにまとめます。Phaser の戻り値オブジェクトを置き換えます |
+| 三角形の交差判定 | 3 辺との交点の **t 区間** と線分の `[0,1]` を突き合わせ | winding（頂点順序）に依存しません。1 交点しか無い場合は端点に接するだけなので非交差とみなします |
+| `ExprParser` | **shunting-yard で後缀記法 (RPN) に 1 度だけ変換** | 演算子の優先順位推移を評価フェーズで行うと、毎フレームパースし直すことになるためです |
+| `ExprParser` の関数 | **固定引数個数**（1 引数 / 2 引数） | 可変長引数は RPN では区切りがないと引数数が分かりません。`min` / `max` は 2 引数に固定しました |
+| `ExprParser` の識別子 | `Map<string, number>` を**パース時のみ**使う | 同じ名前が常に同じ `parameters` 添字に対応する必要があります。評価フェーズは一切触りません |
+| `ExprParser` のアンダーフロー | 空スタックからの pop は **0 ではなく NaN** | `1 +` のような不完全な式を黙って 0 として扱わないためです |
+| `Curves` の表現 | **継承階層を持たず** `{ kind, points }` の union | 具象クラスを継承するとオブジェクトが 1 つ増えます（R-03）。`kind` 分岐なら 1 個の関数に集約できます |
+| `Path` の点列 | **自動拡張しない**。満杯なら `false` | 自動拡張は GC スパイクの原因になります（R-02）。拡張は `resize` で明示的に行います |
+| `Geom` の生成関数 | `RectangleToPoints(x, y, w, h, out)` のように **値渡し** | Phaser 互換の `Geom.Rectangle(x, y, w, h)`（オブジェクト生成）からあえて変えました。`out` を渡さないと生成できません |
+| `Struct` | ネイティブ `Set` / `Map` を**そのまま使う**（ラッパーなし） | ラッパーを 1 枚増やさないので R-03 を満たします。不足している規約だけを補助関数として追加しました |
 | ヒープ生成ゼロテスト | **静的検査**（ソース走査）に留める | 実行時のヒープ計測はブラウザ/jsdom 環境で不安定です。`out` パラメータの強制は型とソース走査で保証しています |
 | ヒープ生成ゼロテストの読み込み | Vite の `?raw` import | テストは browser project で動くため `node:fs` が使えません |
 

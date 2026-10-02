@@ -23,6 +23,8 @@ export * from './math/Raycaster';
 export * from './math/ExprParser';
 export * from './math/Curves';
 export * from './math/Path';
+export * from './math/Geom';
+export * from './math/Struct';
 export * from './input/InputManager';
 export * from './time/TimeStepManager';
 export * from './time/TimerEvent';
