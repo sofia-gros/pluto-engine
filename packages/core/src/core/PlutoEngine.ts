@@ -44,6 +44,14 @@ export interface EngineConfig {
    * 'auto' (既定) は WebGPU を試し、失敗したら WebGL2 へ落ちます。
    */
   backend?: 'auto' | 'webgpu' | 'webgl2';
+  /**
+   * CPU 系列的ベンチ用。true のとき clear / 転送 / draw をすべてスキップし、
+   * シーン更新とカリングだけを走らせます。
+   *
+   * 要件2（WebGPU > WebGL > CPU）の CPU 基準を測るためのモードです。
+   * 通常のゲームでは指定しないでください。
+   */
+  cpuOnly?: boolean;
   scene: (new () => Scene)[];
 }
 
@@ -269,6 +277,15 @@ export class PlutoEngine {
       this.cullTimeMs = performance.now() - tCullStart;
       renderCount = maxVisible;
       this.renderCount = renderCount;
+
+      // CPU 系列のベンチモードでは、GPU への転送と draw を省きます。
+      // カリングまでが CPU 側の処理なので、ここで止めることで
+      // 要件2 の CPU 基準値になります（clear は描画なので含めません）。
+      if (this.config.cpuOnly === true) {
+        this.uploadTimeMs = 0;
+        this.drawTimeMs = performance.now() - tCullStart;
+        return;
+      }
 
       if (renderCount > 0) {
         // 並びが変わったため、転送をここで行います

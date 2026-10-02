@@ -498,11 +498,61 @@ Phase 7 は工作量が多いため、次の 4 分割で進めました。
 
 | # | タスク | 状態 |
 | --- | --- | --- |
-| P-01 | WebGPU bench harness | **未着手** |
-| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手** |
-| P-03 | WebGL2 culling（byteOffset による baseInstance） | **未着手** |
-| P-04 | Filter を WebGPU のみに限定 | **未着手** |
-| P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **未着手** |
+| P-01 | WebGPU bench harness | **完了**（`apps/demo/backend-bench/`） |
+| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | 未着手 |
+| P-03 | WebGL2 culling（byteOffset による baseInstance） | 未着手 |
+| P-04 | Filter を WebGPU のみに限定 | 未着手 |
+| P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **完了**（`scripts/gpu-benchmark.mjs`） |
+
+### 9.1.1 P-01 / P-05 の実装内容
+
+| 項目 | 内容 |
+| --- | --- |
+| ハーネス | `apps/demo/backend-bench/`。`?backend=webgpu\|webgl2\|cpu` `?entities=` `?frames=` `?warmup=` |
+| 3 系統 | WebGPU / WebGL2 / **CPU 参照ラスタライザ** |
+| 計測 | `engine.loop.stop()` してから時刻を合成し、requestAnimationFrame の揺らぎを排除 |
+| 統計 | 中央値と p95。平均は外れ値（GC・OS スケジューリング）に弱いため使わない |
+| 出力 | `benchmark_results.json` の `backends` と `requirement2`。既存の `steering` は保持 |
+| CPU モード | `PlutoEngine` に `cpuOnly` を追加し、転送と draw を省く（要件2 の CPU 基準） |
+
+### 9.1.2 実測結果と交所見（重要）
+
+1280x720 / 30 万スプライト（可視 10 万）で実測した結果、
+**要件2（WebGPU > WebGL > CPU）はフレーム時間では成立していません**。
+
+```
+300000 体 (cull=1.3ms)
+  frame: webgpu=1.4ms  webgl2=1.6ms  cpu=1.1ms  -> NG
+  draw : webgpu=1.4ms  webgl2=1.5ms  cpu=0.0ms  -> NG
+```
+
+理由は 2 つあり、**いずれも想定内**です。
+
+1. **カリングが CPU 側にあり、フレームを支配している。**
+   `cull` が 1.1〜1.5ms で、バックエンド差（0.1〜0.3ms）より大きいため、
+   フレーム時間では 3 系統がほぼ同値に潰れます。
+   **これが P-02（GPU compute によるカリング）と P-03（baseInstance）の
+   本来の対象です。** カリングを GPU へ移さない限り、要件2 は
+   フレーム時間では成立しません。
+
+2. **30 万体を 1280x720 に収めるとスプライトがサブピクセルになる。**
+   ズームは 0.018 倍まで落ちるため 1 スプライト約 0.6 ピクセルです。
+   フラグメント作業量が問題にならず、GPU の利点が
+   ピクセル処理量でインスタンス数に出ません。
+   CPU 参照ラスタライザが 0.1ms 未満（クロック分解能 以下）で終わるのは
+   このためです。
+
+**結論**: P-01 / P-05 は「測定の仕組み」を提供しました。要件2 の達成には
+P-02 / P-03 が必要です。この結果を肯定するものではなく、
+**どこがまだ改善されていないかを数値で示したものです**。
+
+### 9.1.3 ハーネス上の制約
+
+| 制約 | 影響 |
+| --- | --- |
+| `performance.now()` が 0.1ms に丸められる環境がある | サブミリ秒の差は測定不能。比較は 10ms 以上のフレームで行うこと |
+| 30 万体を 1 画面に収めるとサブピクセルになる | ピクセル充填コストを測るには、縮小カメラではなく大きなキャンバスが必要 |
+| WebGPU 非対応環境では `webgpu` 系が WebGL2 にフォールバックする | `actualBackend` を必ず確認すること（ハーネスは記録します） |
 
 ### 9.2 RenderGraph / Filter
 
