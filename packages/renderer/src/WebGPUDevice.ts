@@ -64,6 +64,41 @@ import {
  * - indirect  : [0]=vertexCount [1]=instanceCount(atomic) [2]=firstIndex [3]=baseVertex
  */
 /**
+ * 不変コピー用 WGSL（canvas へ 1 パスで blit します）。
+ *
+ * `filters/fullscreen.ts` の頂点シェーダと同じ構造ですが、
+ * uniform を持たないぶん binding が 2 つだけです。
+ */
+const BLIT_WGSL = /* wgsl */ `
+struct VsOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0) uv : vec2<f32>,
+};
+
+@group(0) @binding(0) var samp : sampler;
+@group(0) @binding(1) var srcTex : texture_2d<f32>;
+
+@vertex
+fn vs_main(@builtin(vertex_index) vi : u32) -> VsOut {
+  var p = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>( 3.0, -1.0),
+    vec2<f32>(-1.0,  3.0),
+  );
+  var o : VsOut;
+  let xy = p[vi];
+  o.pos = vec4<f32>(xy, 0.0, 1.0);
+  o.uv = vec2<f32>(xy.x * 0.5 + 0.5, 0.5 - xy.y * 0.5);
+  return o;
+}
+
+@fragment
+fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+  return textureSampleLevel(srcTex, samp, in.uv, 0.0);
+}
+`;
+
+/**
  * compute stage で使う storage buffer の本数。
  *
  * 入力 6（transform / shape / flags / uv / tint / origin）+ 出力 6 + atomic 1。
@@ -386,6 +421,33 @@ export class WebGPUDevice implements GraphicsDevice {
    * WGSL からパイプラインを組み立てます。
    * レイアウトは WebGL2Device と同一にします。
    */
+  /**
+   * Filter 用 sampler と bind group layout を作ります。
+   *
+   * layout は `auto` ではなく明示します。フィルタごとにシェーダを違うため、
+   * 1 つの layout を共有します（`auto` だとシェーダごとに layout が変わります）。
+   */
+  private _initFilterSupport(): void {
+    const dev = this.device;
+    if (!dev || this._filterPipelineLayout) return;
+    this._filterSampler = dev.createSampler({
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    });
+    this._filterBindGroupLayout = dev.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      ],
+    });
+    this._filterPipelineLayout = dev.createPipelineLayout({
+      bindGroupLayouts: [this._filterBindGroupLayout],
+    });
+  }
+
   initPipelines(): void {
     if (!this.device || !this.context) {
       throw new Error('Device not initialized');
@@ -417,7 +479,7 @@ export class WebGPUDevice implements GraphicsDevice {
 
     this.textureArray = device.createTexture({
       size: { width: 2048, height: 2048, depthOrArrayLayers: 64 },
-      format: 'rgba8unorm',
+      format: this._swapFormat(),
       dimension: '2d',
       usage:
         GPUTextureUsage.TEXTURE_BINDING |
@@ -483,6 +545,7 @@ export class WebGPUDevice implements GraphicsDevice {
 
     // compute カリングのパイプラインは描画パイプラインと同じタイミングで用意します。
     this._initComputeCulling();
+    this._initFilterSupport();
   }
 
   createBuffer(size: number): BufferInfo {
@@ -882,6 +945,504 @@ export class WebGPUDevice implements GraphicsDevice {
     return this._computeCullingSupported && this._cullPipeline !== null;
   }
 
+  // ---------------------------------------------------------------------
+  // RenderGraph / Filter 用のオフスクリーン描画 (Phase 8)
+  //
+  // 流れは次の 3 段階です。
+  //   1. beginSceneToTarget()  : スプライト用テクスチャ created + clear
+  //   2. drawInstanced()        : そのテクスチャへ通常のスプライト描画
+  //   3. runFilterPass() × N    : Filter チェーン
+  //      presentTarget()        : 最後の結果を canvas へ 1 パスで blit
+  //
+  // Filter が 0 個なら beginSceneToTarget() を呼ばないため、
+  // 従来とまったく同じ経路で描画されます（挙動が変わらない）。
+  // ---------------------------------------------------------------------
+
+  /** Filter を適用できる状態か（WebGPU 限定） */
+  isFilterSupported(): boolean {
+    return this.device !== null && this.context !== null;
+  }
+
+  /**
+   * スプライトを描き込むオフスクリーン target を作ります（既存は再利用）。
+   *
+   * 画面サイズが変わったときだけ作り直します。
+   * filter 経路は毎フレーム `load` で上書きするため clear はここで 1 回だけ行います。
+   */
+  beginSceneToTarget(width: number, height: number): boolean {
+    const dev = this.device;
+    if (!dev || !this.isFilterSupported()) return false;
+    const w = Math.max(1, Math.floor(width));
+    const h = Math.max(1, Math.floor(height));
+    if (this._sceneTexture && this._sceneTargetSize[0] === w && this._sceneTargetSize[1] === h) {
+      this._swapSize[0] = w;
+      this._swapSize[1] = h;
+      // 使い回すフレームは view を作り直します。
+      // 破棄済みの view を参照すると validation error になるため。
+      this._sceneTarget = this._sceneTexture.createView();
+      return true;
+    }
+    // view は texture から作るため、破棄は texture 側だけで足ります
+    this._sceneTexture?.destroy();
+
+    const texture = dev.createTexture({
+      size: { width: w, height: h },
+      format: this._swapFormat(),
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.COPY_SRC,
+    });
+    this._sceneTexture = texture;
+    this._sceneTarget = texture.createView();
+    this._sceneTargetSize[0] = w;
+    this._sceneTargetSize[1] = h;
+
+    // ping-pong 用の scratch も同じサイズで作ります
+    this._filterScratchTexture?.destroy();
+    this._filterScratchTexture = dev.createTexture({
+      size: { width: w, height: h },
+      format: this._swapFormat(),
+      // COPY_SRC は診断の読み戻し用です（本番経路では不要）
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.TEXTURE_BINDING |
+        GPUTextureUsage.COPY_SRC,
+    });
+    return true;
+  }
+
+  /**
+   * scene target を背景色で clear します。
+   *
+   * target を**使い回す**ため、毎フレーム clear が/** Filter 経路の途中か（= スプライトがオフスクリーンへ描かれているか） */
+  get renderingToTarget(): boolean {
+    return this._sceneTarget !== null;
+  }
+
+  /**
+   * Filter パスを 1 つ実行します。
+   *
+   * @param wgsl フラグメントシェーダ（`fs_main` を持つ）
+   * @param srcTexture 読むテクスチャ
+   * @param dstTexture 書くテクスチャ
+   * @param uniforms uniform データ（vec4 × 8 = 128 バイト）
+   */
+  /**
+   * Filter パスを 1 つ実行します。
+   *
+   * ## `passIndex` について
+   *
+   * 診断のため `passIndex` を持ちます。0 なら最初の入力（scene target）、
+   * 1 以降なら直前の scratch を読む-pass であることを表します。
+   * 出力は常に scratch です。
+   */
+  /**
+   * 診断: scene target の中心画素を 1 つ読み戻します。
+   *
+   * 「scene が offscreen に入っているか」を推測せずに確認します。
+   * 読み戻しは非同期なので、値は {@link filterStatus} から取得します。
+   */
+  probeSceneTarget(): void {
+    const dev = this.device;
+    const tex = this._sceneTexture;
+    if (!dev || !tex || this._filterProbePending) return;
+    if (!this._filterProbeBuffer) {
+      this._filterProbeBuffer = dev.createBuffer({
+        size: 256,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+    }
+    const buffer = this._filterProbeBuffer;
+    const w = Math.max(1, Math.floor(tex.width / 2));
+    const h = Math.max(1, Math.floor(tex.height / 2));
+    try {
+      const enc = dev.createCommandEncoder();
+      enc.copyTextureToBuffer(
+        { texture: tex, origin: { x: w, y: h } },
+        { buffer, bytesPerRow: 256 },
+        { width: 1, height: 1 },
+      );
+      dev.queue.submit([enc.finish()]);
+    } catch {
+      this._sceneProbeValue = null;
+      return;
+    }
+    this._filterProbePending = true;
+    void buffer
+      .mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const px = new Uint8Array(buffer.getMappedRange(0, 4));
+        this._sceneProbeValue = [px[0] ?? -1, px[1] ?? -1, px[2] ?? -1, px[3] ?? -1];
+        buffer.unmap();
+      })
+      .catch(() => {
+        this._sceneProbeValue = null;
+      })
+      .finally(() => {
+        this._filterProbePending = false;
+      });
+  }
+
+  private _sceneProbeValue: [number, number, number, number] | null = null;
+
+  runFilterPass(
+    wgsl: string,
+    srcTexture: GPUTexture,
+    dstTexture: GPUTexture,
+    uniforms: Float32Array,
+    probe = false,
+  ): boolean {
+    // probeSceneTarget が既に map 中なら、filter 側 probe は見送ります
+    // （同じ buffer を二重に map するとエラーになります）
+    const doProbe = probe && !this._filterProbePending;
+    const dev = this.device;
+    if (!dev) {
+      this._filterLastError = 'device が未初期化';
+      return false;
+    }
+    if (!this._filterPipelineLayout) {
+      this._filterLastError = 'pipelineLayout が未初期化（initPipelines が走っていない）';
+      return false;
+    }
+
+    const key = wgsl;
+    let pipeline = this._filterPipelines.get(key);
+    if (!pipeline) {
+      const module = dev.createShaderModule({ code: wgsl });
+      /**
+       * pipeline 生成は**エラースコープ内で**行います。
+       *
+       * 不正な pipeline は例外ではなく validation error として報告され、
+       * `setPipeline` が黙って無視されます（描画は空のまま）。
+       * 生成直後に捕まえないと原因が失われます。
+       */
+      dev.pushErrorScope('validation');
+      pipeline = dev.createRenderPipeline({
+        layout: this._filterPipelineLayout,
+        vertex: { module, entryPoint: 'vs_main' },
+        fragment: { module, entryPoint: 'fs_main', targets: [{ format: this._swapFormat() }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      void dev.popErrorScope().then((err) => {
+        if (err) {
+          this._filterLastError = `pipeline 生成失敗: ${err.message}`;
+          console.error('[filter] pipeline:', err.message);
+        }
+      });
+      // コンパイル結果も明示的に取り出します
+      void module.getCompilationInfo?.().then((info) => {
+        for (const m of info.messages) {
+          if (m.type === 'error') {
+            const msg = `WGSL ${m.lineNum}:${m.linePos} ${m.message}`;
+            this._filterLastError = msg;
+            console.error('[filter]', msg);
+          }
+        }
+      });
+      this._filterPipelines.set(key, pipeline);
+    }
+
+    const uniformBuffer = this._ensureFilterUniforms();
+    dev.queue.writeBuffer(
+      uniformBuffer,
+      0,
+      uniforms.buffer as ArrayBuffer,
+      uniforms.byteOffset,
+      128,
+    );
+
+    const sampler = this._filterSampler;
+    const layout = this._filterBindGroupLayout;
+    if (!sampler || !layout) {
+      this._filterLastError = 'sampler または bindGroupLayout が未初期化';
+      return false;
+    }
+    const bindGroup = dev.createBindGroup({
+      layout,
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: srcTexture.createView() },
+        { binding: 2, resource: { buffer: uniformBuffer } },
+      ],
+    });
+
+    /**
+     * Filter pass をエラースコープで包みます。
+     *
+     * draw が無効化されると**例外を投げずに黙って何も描かなくなる**ため、
+     * 原因をBench に報告できるようにします。
+     */
+    dev.pushErrorScope('validation');
+    const encoder = dev.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: dstTexture.createView(),
+          clearValue: this.clearColor,
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3, 1, 0, 0);
+    pass.end();
+    /**
+     * 診断は**出力側**（filter の結果）から読み戻します。
+     *
+     * 入力側を測ると「offscreen が空だった」のか
+     * 「filter が空を出した」のかを区別できないためです。
+     */
+    if (doProbe) this._queueFilterProbe(encoder, dstTexture, srcTexture);
+    dev.queue.submit([encoder.finish()]);
+    void dev.popErrorScope().then((err) => {
+      if (err) {
+        this._filterLastError = err.message;
+        console.error('[filter] validation:', err.message);
+      }
+    });
+    this._filterLastError = '';
+    this._filterPasses++;
+    return true;
+  }
+
+  /**
+   * 診断用: filter の入力 texture の中央 1 ピクセルを読み戻します。
+   *
+   * 「offscreen に scene が入っているか」を推測せずに確認するためです
+   * （P-02 で「空描画を高速と誤認」した反省に基づきます）。
+   * COPY_SRC が無い texture に対しては読み戻せません。
+   */
+  private _queueFilterProbe(
+    encoder: GPUCommandEncoder,
+    dstTexture: GPUTexture,
+    srcTexture: GPUTexture,
+  ): void {
+    const dev = this.device;
+    if (!dev || this._filterProbePending) return;
+    if (!this._filterProbeBuffer) {
+      this._filterProbeBuffer = dev.createBuffer({
+        size: 512,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+    }
+    const buffer = this._filterProbeBuffer;
+    /**
+     * 出力（dst）と入力（src）の 2 画素を 1 つのバッファへ読み戻します。
+     * bytesPerRow 256 × 2 行 = 512 バイト。
+     *
+     * 「入力が空」か「出力が空」かを 1 回で区別するためです。
+     */
+    const w = Math.max(1, Math.floor(srcTexture.width / 2));
+    const h = Math.max(1, Math.floor(srcTexture.height / 2));
+    try {
+      // 出力と入力は**別々のオフセット**へ読み戻します。
+      // 同じオフセットへ 2 回コピーすると後勝ちで上書きされます。
+      encoder.copyTextureToBuffer(
+        { texture: dstTexture, origin: { x: w, y: h } },
+        { buffer, bytesPerRow: 256, rowsPerImage: 1 },
+        { width: 1, height: 1 },
+      );
+      encoder.copyTextureToBuffer(
+        { texture: srcTexture, origin: { x: w, y: h } },
+        { buffer, bytesPerRow: 256, offset: 256 },
+        { width: 1, height: 1 },
+      );
+    } catch {
+      // COPY_SRC が無い場合は読み戻せません（エラーにはしません）
+      this._filterProbeValue = null;
+      return;
+    }
+    this._filterProbePending = true;
+    void buffer
+      .mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const px = new Uint8Array(buffer.getMappedRange(0, 8));
+        // 出力 4 バイト +（256 へ整列された後）入力 4 バイト
+        const dst: [number, number, number, number] = [
+          px[0] ?? -1,
+          px[1] ?? -1,
+          px[2] ?? -1,
+          px[3] ?? -1,
+        ];
+        const src: [number, number, number, number] = [
+          px[4] ?? -1,
+          px[5] ?? -1,
+          px[6] ?? -1,
+          px[7] ?? -1,
+        ];
+        this._filterProbeValue = dst;
+        this._filterProbeSrc = src;
+        buffer.unmap();
+      })
+      .catch(() => {
+        this._filterProbeValue = null;
+      })
+      .finally(() => {
+        this._filterProbePending = false;
+      });
+  }
+
+  private _filterProbeBuffer: GPUBuffer | null = null;
+  private _filterProbePending = false;
+  private _filterProbeValue: [number, number, number, number] | null = null;
+  private _filterProbeSrc: [number, number, number, number] | null = null;
+
+  /**
+   * Filter 適用済みの texture を canvas へ 1 パスで blit します。
+   *
+   * ここで初めて swapchain を書きます。Filter が無いときは
+   * このメソッドを呼ばないので、canvas への直接描画のままです。
+   */
+  presentTarget(srcTexture: GPUTexture): boolean {
+    const dev = this.device;
+    if (!dev || !this.context) return false;
+    // 不変パス（1:1 コピー）を使います。uniform なし・texture 1 枚のみ。
+    if (!this._blitPipeline) {
+      const module = dev.createShaderModule({ code: BLIT_WGSL });
+      this._blitPipeline = dev.createRenderPipeline({
+        layout: 'auto',
+        vertex: { module, entryPoint: 'vs_main' },
+        fragment: { module, entryPoint: 'fs_main', targets: [{ format: this._swapFormat() }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      this._blitSampler = dev.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    }
+    const pipeline = this._blitPipeline;
+    const sampler = this._blitSampler;
+    if (!pipeline || !sampler) return false;
+
+    const bindGroup = dev.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: sampler },
+        { binding: 1, resource: srcTexture.createView() },
+      ],
+    });
+
+    const encoder = dev.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: this.context.getCurrentTexture().createView(),
+          clearValue: this.clearColor,
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3, 1, 0, 0);
+    pass.end();
+    dev.queue.submit([encoder.finish()]);
+    return true;
+  }
+
+  /** RenderGraph から参照するための texture getter */
+  getSceneTexture(): GPUTexture | null {
+    return this._sceneTexture;
+  }
+
+  /** RenderGraph から参照するための scratch texture getter */
+  getFilterScratchTexture(): GPUTexture | null {
+    return this._filterScratchTexture;
+  }
+
+  /** Filter 用の uniform バッファ（128 バイト）を 1 つだけ持ち回します */
+  private _ensureFilterUniforms(): GPUBuffer {
+    if (this._filterUniformBuffer) return this._filterUniformBuffer;
+    const dev = this.device;
+    if (!dev) throw new Error('Device not initialized');
+    this._filterUniformBuffer = dev.createBuffer({
+      size: 128,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    return this._filterUniformBuffer;
+  }
+
+  /**
+   * scene の描画先 view。`null` なら swapchain（従来経路）です。
+   *
+   * **view と texture を分けて持ちます。** view は texture から作るため
+   * 破棄は texture 側だけで済みますが、probe（copyTextureToBuffer）は
+   * texture を要求するため、view だけでは読み戻せません。
+   */
+  private _sceneTarget: GPUTextureView | null = null;
+  private _sceneTexture: GPUTexture | null = null;
+
+  /**
+   * swapchain の format（キャッシュ）。
+   *
+   * **offscreen texture はこの format と一致させる必要があります。**
+   * 異なる format で render pass を作ると validation error になり、
+   * scene が 1 ピクセルも描かれません。
+   * 症状だけ見ると「空描画」なので、原因の特定には時間がかかります
+   * （実際にここでは時間のかかりました）。
+   */
+  private _swapFormatValue: GPUTextureFormat | null = null;
+
+  private _swapFormat(): GPUTextureFormat {
+    if (!this._swapFormatValue) {
+      this._swapFormatValue = navigator.gpu.getPreferredCanvasFormat();
+    }
+    return this._swapFormatValue;
+  }
+  private _sceneTargetSize: [number, number] = [0, 0];
+  /** swapchain（canvas）の実寸。target と一致しているかを確認するために持ちます */
+  private _swapSize: [number, number] = [0, 0];
+  private _filterScratchTexture: GPUTexture | null = null;
+  private _filterPipelines = new Map<string, GPURenderPipeline>();
+  /** 明示的な bind group layout。`auto` だとシェーダごとに変わるため共有します。 */
+  private _filterBindGroupLayout: GPUBindGroupLayout | null = null;
+  private _filterPipelineLayout: GPUPipelineLayout | null = null;
+  private _filterUniformBuffer: GPUBuffer | null = null;
+  private _filterSampler: GPUSampler | null = null;
+  private _blitPipeline: GPURenderPipeline | null = null;
+  private _blitSampler: GPUSampler | null = null;
+  /** 診断: 直近の filter パス失敗理由と、通過したパス数 */
+  private _filterLastError = '';
+  private _filterPasses = 0;
+
+  /**
+   * Filter 経路の診断情報を返します（ベンチ用）。
+   *
+   * `passes` が 0 なら filter が 1 度も実行されていません。
+   * `lastError` があれば、その理由が入っています。
+   */
+  filterStatus(): {
+    passes: number;
+    lastError: string;
+    targetWidth: number;
+    targetHeight: number;
+    swapWidth: number;
+    swapHeight: number;
+    probe: [number, number, number, number] | null;
+    probeSrc: [number, number, number, number] | null;
+    sceneProbe: [number, number, number, number] | null;
+  } {
+    return {
+      passes: this._filterPasses,
+      lastError: this._filterLastError,
+      targetWidth: this._sceneTargetSize[0],
+      targetHeight: this._sceneTargetSize[1],
+      /** swapchain の実寸（target と一致している必要があります） */
+      swapWidth: this._swapSize[0],
+      swapHeight: this._swapSize[1],
+      /**
+       * filter 入力 texture の中央付近 1 ピクセル（診断用）。
+       * null なら読み戻し失敗、全部 -1 なら offscreen が空です。
+       */
+      probe: this._filterProbeValue,
+      /** filter の入力（= scene target）側の同じ画素。null なら読み戻し失敗 */
+      probeSrc: this._filterProbeSrc,
+      /** scene target の中心画素（filter 連鎖の前）。null なら読み戻し失敗 */
+      sceneProbe: this._sceneProbeValue,
+    };
+  }
+
   /**
    * compute カリングの各段階の状態を返します（診断用）。
    *
@@ -1095,7 +1656,18 @@ export class WebGPUDevice implements GraphicsDevice {
     if (!this.quadBuffer) return;
 
     const encoder = this.device.createCommandEncoder();
-    const view = this.context.getCurrentTexture().createView();
+    /**
+     * Filter 経路（RenderGraph）が有効なときは canvas ではなく
+     * オフスクリーンのテクスチャへ描きます。
+     * canvas への描画は最後に 1 パスだけで行います。
+     *
+     * `load` は**必ず clear** にします。target は使い回すため、
+     * `load` にすると前のフレームの残像が上書きされずに残ります。
+     * clear は {@link beginSceneToTarget} の専用パスで行い、
+     * このパスは scene の上書きに専念します（同一パスの load/clear は
+     * どちらでも 1 回ですが、职责を分けたほうが安全です）。
+     */
+    const view = this._sceneTarget ?? this.context.getCurrentTexture().createView();
 
     // timestamp query が使えるなら描画の前後を計測します。
     // 生の timestamp はローカルの量子化刻みなので、
@@ -1110,6 +1682,8 @@ export class WebGPUDevice implements GraphicsDevice {
         {
           view,
           clearValue: this.clearColor,
+          // Filter 経路では前のパスの結果を引き継ぐので load します
+          // 背景で clear します（前フレームの残像を残さないため）
           loadOp: 'clear',
           storeOp: 'store',
         },

@@ -4,6 +4,12 @@ export * from './InstanceLayout';
 export * from './WebGPUDevice';
 export * from './WebGL2Device';
 
+// Phase 8: Filter 基盤（RenderGraph / filters.internal / filters.external）
+export * from './filters/RenderGraph';
+export * from './filters/types';
+export { filters } from './filters/internal';
+export { filtersExternal, NOT_IMPLEMENTED_EXTERNAL_FILTERS } from './filters/external';
+
 import type { GraphicsDevice } from './GraphicsDevice';
 import { WebGL2Device } from './WebGL2Device';
 import { WebGPUDevice } from './WebGPUDevice';

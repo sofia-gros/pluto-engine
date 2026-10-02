@@ -27,7 +27,7 @@
  */
 
 import { PlutoEngine, Scene } from '@pluto-engine/core';
-import { WebGPUDevice } from '@pluto-engine/renderer';
+import { type FilterDef, WebGPUDevice, filters, filtersExternal } from '@pluto-engine/renderer';
 
 /** クエリパラメータを整数として読みます。不正値は `def` に戻します。 */
 function intParam(name: string, def: number): number {
@@ -140,6 +140,98 @@ async function main(): Promise<void> {
   status.textContent = `booting (backend=${RAW_BACKEND}, entities=${ENTITIES})`;
 
   const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+  /**
+   * `?filter=` からフィルタ列を組み立てます（例: `?filter=blur,vignette`）。
+   *
+   * **エンジン生成時に 1 度だけ** 呼ばれます。毎フレーム呼ぶと
+   * `new` が増えて R-02 に反します。
+   */
+  /** 実際に積んだフィルタ名（ベンチの報告用）。`buildFilters` が埋めます。 */
+  const FILTER_NAMES: string[] = [];
+
+  function buildFilters(): FilterDef[] {
+    const spec = strParam('filter', '');
+    if (!spec) return [];
+    const out: FilterDef[] = [];
+    FILTER_NAMES.length = 0;
+    for (const raw of spec.split(',')) {
+      const name = raw.trim();
+      switch (name) {
+        case 'blur': {
+          const f = filters.internal.blur();
+          f.setStrength(6);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'vignette': {
+          const f = filters.internal.vignette();
+          f.setRadius(0.35);
+          f.setStrength(1);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'pixelate': {
+          const f = filters.internal.pixelate();
+          f.setBlockSize(8);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'grayscale': {
+          const f = filters.internal.colorMatrix();
+          f.setGrayscale(1);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'invert': {
+          const f = filters.internal.colorMatrix();
+          f.setInvert(1);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'sepia': {
+          const f = filters.internal.colorMatrix();
+          f.setSepia(1);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'identity': {
+          // 判定用: 何もしない 1 パス。
+          // これが参照画像と一致しなければ、フィルタの中身ではなく
+          // offscreen → blit の経路の問題です。
+          const f = filters.internal.colorMatrix();
+          f.reset();
+          FILTER_NAMES.push(f.name);
+          out.push(f);
+          break;
+        }
+        case 'brightness': {
+          const f = filters.internal.colorMatrix();
+          f.setBrightness(0.3);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        case 'threshold': {
+          const f = filtersExternal.threshold();
+          f.setLevel(0.5);
+          out.push(f);
+          FILTER_NAMES.push(f.name);
+          break;
+        }
+        default:
+          console.warn(`[bench] 未対応のフィルタ: ${name}`);
+          break;
+      }
+    }
+    return out;
+  }
+
   const engine = new PlutoEngine({
     canvas,
     width: 1280,
@@ -151,6 +243,9 @@ async function main(): Promise<void> {
     gpuComputeCulling: COMPUTE_CULL,
     gpuTimestampQuery: TSQ,
     scene: [BenchScene],
+    // Filter は URL で指定します（?filter=blur,vignette）。
+    // フィルタのインスタンスは 1 度だけ作り、毎フレーム new しません（R-02）。
+    filters: buildFilters(),
   });
 
   await engine.ready;
@@ -259,6 +354,19 @@ async function main(): Promise<void> {
     /** 設定値ではなく、実際に各カリング経路が走ったか。 */
     gpuCullingActive: engine.gpuCullingActive,
     computeCullingActive: engine.computeCullingActive,
+    /** Filter（RenderGraph 経路）が実際に使われたか。設定値ではなく実測値です。 */
+    filtersActive: engine.filtersActive,
+    /** 適用されたフィルタ名（順序付き）。 */
+    appliedFilters: FILTER_NAMES,
+    /**
+     * Filter 経路の診断。
+     *
+     * `passes` が 0 なら filter が 1 度も走っていません（空描画）。
+     * `lastError` にはその理由が入ります。
+     */
+    filterStatus: (engine.device as { filterStatus?: () => unknown })?.filterStatus?.() ?? null,
+    /** RenderGraph が scene 描画を呼んだ回数（1 であるべき）。 */
+    sceneDrawCalls: engine.renderGraph.sceneDrawCalls(),
     /** compute カリングがどの段階で落ちたか（診断用）。 */
     computeCullingStatus:
       (engine.device as { computeCullingStatus?: () => unknown })?.computeCullingStatus?.() ?? null,

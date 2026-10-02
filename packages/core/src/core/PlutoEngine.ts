@@ -9,8 +9,8 @@
  * 毎フレームの書き込みのみを行います。
  */
 
-import { INSTANCE_BUFFERS, createGraphicsDevice } from '@pluto-engine/renderer';
-import type { BufferInfo, GraphicsDevice } from '@pluto-engine/renderer';
+import { INSTANCE_BUFFERS, RenderGraph, createGraphicsDevice } from '@pluto-engine/renderer';
+import type { BufferInfo, FilterDef, GraphicsDevice } from '@pluto-engine/renderer';
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { ScaleManager, ScaleMode } from '../scale/ScaleManager';
 import type { Camera } from '../scene/Camera';
@@ -79,6 +79,29 @@ export interface EngineConfig {
    * WebGPU のみ対応で、compute と indirect draw を使います。
    */
   gpuComputeCulling?: boolean;
+
+  /**
+   * シーン全体にかかるフィルタ列 (`filters.internal`)。
+   *
+   * 例: `[filters.internal.vignette()]`
+   *
+   * **既定は空**です（未検証経路を描画に載せないため）。
+   * Filter を 1 個でも入れると描画は offscreen → filter → canvas の
+   * 多重パスになります。WebGL2 など Filter 非対応のバックエンドでは
+   * 自動的に無視され、従来どおり直接描画します。
+   *
+   * フィルタのインスタンスは毎フレーム `new` しないでください。
+   * この設定は 1 度だけ呼びます。
+   */
+  filters?: readonly FilterDef[];
+
+  /**
+   * 外部フィルタ列 (`filters.external`)。
+   *
+   * `filters` の後に同じ順序で適用されます。WebGPU のみ対応です。
+   */
+  externalFilters?: readonly FilterDef[];
+
   scene: (new () => Scene)[];
 }
 
@@ -126,6 +149,14 @@ export class PlutoEngine {
     });
 
     this.time = new TimeStepManager();
+
+    // Filter チェーンは設定時に確定します（毎フレームの確保を避けるため）
+    this.renderGraph = new RenderGraph();
+    this.config.filters = config.filters ?? [];
+    this.config.externalFilters = config.externalFilters ?? [];
+    if (this.config.filters.length > 0 || this.config.externalFilters.length > 0) {
+      this.renderGraph.setFilters(this.config.filters, this.config.externalFilters);
+    }
 
     const fps = this.config.fps ?? {};
     this.loop = new GameLoop(
@@ -252,6 +283,22 @@ export class PlutoEngine {
    * `gpuCullingActive` と同じ理由で、設定値ではなく実測値を報告します。
    */
   public computeCullingActive = false;
+
+  /**
+   * 直近のフレームで Filter（RenderGraph 経路）が実際に使われたか。
+   *
+   * 設定値ではなく実測値を報告します。バックエンドが WebGPU でなく、
+   * `webgpuOnly` のフィルタが除外された場合にも false になります。
+   */
+  public filtersActive = false;
+
+  /**
+   * Filter チェーンと多重パス構成（Phase 8 RenderGraph）。
+   *
+   * 公開しているため、`engine.renderGraph.setFilters(...)` で
+   * 実行時にフィルタを差し替えられます。
+   */
+  public readonly renderGraph: RenderGraph;
 
   /** 登録済みインスタンス総数（カリング前） */
   public totalInstanceCount = 0;
@@ -380,13 +427,35 @@ export class PlutoEngine {
         this._uploadDirtyGroups(arena, renderCount);
         this.uploadTimeMs = performance.now() - tUploadStart;
 
-        for (let ci = 0; ci < camCount; ci++) {
-          const cam = this._activeCameras[ci];
-          this._writeProjection(cam, w, h);
-          this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
-          this.device.setupInstancedAttributes(this.gpuBuffers, renderCount, 0);
-          this.device.drawInstanced(renderCount, 0);
+        /**
+         * Filter が設定されている場合は RenderGraph が scene の描画と
+         * フィルタの適用を 1 つのパス列としてまとめます。
+         *
+         * Filter が 0 個のときは従来どおり swapchain へ直接描画するため、
+         * 既存挙動は完全に保存されます（既定オフ）。
+         */
+        const drawScene = (): void => {
+          for (let ci = 0; ci < camCount; ci++) {
+            const cam = this._activeCameras[ci];
+            this._writeProjection(cam, w, h);
+            this.device?.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
+            this.device?.setupInstancedAttributes(this.gpuBuffers, renderCount, 0);
+            this.device?.drawInstanced(renderCount, 0);
+          }
+        };
+
+        if (this.renderGraph.hasFilters) {
+          // 実際に RenderGraph が scene 描画を受け持ったかを記録します。
+          // `hasFilters` は設定値なので、実測値として報告するのは
+          // `sceneDrawCalls` と device 側の `filterStatus` です。
+          const ok = this.renderGraph.render(drawScene, w, h, this.device);
+          this.filtersActive = ok;
+        } else {
+          this.filtersActive = false;
+          drawScene();
         }
+      } else {
+        this.filtersActive = false;
       }
     } else {
       this.cullTimeMs = 0;
