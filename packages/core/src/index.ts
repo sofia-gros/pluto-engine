@@ -3,6 +3,8 @@ export * from './core/GameLoop';
 export * from './arena/InstanceBufferArena';
 export * from './arena/Sprite';
 export * from './arena/Group';
+export * from './arena/Shape';
+export * from './arena/BitmapFontGlyphSource';
 export * from './arena/Container';
 export * from './arena/Text';
 export * from './text/FontAtlas';

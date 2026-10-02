@@ -956,6 +956,67 @@ describe('TilemapLayer Flyweight (R-03)', () => {
     expect(ownPropertyCount(layer)).toBe(2);
   });
 
+  it('createBlankLayer が空レイヤーを作り putTileAt で書ける', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);
+    const blank = map.createBlankLayer();
+    expect(blank).not.toBeNull();
+    if (!blank) throw new Error('createBlankLayer が null');
+    // 元のレイヤーのインデックスは 0 なので、新しいレイヤーは 1
+    expect(blank.index).toBe(1);
+    // 生成直後は空き
+    expect(blank.tileIndex(0, 0)).toBe(0);
+
+    expect(blank.putTileAt(1, 2, 5)).toBe(true);
+    expect(blank.tileIndex(1, 2)).toBe(5);
+    // 元レイヤーは変化していない
+    expect(map.getLayer(0).tileIndex(1, 2)).toBe(0);
+  });
+
+  it('putTileAt は範囲外を拒否する', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);
+    const layer = map.getLayer(0);
+    expect(layer.putTileAt(99, 0, 3)).toBe(false);
+    expect(layer.putTileAt(0, 99, 3)).toBe(false);
+  });
+
+  it('findTileAt はピクセル座標で gid を返す', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);
+    const layer = map.getLayer(0);
+    // data[0..3] = 1 が 0 行目
+    expect(layer.findTileAt(0, 0)).toBe(1);
+    expect(layer.findTileAt(40, 4)).toBe(1);
+    // 1 行目は空き (data[4] = 0)
+    expect(layer.findTileAt(0, 20)).toBe(-1);
+    // 範囲外
+    expect(layer.findTileAt(9999, 0)).toBe(-1);
+  });
+
+  it('getTilesWithinWorldXY は範囲内の gid を out へ書く', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);
+    const layer = map.getLayer(0);
+    const out = new Int32Array(16);
+    // 0 行目の 4 タイル (すべて gid 1)
+    expect(layer.getTilesWithinWorldXY(out, 0, 0, 64, 0)).toBe(4);
+    // 高さ 16px なら 0 行目の 4 個のみ (1 行目は空きなので数えない)
+    expect(layer.getTilesWithinWorldXY(out, 0, 0, 64, 16)).toBe(4);
+    // バッファより多い場合は clamp される
+    const small = new Int32Array(2);
+    expect(layer.getTilesWithinWorldXY(small, 0, 0, 64, 16)).toBe(2);
+  });
+
+  it('setTileGrid で UV グリッドを変更できる', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);
+    expect(map.gidToFrame(1)).toBe(0);
+    expect(map.gidToFrame(5)).toBe(4);
+    // firstgid を外すと -1
+    expect(map.gidToFrame(0)).toBe(-1);
+  });
+
   it('tileIndex で gid を取得できる', () => {
     const scene = new Scene({ maxInstances: 64 });
     const map = new Tilemap(scene.arena, makeTiledJson() as never, 16);

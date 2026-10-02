@@ -3,6 +3,7 @@ import { AnimationManager } from '../src/anim/AnimationManager';
 import { InstanceBufferArena } from '../src/arena/InstanceBufferArena';
 import { Sprite } from '../src/arena/Sprite';
 import { Text } from '../src/arena/Text';
+import { Scene } from '../src/scene/Scene';
 
 describe('InstanceBufferArena: SoA Scene Graph', () => {
   test('computeWorldTransforms resolves parent-child composition', () => {
@@ -394,5 +395,125 @@ describe('Text: zero-allocation glyph layout', () => {
     expect(arena.uvW[base]).toBe(0.25);
     // 前進幅 0.5 * fontSize 10 = 5
     expect(arena.posX[base + 1]).toBe(5);
+  });
+
+  test('lookup は文字列が変わらない限り 1 回だけ呼ばれる (折り返し計測のキャッシュ)', () => {
+    const arena = new InstanceBufferArena(64);
+    const text = new Text(0, 0, 'abc', { fontSize: 10 }, arena);
+    let calls = 0;
+    text.setGlyphSource({
+      layerIndex: 0,
+      lookup(_c: number, outUv: Float32Array): number {
+        calls++;
+        outUv[0] = 0;
+        outUv[1] = 0;
+        outUv[2] = 0.25;
+        outUv[3] = 0.25;
+        return 0.5;
+      },
+    });
+    const afterFirst = calls;
+    // 同じ文字列で再構築しても layout はキャッシュ済みなので増えません
+    text.rebuild();
+    text.rebuild();
+    expect(calls).toBe(afterFirst);
+    // 文字列を変えると全体.layout をやり直すので 1 文字分ではなく全文字ぶん増えます
+    text.text = 'abcd';
+    expect(calls).toBe(afterFirst + 4);
+  });
+
+  test('改行で 1 行に 1 グリフになる', () => {
+    const arena = new InstanceBufferArena(64);
+    const text = new Text(0, 0, 'a\nbb', { fontSize: 10, lineSpacing: 4 }, arena);
+    // `\n` はグリフを持ちません
+    expect(text.glyphCount).toBe(3);
+    expect(arena.activeCount).toBe(3);
+    // 0 行目の Y は基準位置、1 行目は lineHeight だけ下
+    expect(arena.posY[0]).toBe(0);
+    expect(arena.posY[1]).toBe(14); // fontSize 10 + lineSpacing 4
+  });
+
+  test('padding が原点をずらす', () => {
+    const arena = new InstanceBufferArena(64);
+    new Text(0, 0, 'ab', { fontSize: 10, padding: { x: 5, y: 3 } }, arena);
+    expect(arena.posX[0]).toBe(5);
+    expect(arena.posY[0]).toBe(3);
+  });
+
+  test('align が折り返し幅の中で位置を調整する', () => {
+    const arena = new InstanceBufferArena(64);
+    // fontSize 10 / monospace で前進 5。'ab' = 10 幅、box は 50 幅
+    new Text(
+      0,
+      0,
+      'ab',
+      { fontSize: 10, monospace: true, wordWrapWidth: 50, align: 'left' },
+      arena,
+    );
+    expect(arena.posX[0]).toBe(0);
+
+    const arena2 = new InstanceBufferArena(64);
+    new Text(
+      0,
+      0,
+      'ab',
+      { fontSize: 10, monospace: true, wordWrapWidth: 50, align: 'center' },
+      arena2,
+    );
+    // (50 - 10) / 2 = 20
+    expect(arena2.posX[0]).toBe(20);
+
+    const arena3 = new InstanceBufferArena(64);
+    new Text(
+      0,
+      0,
+      'ab',
+      { fontSize: 10, monospace: true, wordWrapWidth: 50, align: 'right' },
+      arena3,
+    );
+    // 50 - 10 = 40
+    expect(arena3.posX[0]).toBe(40);
+  });
+
+  test('wordWrapWidth を超えると空白で折り返す', () => {
+    const arena = new InstanceBufferArena(64);
+    // 前進 5/文字。'aaa bbb' を幅 20 で折り返す
+    const text = new Text(
+      0,
+      0,
+      'aaa bbb',
+      { fontSize: 10, monospace: true, wordWrapWidth: 20 },
+      arena,
+    );
+    // 'aaa' (15) + 空白 + 'bbb' (15) = 2 行
+    expect(text.glyphCount).toBe(7);
+    expect(arena.posX[0]).toBe(0);
+    // 2 行目は X が 0 に戻り、Y が下へ
+    expect(arena.posX[3]).toBe(0);
+    expect(arena.posY[3]).toBe(10);
+  });
+
+  test('resolution がグリフ表示サイズを倍率する', () => {
+    const arena = new InstanceBufferArena(64);
+    new Text(0, 0, 'a', { fontSize: 10, resolution: 2 }, arena);
+    expect(arena.frameWidth[0]).toBe(20);
+  });
+
+  test('add.bitmapText が BMFont の UV と前進幅を使う', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const t = scene.add.bitmapText(0, 0, 'AB', {
+      name: 'test',
+      size: 16,
+      lineHeight: 20,
+      imagePath: null,
+      chars: [
+        { id: 65, x: 0, y: 0, width: 8, height: 16, xoffset: 0, yoffset: 0, xadvance: 10 },
+        { id: 66, x: 8, y: 0, width: 8, height: 16, xoffset: 0, yoffset: 0, xadvance: 10 },
+      ],
+    } as never);
+    expect(t.glyphCount).toBe(2);
+    expect(scene.arena.activeCount).toBe(2);
+    // 前進幅 10 / fontSize 16 = 0.625、* 16 = 10
+    expect(scene.arena.posX[1]).toBeCloseTo(10);
   });
 });

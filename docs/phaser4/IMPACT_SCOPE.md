@@ -386,16 +386,36 @@ Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不�
 
 ### 7.4 チェックリスト
 
-- [ ] `Text` を `Sprite` と共通化（Flyweight）
-- [ ] `Text` のスタイル SoA 配列を追加（font / size / color / align / lineSpacing / padding / wrapWidth / resolution）
-- [ ] `add.bitmapText` を実装
-- [ ] Tilemap の **UV mapping TODO** を解消（`tileIndex → uv` の SoA 事前計算）
-- [ ] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array`）
-- [ ] `tilemap.createLayer` / `createBlankLayer` / `findTileAt` / `getTilesWithinWorldXY` を実装
-- [ ] `tilemap.setCollisionByIndex` を実装（`collision: Uint8Array`）
-- [ ] 静的シェイプを SoA で実装（rectangle / circle / triangle / star / roundrect ほか）
-- [ ] `add.graphics`（動的）が**未実装**であることを確認（E-02）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `Text` を `Sprite` と共通化（Flyweight）
+- [x] `Text` のスタイル SoA 配列を追加（font / size / color / align / lineSpacing / padding / wrapWidth / resolution）
+- [x] `add.bitmapText` を実装
+- [x] Tilemap の **UV mapping TODO** を解消（`tileIndex → uv` の SoA 事前計算）
+- [x] `TilemapLayer` Flyweight を実装（`tileIndex: Int32Array`）
+- [x] `tilemap.createLayer` / `createBlankLayer` / `findTileAt` / `getTilesWithinWorldXY` を実装
+- [x] `tilemap.setCollisionByIndex` を実装（`collision: Uint8Array`）
+- [x] 静的シェイプを SoA で実装（rectangle / circle / triangle / star / roundrect ほか）
+- [x] `add.graphics`（動的）が**未実装**であることを確認（E-02）
+- [x] `bun run test` / `bun run lint` 通過
+
+### 7.5 設計上の補足（当初計画からの逸脱）
+
+| 項目 | 判断 | 理由 |
+| --- | --- | --- |
+| 静的シェイプの描画 | **形状を canvas にベイクしてテクスチャ化** | アarena はクアッド主体です。円や星をクアッド 1 枚で描くには頂点を持つ形状信息来源が要ります。生成時だけの CPU 処理なので R-01 / R-05 には反しません |
+| シェイプのキャッシュ | (種別, 寸法, 補助) をキーに**同一形状は 1 枚だけベイク** | 1000 個の 32x16 矩形でも GPU レイヤーは 1 枚で済みます。キャッシュ上限は 512 で、超過時は白 1 ピクセルへフォールバックします |
+| シェイプの色 | **ベイクは白、色は tint で乗算** | 同一形状を色違いで使い回せます。色を焼くとベイク枚数が色数だけ増えます |
+| `Text` のスタイル SoA | スタイルは Flyweight 内に保持し、**描画状態のみ SoA** | 描画は既にア arena の SoA です。スタイル値は 1 テキスト 1 値で更新頻度が低く、StyleManager を立てると Flyweight の own property (R-03) を増やしてしまいます。折り返し計測結果（前進幅・UV）は `Float32Array` にキャッシュしています |
+| `Text` のレイアウト | **計測フェーズと描画フェーズを分離し、UV と前進幅を SoA にキャッシュ** | 実際には `FontGlyphSource.lookup` が 1 回しか呼ばれません。文字列が変わらない限り再計算しません |
+| 折り返し | 空白位置で貪欲に折り返す | 英語向けの標準的な挙動です。CJK の禁則処理は将来課題です |
+| `createLayer` | 既存レイヤーインデックスの指定に留める | 本クラスはコンストラクタで全 tilelayer を読み込みます。Phaser 互換のシグネチャを提供しますが、動的なレイヤー追加は `createBlankLayer` を使います |
+| `findTileAt` と `getTilesWithinWorldXY` | ピクセル座標で受け取る | Phaser と揃えるためです。タイル座標版は `getTileIndexAt` / `TilemapLayer.tileIndex` にあります |
+| `add.graphics` | **未実装のまま**（E-02） | 動的 command buffer は SoA と相性が悪い想定でした。静的シェイプで代替します |
+
+### 7.6 実装中に検出した既存バグ
+
+| 場所 | 内容 |
+| --- | --- |
+| `Text.rebuild` | グリフ数を `text.length` と 数えており、改行を含む文字列では `\n` を 1 グリフとして確保していました。折り返し導入時の実装修正で、グリフ数を `_layout` の実測値に変更しています |
 
 ---
 

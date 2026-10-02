@@ -5,11 +5,14 @@ import { Text, type TextStyle } from '../arena/Text';
 import { FontAtlas, type FontAtlasOptions } from '../text/FontAtlas';
 
 import { AnimationManager } from '../anim/AnimationManager';
+import { BitmapFontGlyphSource } from '../arena/BitmapFontGlyphSource';
 import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
+import { ShapeKind, ShapeManager } from '../arena/Shape';
 import type { PlutoEngine } from '../core/PlutoEngine';
 import { DataRegistry } from '../events/DataRegistry';
 import { EventEmitter } from '../events/EventEmitter';
 import { InputManager } from '../input/InputManager';
+import type { ParsedBitmapFont } from '../loader/BitmapFontParser';
 import { LoaderManager } from '../loader/LoaderManager';
 import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
@@ -432,13 +435,15 @@ export class Scene {
     /**
      * パーティクルエミッターを生成します (Phaser 互換の `add.particles`)。
      *
-     * 返り値は ParticleEmitter Flyweight で、own property は id と _manager の
-     * 2 個だけ (R-03)。設定は ParticleManager の SoA が正本です。
-     *
      * `textureKey` を渡すと各粒子にそのテクスチャを設定します。
      * Particles subsystem を有効化するため `Subsystem.Particles` を立てます。
      */
-    particles: (x = 0, y = 0, textureKey?: string, config: EmitterCreateConfig = {}) => {
+    particles: (
+      x = 0,
+      y = 0,
+      textureKey: string | undefined = undefined,
+      config: EmitterCreateConfig = {},
+    ) => {
       const emitter = this.particles.create({ x, y, ...config });
       if (emitter === null) return null;
       if (textureKey) {
@@ -447,7 +452,256 @@ export class Scene {
       }
       return emitter;
     },
+    /**
+     * ビットマップフォントのテキストを生成します
+     * (Phaser 互換の `add.bitmapText`)。
+     *
+     * BMFont (AngelCode) の解析結果と、ページ画像のテクスチャキーを受け取ります。
+     * ページ画像は TextureManager に登録済みである必要があります
+     * （未登録の場合はアトラス全体を 1 文字 1 クイッドとして描画するフォールバックになります）。
+     *
+     * 返り値は {@link Text} と同じ arena 上のオブジェクトです。
+     */
+    bitmapText: (x = 0, y = 0, text = '', font: ParsedBitmapFont, pageKey?: string) => {
+      const t = new Text(
+        x,
+        y,
+        text,
+        { fontSize: font.size, lineSpacing: font.lineHeight },
+        this.arena,
+      );
+      t.setGlyphSource(new BitmapFontGlyphSource(font, this.textures.get(pageKey ?? '')));
+      return t;
+    },
   };
+
+  /**
+   * 静的シェイプを生成します (Phaser 互換の `add.rectangle` ほか)。
+   *
+   * シェイプは canvas にベイクしてテクスチャ化します。同じ寸法は
+   * 1 枚しかベイクされないため、多数生成しても GPU レイヤーは増えません。
+   *
+   * 返り値は形状 ID (`ShapeManager` のインデックス) で、
+   * Sprite と同じアarena 上に存在します。
+   *
+   * **注意**: `add.graphics` (動的 command buffer) は却下 (E-02) です。
+   * 現在のシェイプは生成時に確定する静的形状のみです。
+   */
+  private _addShape(
+    kind: number,
+    width: number,
+    height: number,
+    aux2: number,
+    aux3: number,
+    color: number,
+    alpha: number,
+  ): number {
+    const shapes = (this._shapes ??= new ShapeManager(this.arena, (key, canvas) =>
+      this.textures.addCanvas(key, canvas),
+    ));
+    return shapes.add(kind, width, height, aux2, aux3, color, alpha);
+  }
+
+  /** 矩形 (Phaser 互換の `add.rectangle`) */
+  public addRectangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Rectangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 円 (Phaser 互換の `add.circle`) */
+  public addCircle(x: number, y: number, radius: number, color = 0xffffff, alpha = 1): number {
+    const id = this._addShape(ShapeKind.Circle, radius * 2, radius * 2, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 楕円 (Phaser 互換の `add.ellipse`) */
+  public addEllipse(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Ellipse, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 三角形 (Phaser 互換の `add.triangle`) */
+  public addTriangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Triangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 星形 (Phaser 互換の `add.star`) */
+  public addStar(
+    x: number,
+    y: number,
+    points: number,
+    radius: number,
+    innerRadius = radius / 2,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(
+      ShapeKind.Star,
+      radius * 2,
+      radius * 2,
+      points,
+      innerRadius / radius,
+      color,
+      alpha,
+    );
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 角丸矩形 (Phaser 互換の `add.roundRect` / `add.roundrect`) */
+  public addRoundRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius = 8,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.RoundRect, width, height, radius, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 線 (Phaser 互換の `add.line`) */
+  public addLine(
+    x: number,
+    y: number,
+    length: number,
+    lineWidth = 1,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Line, length, lineWidth, lineWidth, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 格子 (Phaser 互換の `add.grid`) */
+  public addGrid(
+    x: number,
+    y: number,
+    cellWidth: number,
+    cellHeight: number,
+    cells = 2,
+    lineWidth = 1,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(
+      ShapeKind.Grid,
+      cellWidth * cells,
+      cellHeight * cells,
+      cells,
+      lineWidth,
+      color,
+      alpha,
+    );
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 等角三角形 (Phaser 互換の `add.isotriangle`) */
+  public addIsoTriangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.IsoTriangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 等角ダイヤ (Phaser 互換の `add.isodiamond` / `isobox`) */
+  public addIsoDiamond(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.IsoDiamond, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 四辺形 (Phaser 互換の `add.quad`) */
+  public addQuad(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    inset = 0,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Quad, width, height, inset, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 円弧 (Phaser 互換の `add.arc`) */
+  public addArc(
+    x: number,
+    y: number,
+    radius: number,
+    lineWidth = 2,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Arc, radius * 2, radius * 2, lineWidth, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 生成済みシェイプ先頭の位置を書き込みます。 */
+  private _setShapePos(shapeId: number, x: number, y: number): void {
+    const arenaId = this.shapes.ids[shapeId];
+    if (arenaId < 0) return;
+    const dense = this.arena.idToIndex[arenaId];
+    if (dense < 0) return;
+    this.arena.setPosX(dense, x);
+    this.arena.setPosY(dense, y);
+  }
+
+  /** 静的シェイプの SoA。初回参照時に生成します。 */
+  public get shapes(): ShapeManager {
+    return (this._shapes ??= new ShapeManager(this.arena, (key, canvas) =>
+      this.textures.addCanvas(key, canvas),
+    ));
+  }
+
+  private _shapes: ShapeManager | null = null;
 
   constructor(props: SceneProps | string = {}) {
     let maxInstances = 100000;
