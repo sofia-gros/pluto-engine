@@ -68,6 +68,19 @@ const BACKEND = CPU_ONLY ? 'auto' : RAW_BACKEND;
 const GPU_CULL = strParam('cull', 'cpu') === 'gpu';
 /** `tsq=1` で WebGPU timestamp query を有効化します (Phase 8 P-02、診断用)。 */
 const TSQ = strParam('tsq', '0') === '1';
+/**
+ * 画面内に見せるスプライトの割合 (0.01〜1)。
+ *
+ * **カリングの交差点を測るために必要です。**
+ * `Camera.zoom` は大きいほど拡大、つまり**可視範囲が狭く**なります。
+ * 全スプライトを収めるズームを基準に、
+ * 可視面積が `visible` 倍になるよう `1 / sqrt(visible)` を掛けます
+ * （可視スプライト数 = 全体 × zoom^2 のため）。
+ *
+ * 注意: 逆向き（`× sqrt`）にするとズームが小さくなってむしろ
+ * 可視が増えてしまい、`renderCount` が変化しなくなります。
+ */
+const VISIBLE_FRAC = Math.min(1, Math.max(0.01, Number(strParam('visible', '1')) || 1));
 
 const status = document.getElementById('status') as HTMLDivElement;
 
@@ -211,6 +224,8 @@ async function main(): Promise<void> {
     /** 実際に 1 フレームで描画されたインスタンス数。
      *  これが 0 だとカリングが全部落としており、比較になりません。 */
     renderCount: engine.renderCount,
+    /** 要求した可視率。実測の `renderCount` と突き合わせるため記録します。 */
+    visibleFracRequested: VISIBLE_FRAC,
     worldWidth: scene.worldWidth,
     worldHeight: scene.worldHeight,
     frames: FRAMES,
@@ -319,12 +334,13 @@ class BenchScene extends Scene {
     this.worldHeight = Math.ceil(count / cols) * spacing;
 
     // 全スプライトが画面に収まる最大ズーム（90% を加えて余裕を持たせます）
-    // カメラをこの倍率にすると描画対象が全件になるため、
-    // 「CPU カリングが捨てるものがない」構成になります。
+    // Camera.zoom は大きいほど拡大 = 可視範囲が狭くなります。
+    // 可視面積を VISIBLE_FRAC 倍にするには 1/sqrt(frac) を掛けます。
     const cam = this.cameras.main;
     const viewW = 1280;
     const viewH = 720;
-    const zoom = Math.min(viewW / this.worldWidth, viewH / this.worldHeight) * 0.9;
+    const zoomAll = Math.min(viewW / this.worldWidth, viewH / this.worldHeight) * 0.9;
+    const zoom = (zoomAll * 0.9) / Math.sqrt(VISIBLE_FRAC);
     cam.setZoom(zoom);
     // 中心をグリッドの真中に合わせます
     cam.setScroll(this.worldWidth / 2, this.worldHeight / 2);
