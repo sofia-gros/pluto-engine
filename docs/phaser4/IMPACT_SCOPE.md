@@ -874,12 +874,12 @@ GPU 時間のみを 1 インスタンス当たりに直すと:
 
 - [x] WebGPU bench harness を構築（P-01）
 - [x] WebGPU compute で culling を実装（P-02 / 9.4）
-- [ ] WebGPU compute で Morton sort を実装（P-02）
+- [x] WebGPU compute で Morton sort を実装（P-02）
 - [x] WebGPU で indirect draw を実装（P-02 / 9.4）
 - [x] WebGL2 で byteOffset による culling を実装（P-03 / 9.2）
 - [x] `RenderGraph` を新設（複数パス）
 - [x] `Filter` 基盤を新設（`filters.internal` / `filters.external`）
-- [ ] 主要 Filter を WebGPU のみで実装（Blur / Bloom / Glow / Pixelate / ColorMatrix / Vignette ほか）
+- [x] 主要 Filter を WebGPU のみで実装（Blur / Bloom / Glow / Pixelate / ColorMatrix / Vignette ほか）
 - [ ] `SpriteGPULayer` を実装（静的 GPU バッファ + GPU 駆動アニメ）
 - [ ] `TilemapGPULayer` を実装（1 quad）
 - [ ] `Gradient` / `Noise` を実装（WebGPU）
