@@ -499,7 +499,7 @@ Phase 7 は工作量が多いため、次の 4 分割で進めました。
 | # | タスク | 状態 |
 | --- | --- | --- |
 | P-01 | WebGPU bench harness | **完了**（`apps/demo/backend-bench/`） |
-| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手**（GPU 時間計測の土台のみ / 9.3 参照） |
+| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手**（GPU 時間計測は完成 / 9.3 参照） |
 | P-03 | WebGL2 culling（byteOffset による baseInstance） | **一部完了**（頂点シェーダ GPU カリング / 9.2 参照） |
 | P-04 | Filter を WebGPU のみに限定 | 未着手 |
 | P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **完了**（`scripts/gpu-benchmark.mjs`） |
@@ -581,23 +581,40 @@ webgl2  frame  4.300ms             0.000ms           -
 **CPU 時間は事実として消えました。** `partitionVisible`（SoA の詰め替え）が
 フレームから完全に外れたためです。
 
-#### 9.2.3 ただしこれは「実速度 40 倍」を意味しません（重要）
+#### 9.2.3 GPU 時間での実測（留保は解除）
 
-**このハーネスは CPU 時間しか測っていません。** WebGL2 / WebGPU は
-ドローコール発行が非同期なので、`drawTimeMs` は「GPU に渡すまでの CPU 時間」で、
-**GPU 側の実行時間は含まれていません**（timestamp query を使っていません）。
+timestamp query が動くようになったので、**GPU 実行時間ベースの比較**ができるように
+なりました（仕組みは 9.3）。300000 体 / 可視 300000 / 1280x720 の実測:
 
-GPU カリングを有効にすると:
-- **CPU 側**: 3.8ms → 0.0ms（詰め替えをやめるので減る）
-- **GPU 側**: 全 300000 インスタンスを必ず頂点シェーダに通すため、**増えます**
+| 項目 | CPU カリング | GPU カリング | 比 |
+| --- | --- | --- | --- |
+| CPU frame | 4.400ms | 0.200ms | 22x |
+| CPU cull | 4.100ms | 0.000ms | - |
+| **GPU time** | **0.354ms** | **0.353ms** | **1.003x** |
 
-網点上は正味-interactive になるか不明です。判断するには
-GPU timestamp query で GPU 実行時間を測る必要があります
-（P-02 の WebGPU compute で仕組みとして入ります）。
+**読み方: GPU 時間は変わっていません。**
 
-**したがって 40x は「CPU コストの除去率」であって「性能比」ではありません。**
-``draw` の CPU 時間が 0.000ms になったのも「GPU 実行が 0 だったから」ではなく、
-**測っていないから**です。
+これが両方の経路で 300000 インスタンスをすべて描画しているためです。
+カメラを全スプライトが収まるまでズームしているので、CPU カリングは
+「捨てるものがない」状態です（`renderCount` が常に 300000）。
+GPU カリングは詰め替えをやめるだけで、描画량은同じです。
+
+したがって **この構成では GPU カリングは CPU コストだけの純粋な削減**です。
+
+#### 9.2.3.1 ただし交差点は未測定（重要な留保）
+
+上の 22x は **「ほぼ全部可視」という GPU カリングに最も有利な構成**での値です。
+
+GPU カリングの不利な面は逆向きに起きます。**可視率が低いほど**、
+CPU カリングなら描画 instances 数が減りますが、GPU カリングでは
+画面外のインスタンスもすべて頂点シェーダに通すため GPU 側の費用が増えます。
+某个交差点より上の可視率では **CPU カリングのほうが速い**可能性があります。
+
+**この交差点はまだ測っていません。** カメラ `zoom` で可視率を変える尝试を
+行いましたが、`renderCount` が全条件で 300000 のままで、
+この構成ではカリング対象を絞れませんでした。動作しないノブは残さないため
+撤去しています。再現にはカメラのカリング矩形の計算（`_cameraRect` と
+`Camera.zoom` の関係）を先に検証する必要があります。
 
 #### 9.2.4 実装中に検出した既存バグ
 
@@ -607,54 +624,47 @@ GPU timestamp query で GPU 実行時間を測る必要があります
 | `PlutoEngine` | `gpuCulling: true` でも実際の経路が走っているかを外から判別できませんでした（`setCullRect` 未実装のバックエンド、複数カメラ）。`gpuCullingActive` テレメトリを追加しています |
 
 
-### 9.3 P-02 の現状 — GPU 時間計測の土台（未完）
+### 9.3 P-02 の現状 — GPU 時間計測（完成）と本体（未着手）
 
 P-02 本体（WebGPU compute によるカリング / Morton sort / indirect draw）は
-**未着手**です。着手前に「P-03 で提示した GPU 側の副作用を測る」
-必要があるため、先に GPU timestamp query を組み込みました。
+**未着手**です。着手前に「P-03 で提示した GPU 側の副作用を測る」必要があったため、
+先に GPU timestamp query を組み込みました。**こちらは完成しています。**
 
-#### 9.3.1 実装済み
+#### 9.3.1 実装
 
 | 項目 | 内容 |
 | --- | --- |
 | feature 要求 | `adapter.features.has('timestamp-query')` を確認して `requestDevice` に渡す |
 | 描画計測 | 描画パスに `timestampWrites`（begin/end の 2 エントリ）を付与 |
 | 解決 | `resolveQuerySet` → `copyBufferToBuffer` → `mapAsync` で `BigUint64Array` として読み出し |
-| 公開 API | `GraphicsDevice.resolveGpuTimeMs()`（optional）と `isTimestampQuerySupported()` |
-| 診断 | ベンチが `timestampSupported` と `gpuSampleCount` を記録 |
-| 既定 | **無効**。`enableTimestampQuery()` を明示的に呼ばないと入りません |
+| 公開 API | `GraphicsDevice.resolveGpuTimeMs()` / `isTimestampQuerySupported()` / `lastTimestampError()` / `lastTimestampRaw()`（後 2 つは診断用） |
+| 有効化 | `CreateDeviceOptions.timestampQuery` → `PlutoEngineConfig.gpuTimestampQuery` → ベンチの `?tsq=1` |
+| 既定 | **無効**（既存動作に影響させないため） |
 
-#### 9.3.2 なぜ既定無効か
+#### 9.3.2 実装中に判明した自分のバグ
 
-**読み出しが値を返しません。** 実測（300000 体 / WebGPU）:
+**計測値が 1 フレームも取れなかった原因はエンジン側ではありませんでした。**
 
-```
-timestampSupported = true    // feature は要求できる
-gpuSampleCount     = 0       // しかし実測値は 1 フレームも取れない
-```
+`mapAsync` は Promise なので、コールバックが走るのは**イベントループが回るときだけ**です。
+ベンチの計測ループが同期 `for` で Frames 回していたため、
+`mapAsync` のコールバックが一度も実行されませんでした。
+`timestampError` は空（reject していない）、`timestampRaw` は `[-1, -1]`
+（`then` が走っていない）のまま、という観測から特定しました。
 
-そのため `resolveGpuTimeMs()` は毎回 -1 を返し、ベンチの `gpuMsMedian` も -1 です。
+**修正**: 計測ループを 1 フレームごとに `setTimeout(0)` で yield する形に変更。
+これでサンプル 84 件が取れ、`gpuMsMedian = 0.062ms` になりました。
 
-**切り分け済み**: feature 不支持ではありません（`timestampSupported=true`）。
-`mapAsync` が解決しないか例外している側です。候補は次の 3 つです。
-
-1. `copyBufferToBuffer` の先がまだ map 中で、submit が validation error になる
-2. `mapAsync` がキュー完了を待つため、毎フレーム submit すると解決が間に合わない
-3. `BigUint64Array` への解釈または `raw[0]/raw[1]` の順序が想定と違う
-
-まだ 1〜3 の切り分けはしていません。**未検証の経路を既定で描画に載せるのは
-リグレッションの元になる**ため,opt-in にしています。
+**教訓**: 非同期計測を入れるときは、**計測ループ側から `await` で
+イベントループへ譲る構造**にしないと、計測値そのものが永久に取れなくなります。
 
 #### 9.3.3 次の作業
 
-- `enableTimestampQuery()` を有効にした状態で、`mapAsync` が reject しているかを
-  `catch` で可視化（今は `_lastGpuMs = -1` に潰している）
-- `copyBufferToBuffer` を map 中にも発行しないよう、2 フレームalternating にする
-- 値が出たら 9.2.3 の留保を解除し、CPU カリングと GPU カリングを
-  **GPU 時間ベースで**比較し直す
-
-それまでは **P-03 の「40x」は CPU コストの除去率であって性能比ではない**
-という留保を維持します。
+- カメラ `zoom` がカリング矩形にどう影響するかを検証し、
+  「ほぼ全部画面外」の構成を作れるようにする
+- そこで **P-03 の交差点**（GPU カリングと CPU カリングの速さolinắ switch）を測る
+- それが済んでから P-02 本体（compute カリング / Morton sort / indirect draw）に入る
+- その際、compute カリングなら GPU 上でインデックス列を作るので
+  **WebGPU の indirect draw が必須**になる（WebGL2 側は P-03 の byteOffset で代替）
 
 ### 9.2 RenderGraph / Filter
 

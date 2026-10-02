@@ -66,6 +66,8 @@ const CPU_ONLY = RAW_BACKEND === 'cpu';
 const BACKEND = CPU_ONLY ? 'auto' : RAW_BACKEND;
 /** `cull=gpu` で頂点シェーダ カリングを有効にします (Phase 8 P-03)。 */
 const GPU_CULL = strParam('cull', 'cpu') === 'gpu';
+/** `tsq=1` で WebGPU timestamp query を有効化します (Phase 8 P-02、診断用)。 */
+const TSQ = strParam('tsq', '0') === '1';
 
 const status = document.getElementById('status') as HTMLDivElement;
 
@@ -106,6 +108,7 @@ async function main(): Promise<void> {
     backend: BACKEND as 'auto' | 'webgpu' | 'webgl2',
     cpuOnly: CPU_ONLY,
     gpuCulling: GPU_CULL,
+    gpuTimestampQuery: TSQ,
     scene: [BenchScene],
   });
 
@@ -150,7 +153,22 @@ async function main(): Promise<void> {
   const ctx2d = CPU_ONLY ? canvas.getContext('2d') : null;
   const scene0 = engine.scene.activeScene;
 
-  for (let i = 0; i < FRAMES; i++) {
+  /**
+   * 1 フレーム分の計測。
+   *
+   * **フレームごとにイベントループへ yield することが必須です。**
+   * WebGPU の `mapAsync` は Promise なので、コールバックが走るのは
+   * イベントループが回るときだけです。同期ループで Frames 回すると
+   * コールバックが一度も実行されず、timestamp が永久に取れません
+   * （実際にこれで 0 サンプルでした）。
+   */
+  async function measureFrame(): Promise<{
+    frame: number;
+    cull: number;
+    upload: number;
+    draw: number;
+    gpu: number;
+  }> {
     const t0 = performance.now();
     clock += 1000 / 60;
     engine.loop.step(clock);
@@ -160,15 +178,26 @@ async function main(): Promise<void> {
       raster.present(ctx2d);
     }
     const tEnd = performance.now();
-    frameTotal.push(tEnd - t0);
-    cull.push(engine.cullTimeMs);
-    upload.push(engine.uploadTimeMs);
-    // CPU 系列の「draw」はラスタライズ時間、それ以外はエンジンの drawTimeMs
-    draw.push(CPU_ONLY ? tEnd - tStep : engine.drawTimeMs);
-    // GPU 実行時間 (WebGPU の timestamp query)。
-    // 非対応・非同期読み出しのため -1 が混ざるので除外します。
-    const g = engine.device?.resolveGpuTimeMs?.() ?? -1;
-    if (g >= 0) gpuMs.push(g);
+    // マクロタスクを 1 つ譲って Promise のコールバックを走らせます。
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    return {
+      frame: tEnd - t0,
+      cull: engine.cullTimeMs,
+      upload: engine.uploadTimeMs,
+      draw: CPU_ONLY ? tEnd - tStep : engine.drawTimeMs,
+      gpu: engine.device?.resolveGpuTimeMs?.() ?? -1,
+    };
+  }
+
+  for (let i = 0; i < FRAMES; i++) {
+    const m = await measureFrame();
+    frameTotal.push(m.frame);
+    cull.push(m.cull);
+    upload.push(m.upload);
+    draw.push(m.draw);
+    if (m.gpu >= 0) gpuMs.push(m.gpu);
   }
 
   const result = {
@@ -209,6 +238,18 @@ async function main(): Promise<void> {
       (
         engine.device as { isTimestampQuerySupported?: () => boolean }
       )?.isTimestampQuerySupported?.() ?? false,
+    /** 読み出しが失敗したときの理由。切り分け用。 */
+    timestampError:
+      (engine.device as { lastTimestampError?: () => string })?.lastTimestampError?.() ?? '',
+    /** 生読できた timestamp の生値 (診断用)。読めていなければ -1。 */
+    timestampRaw: (() => {
+      const buf = new Float64Array(2);
+      const ok =
+        (engine.device as { lastTimestampRaw?: (o: Float64Array) => boolean })?.lastTimestampRaw?.(
+          buf,
+        ) ?? false;
+      return ok ? [buf[0], buf[1]] : [-1, -1];
+    })(),
   };
 
   (window as unknown as { __benchResult: typeof result }).__benchResult = result;
@@ -278,6 +319,8 @@ class BenchScene extends Scene {
     this.worldHeight = Math.ceil(count / cols) * spacing;
 
     // 全スプライトが画面に収まる最大ズーム（90% を加えて余裕を持たせます）
+    // カメラをこの倍率にすると描画対象が全件になるため、
+    // 「CPU カリングが捨てるものがない」構成になります。
     const cam = this.cameras.main;
     const viewW = 1280;
     const viewH = 720;

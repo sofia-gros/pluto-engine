@@ -64,6 +64,13 @@ export interface EngineConfig {
    * uniform 1 本でしか渡せないためです。
    */
   gpuCulling?: boolean;
+  /**
+   * WebGPU の timestamp query を有効化します (Phase 8 P-02、既定は false)。
+   *
+   * **読み出しが値を返さない既知の問題**があります
+   * （IMPACT_SCOPE.md の 9.3）。診断用にのみ使う想定です。
+   */
+  gpuTimestampQuery?: boolean;
   scene: (new () => Scene)[];
 }
 
@@ -162,7 +169,10 @@ export class PlutoEngine {
     this.canvasElement = canvas;
     this.scale.setCanvas(canvas);
 
-    this.device = await createGraphicsDevice(canvas, { backend: this.config.backend });
+    this.device = await createGraphicsDevice(canvas, {
+      backend: this.config.backend,
+      timestampQuery: this.config.gpuTimestampQuery === true,
+    });
     this.device.initPipelines();
 
     const maxInstances = this.config.maxInstances!;

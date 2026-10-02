@@ -13,6 +13,17 @@ export interface CreateDeviceOptions {
   backend?: 'auto' | 'webgpu' | 'webgl2';
   /** フォールバック時に警告を出します */
   warnOnFallback?: boolean;
+  /**
+   * WebGPU の timestamp query を有効化します (Phase 8 P-02)。
+   *
+   * feature を `requestDevice` 時に要求する必要があるため、
+   * デバイス生成前に指定しなければなりません。
+   *
+   * **読み出しが値を返さない既知の問題があるため既定は false** です。
+   * 有効化しても描画は壊れません（タイムスタンプが計測されないだけ）。
+   * 詳細は IMPACT_SCOPE.md の 9.3 を参照してください。
+   */
+  timestampQuery?: boolean;
 }
 
 /**
@@ -38,6 +49,7 @@ export async function createGraphicsDevice(
   if (typeof navigator !== 'undefined' && navigator.gpu) {
     try {
       const device = new WebGPUDevice();
+      if (options.timestampQuery === true) device.enableTimestampQuery();
       await device.init(canvas);
       // パイプラインが組めない場合は描画できないため WebGL2 へ戻します
       device.initPipelines();

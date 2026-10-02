@@ -615,6 +615,11 @@ export class WebGPUDevice implements GraphicsDevice {
   private _timestampReadback: GPUBuffer | null = null;
   /** 直近の resolve 済み GPU 時間 (ms)。未計測なら -1。 */
   private _lastGpuMs = -1;
+  /** timestamp 読み出しの直近エラー。正常なら空文字列。 */
+  private _timestampError = '';
+  /** 生読できた timestamp の生値（診断用）。-1 は未読出し。 */
+  private _timestampRaw0 = -1;
+  private _timestampRaw1 = -1;
   /** mapAsync  が進行中か。二重マップを避けるために使います。 */
   private _timestampMapping = false;
   /** resolve は済んでいて、まだマップしていないデータがあるか。 */
@@ -715,8 +720,14 @@ export class WebGPUDevice implements GraphicsDevice {
           const end = Number(raw[1]);
           dst.unmap();
           this._lastGpuMs = end > begin ? (end - begin) / 1e6 : -1;
+          // 生の値を診断用に残します。0 を読んでいるのか、
+          // resolve 自体が書き込まれていないのかを区別するためです。
+          this._timestampRaw0 = begin;
+          this._timestampRaw1 = end;
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          // 失敗を潰すと切り分けできません。原因をそのまま残します。
+          this._timestampError = err instanceof Error ? err.message : String(err);
           this._lastGpuMs = -1;
         })
         .finally(() => {
@@ -793,5 +804,27 @@ export class WebGPUDevice implements GraphicsDevice {
     }
     this.textures.clear();
     this._boundBuffers = {};
+  }
+  /**
+   * timestamp 読み出しの直近のエラーを返します (デバッグ・報告用)。
+   *
+   * 値が取れない原因を切り分けるためのものです。
+   * 正常な場合は空文字列を返します。
+   */
+  lastTimestampError(): string {
+    return this._timestampError;
+  }
+
+  /**
+   * 生読できた timestamp の生値を `out` へ書き出します (診断用)。
+   *
+   * @param out 2 要素のバッファ。`[0]` = begin, `[1]` = end
+   * @returns 読み出せたか
+   */
+  lastTimestampRaw(out: Float64Array): boolean {
+    if (this._timestampRaw0 < 0) return false;
+    out[0] = this._timestampRaw0;
+    out[1] = this._timestampRaw1;
+    return true;
   }
 }

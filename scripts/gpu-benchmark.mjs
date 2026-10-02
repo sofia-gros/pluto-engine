@@ -76,6 +76,7 @@ function parseArgs(argv) {
     frames: DEFAULT_FRAMES,
     warmup: DEFAULT_WARMUP,
     headed: false,
+    tsq: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -90,6 +91,9 @@ function parseArgs(argv) {
       out.warmup = Number.parseInt(String(argv[++i]), 10) ?? DEFAULT_WARMUP;
     } else if (a === '--headed') {
       out.headed = true;
+    } else if (a === '--tsq') {
+      // WebGPU timestamp query を有効にします (Phase 8 P-02 の診断用)。
+      out.tsq = true;
     }
   }
   if (out.entities.length === 0) out.entities = DEFAULT_ENTITY_COUNTS;
@@ -159,7 +163,7 @@ for (const series of SERIES) {
         const url =
           `http://localhost:${PORT}/backend-bench/index.html` +
           `?backend=${series.backend}&cull=${cull}&entities=${entities}` +
-          `&frames=${args.frames}&warmup=${args.warmup}`;
+          `&frames=${args.frames}&warmup=${args.warmup}&tsq=${args.tsq ? 1 : 0}`;
         await page.goto(url, { waitUntil: 'load', timeout: 60000 });
 
         const result = await page.waitForFunction(
@@ -258,6 +262,7 @@ function checkGpuCulling(data) {
         gpuGpuMs: gpuMode.gpuMsMedian,
         gpuSamples: gpuMode.gpuSampleCount,
         timestampSupported: gpuMode.timestampSupported,
+        timestampError: gpuMode.timestampError,
         cpuRendered: cpuMode.renderCount,
         gpuRendered: gpuMode.renderCount,
         cpuSpeedup:
@@ -325,7 +330,8 @@ if (payload.gpuCulling.length > 0) {
     if (row.gpuTimeRatio === null) {
       console.log(
         `    GPU time: 計測不可 (timestampSupported=${row.timestampSupported}, ` +
-          `サンプル=${row.gpuSamples})`,
+          `サンプル=${row.gpuSamples})` +
+          (row.timestampError ? ` エラー: ${row.timestampError}` : ''),
       );
     } else {
       console.log(
