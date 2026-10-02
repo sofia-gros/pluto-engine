@@ -30,6 +30,23 @@ export class SceneManager {
     const scene = new sceneClass();
     scene.id = key;
     scene.scene = this;
+    /**
+     * エンジン設定の `maxInstances` とシーンのアリーナ容量を揃えます。
+     *
+     * ここを揃えないと、**GPU バッファだけエンジン設定のサイズで確保され、
+     * アリーナはシーンの既定値 (100000) のまま**になります。
+     * 300000 体出した場合アリーナが溢れ `allocate()` が黙って -1 を返すため、
+     * 想定より少ないスプライトしか描画されません（ベンチで実際に踏みました）。
+     *
+     * アリーナの拡張（SoA 全配列の再確保）は未実装のため、
+     * **大きいアリーナが必要なら Scene コンストラクタの maxInstances を
+     * 指定してください。** ここでは小さい方に丸めます。
+     */
+    const engineMax = this._engine?.config?.maxInstances;
+    const arenaCap = scene.arena?.capacity;
+    if (typeof engineMax === 'number' && typeof arenaCap === 'number' && engineMax > arenaCap) {
+      this._engine.config.maxInstances = arenaCap;
+    }
     this._scenes.set(key, scene);
 
     if (autoStart) {

@@ -91,145 +91,175 @@
       "sampleCount": 35
     }
   ],
-  "generatedAt": "2026-10-02T04:26:24.243Z",
+  "generatedAt": "2026-10-02T04:57:09.544Z",
   "note": "backends は Phase 8 P-01/P-05 の 3 系統比較。steering は従来の実測値。",
   "frames": 60,
   "warmup": 20,
   "backends": {
     "webgpu": {
-      "100000": {
-        "requestedBackend": "webgpu",
-        "actualBackend": "webgpu",
-        "cpuOnly": false,
-        "entities": 100000,
-        "renderCount": 100000,
-        "worldWidth": 20288,
-        "worldHeight": 20224,
-        "frames": 60,
-        "warmup": 20,
-        "cullMsMedian": 1.199999988079071,
-        "cullMsP95": 2.4000000059604645,
-        "uploadMsMedian": 0,
-        "drawMsMedian": 1.2999999821186066,
-        "frameMsMedian": 1.300000011920929,
-        "frameMsP95": 2.5999999940395355
-      },
       "300000": {
         "requestedBackend": "webgpu",
         "actualBackend": "webgpu",
         "cpuOnly": false,
+        "gpuCulling": false,
+        "gpuCullingActive": false,
         "entities": 300000,
-        "renderCount": 100000,
+        "renderCount": 300000,
         "worldWidth": 35072,
         "worldHeight": 35072,
         "frames": 60,
         "warmup": 20,
-        "cullMsMedian": 1.2999999821186066,
-        "cullMsP95": 1.5999999940395355,
+        "cullMsMedian": 3.7999999821186066,
+        "cullMsP95": 4.199999988079071,
         "uploadMsMedian": 0,
-        "drawMsMedian": 1.399999976158142,
-        "frameMsMedian": 1.4000000059604645,
-        "frameMsP95": 1.800000011920929
+        "drawMsMedian": 3.9000000059604645,
+        "frameMsMedian": 4,
+        "frameMsP95": 4.300000011920929
       }
     },
     "webgl2": {
-      "100000": {
-        "requestedBackend": "webgl2",
-        "actualBackend": "webgl2",
-        "cpuOnly": false,
-        "entities": 100000,
-        "renderCount": 100000,
-        "worldWidth": 20288,
-        "worldHeight": 20224,
-        "frames": 60,
-        "warmup": 20,
-        "cullMsMedian": 1.5,
-        "cullMsP95": 2.5,
-        "uploadMsMedian": 0,
-        "drawMsMedian": 1.5,
-        "frameMsMedian": 1.699999988079071,
-        "frameMsP95": 2.5999999940395355
-      },
       "300000": {
         "requestedBackend": "webgl2",
         "actualBackend": "webgl2",
         "cpuOnly": false,
+        "gpuCulling": false,
+        "gpuCullingActive": false,
         "entities": 300000,
-        "renderCount": 100000,
+        "renderCount": 300000,
         "worldWidth": 35072,
         "worldHeight": 35072,
         "frames": 60,
         "warmup": 20,
-        "cullMsMedian": 1.5,
-        "cullMsP95": 2.4000000059604645,
+        "cullMsMedian": 4.1500000059604645,
+        "cullMsP95": 7.199999988079071,
         "uploadMsMedian": 0,
-        "drawMsMedian": 1.5,
-        "frameMsMedian": 1.5999999940395355,
-        "frameMsP95": 2.5999999940395355
+        "drawMsMedian": 4.200000017881393,
+        "frameMsMedian": 4.300000011920929,
+        "frameMsP95": 7.4000000059604645
       }
     },
     "cpu": {
-      "100000": {
-        "requestedBackend": "cpu",
-        "actualBackend": "cpu",
-        "cpuOnly": true,
-        "entities": 100000,
-        "renderCount": 100000,
-        "worldWidth": 20288,
-        "worldHeight": 20224,
-        "frames": 60,
-        "warmup": 20,
-        "cullMsMedian": 1.0999999940395355,
-        "cullMsP95": 1.2999999821186066,
-        "uploadMsMedian": 0,
-        "drawMsMedian": 0,
-        "frameMsMedian": 1.199999988079071,
-        "frameMsP95": 1.300000011920929
-      },
       "300000": {
         "requestedBackend": "cpu",
         "actualBackend": "cpu",
         "cpuOnly": true,
+        "gpuCulling": false,
+        "gpuCullingActive": false,
         "entities": 300000,
-        "renderCount": 100000,
+        "renderCount": 300000,
         "worldWidth": 35072,
         "worldHeight": 35072,
         "frames": 60,
         "warmup": 20,
-        "cullMsMedian": 1.0999999940395355,
-        "cullMsP95": 1.2999999821186066,
+        "cullMsMedian": 3.7000000178813934,
+        "cullMsP95": 4.200000017881393,
         "uploadMsMedian": 0,
         "drawMsMedian": 0,
-        "frameMsMedian": 1.0999999940395355,
-        "frameMsP95": 1.4000000059604645
+        "frameMsMedian": 3.800000011920929,
+        "frameMsP95": 4.300000011920929
+      }
+    },
+    "webgpu#gpucull": {
+      "300000": {
+        "requestedBackend": "webgpu",
+        "actualBackend": "webgpu",
+        "cpuOnly": false,
+        "gpuCulling": true,
+        "gpuCullingActive": true,
+        "entities": 300000,
+        "renderCount": 300000,
+        "worldWidth": 35072,
+        "worldHeight": 35072,
+        "frames": 60,
+        "warmup": 20,
+        "cullMsMedian": 0,
+        "cullMsP95": 0,
+        "uploadMsMedian": 0,
+        "drawMsMedian": 0,
+        "frameMsMedian": 0.09999999403953552,
+        "frameMsP95": 0.20000001788139343
+      }
+    },
+    "webgl2#gpucull": {
+      "300000": {
+        "requestedBackend": "webgl2",
+        "actualBackend": "webgl2",
+        "cpuOnly": false,
+        "gpuCulling": true,
+        "gpuCullingActive": true,
+        "entities": 300000,
+        "renderCount": 300000,
+        "worldWidth": 35072,
+        "worldHeight": 35072,
+        "frames": 60,
+        "warmup": 20,
+        "cullMsMedian": 0,
+        "cullMsP95": 0,
+        "uploadMsMedian": 0,
+        "drawMsMedian": 0,
+        "frameMsMedian": 0,
+        "frameMsP95": 0.10000002384185791
+      }
+    },
+    "cpu#gpucull": {
+      "300000": {
+        "requestedBackend": "cpu",
+        "actualBackend": "cpu",
+        "cpuOnly": true,
+        "gpuCulling": true,
+        "gpuCullingActive": true,
+        "entities": 300000,
+        "renderCount": 300000,
+        "worldWidth": 35072,
+        "worldHeight": 35072,
+        "frames": 60,
+        "warmup": 20,
+        "cullMsMedian": 0,
+        "cullMsP95": 0,
+        "uploadMsMedian": 0,
+        "drawMsMedian": 0,
+        "frameMsMedian": 0,
+        "frameMsP95": 0.10000002384185791
       }
     }
   },
   "requirement2": [
     {
-      "entities": 100000,
-      "webgpuFrameMs": 1.300000011920929,
-      "webgl2FrameMs": 1.699999988079071,
-      "cpuFrameMs": 1.199999988079071,
-      "webgpuDrawMs": 1.2999999821186066,
-      "webgl2DrawMs": 1.5,
-      "cpuDrawMs": 0,
-      "cullMs": 1.199999988079071,
-      "frameOk": false,
-      "drawOk": false
-    },
-    {
       "entities": 300000,
-      "webgpuFrameMs": 1.4000000059604645,
-      "webgl2FrameMs": 1.5999999940395355,
-      "cpuFrameMs": 1.0999999940395355,
-      "webgpuDrawMs": 1.399999976158142,
-      "webgl2DrawMs": 1.5,
+      "webgpuFrameMs": 4,
+      "webgl2FrameMs": 4.300000011920929,
+      "cpuFrameMs": 3.800000011920929,
+      "webgpuDrawMs": 3.9000000059604645,
+      "webgl2DrawMs": 4.200000017881393,
       "cpuDrawMs": 0,
-      "cullMs": 1.2999999821186066,
+      "cullMs": 3.7999999821186066,
       "frameOk": false,
       "drawOk": false
     }
   ],
-  "failures": []
+  "failures": [],
+  "gpuCulling": [
+    {
+      "series": "webgpu",
+      "entities": 300000,
+      "cpuCullMs": 3.7999999821186066,
+      "gpuCullMs": 0,
+      "cpuFrameMs": 4,
+      "gpuFrameMs": 0.09999999403953552,
+      "cpuRendered": 300000,
+      "gpuRendered": 300000,
+      "speedup": 40
+    },
+    {
+      "series": "webgl2",
+      "entities": 300000,
+      "cpuCullMs": 4.1500000059604645,
+      "gpuCullMs": 0,
+      "cpuFrameMs": 4.300000011920929,
+      "gpuFrameMs": 0,
+      "cpuRendered": 300000,
+      "gpuRendered": 300000,
+      "speedup": null
+    }
+  ]
 }

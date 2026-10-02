@@ -64,6 +64,8 @@ const RAW_BACKEND = strParam('backend', 'auto');
 /** `cpu` は PlutoEngine の cpuOnly モードに割り当てます。 */
 const CPU_ONLY = RAW_BACKEND === 'cpu';
 const BACKEND = CPU_ONLY ? 'auto' : RAW_BACKEND;
+/** `cull=gpu` で頂点シェーダ カリングを有効にします (Phase 8 P-03)。 */
+const GPU_CULL = strParam('cull', 'cpu') === 'gpu';
 
 const status = document.getElementById('status') as HTMLDivElement;
 
@@ -103,6 +105,7 @@ async function main(): Promise<void> {
     maxInstances: ENTITIES + 1024,
     backend: BACKEND as 'auto' | 'webgpu' | 'webgl2',
     cpuOnly: CPU_ONLY,
+    gpuCulling: GPU_CULL,
     scene: [BenchScene],
   });
 
@@ -167,6 +170,9 @@ async function main(): Promise<void> {
     requestedBackend: RAW_BACKEND,
     actualBackend,
     cpuOnly: CPU_ONLY,
+    gpuCulling: GPU_CULL,
+    /** 設定値ではなく、実際に GPU カリング経路が走ったか。 */
+    gpuCullingActive: engine.gpuCullingActive,
     entities: ENTITIES,
     /** 実際に 1 フレームで描画されたインスタンス数。
      *  これが 0 だとカリングが全部落としており、比較になりません。 */
@@ -195,6 +201,18 @@ async function main(): Promise<void> {
 }
 
 class BenchScene extends Scene {
+  /**
+   * アリーナ容量を明示します。
+   *
+   * `SceneManager` は `new sceneClass()` でシーンを作るため、
+   * エンジン設定の `maxInstances` はシーンに伝わりません
+   * （伝えないと GPU バッファだけ大きくなり、`allocate()` が黙って -1 を返します）。
+   * ベンチは指定した `?entities=` 分を確実に確保する必要があります。
+   */
+  constructor() {
+    super({ maxInstances: Math.max(1, ENTITIES + 1024) });
+  }
+
   /** 生成したグリッドのワールド幅 */
   worldWidth = 1;
   /** 生成したグリッドのワールド高さ */

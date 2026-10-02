@@ -163,6 +163,20 @@ export interface GraphicsDevice {
   setUniformMatrix4fv(name: string, matrix: Float32Array): void;
 
   /**
+   * GPU カリングの可視矩形を設定します（Phase 8 P-03）。
+   *
+   * 有効にすると頂点シェーダが矩形外のクワッドを縮退三角形へ変換し、
+   * ラスタライザに破棄させます。これにより CPU 側の SoA の詰め替え
+   * （`partitionVisible`）が不要になります。
+   *
+   * 未実装のバックエンドでは何もしません（optional）。
+   *
+   * @param rect `(minX, minY, maxX, maxY)` のワールド座標 4 要素
+   * @param enabled false で頂点シェーダのカリングを無効にします
+   */
+  setCullRect?(rect: Float32Array, enabled: boolean): void;
+
+  /**
    * シェーダーパイプラインを作成します。
    */
   createPipeline(vertSource: string, fragSource: string): PipelineInfo;

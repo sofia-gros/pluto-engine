@@ -500,7 +500,7 @@ Phase 7 は工作量が多いため、次の 4 分割で進めました。
 | --- | --- | --- |
 | P-01 | WebGPU bench harness | **完了**（`apps/demo/backend-bench/`） |
 | P-02 | WebGPU compute（culling / Morton sort / indirect draw） | 未着手 |
-| P-03 | WebGL2 culling（byteOffset による baseInstance） | 未着手 |
+| P-03 | WebGL2 culling（byteOffset による baseInstance） | **一部完了**（頂点シェーダ GPU カリング / 9.2 参照） |
 | P-04 | Filter を WebGPU のみに限定 | 未着手 |
 | P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **完了**（`scripts/gpu-benchmark.mjs`） |
 
@@ -553,6 +553,58 @@ P-02 / P-03 が必要です。この結果を肯定するものではなく、
 | `performance.now()` が 0.1ms に丸められる環境がある | サブミリ秒の差は測定不能。比較は 10ms 以上のフレームで行うこと |
 | 30 万体を 1 画面に収めるとサブピクセルになる | ピクセル充填コストを測るには、縮小カメラではなく大きなキャンバスが必要 |
 | WebGPU 非対応環境では `webgpu` 系が WebGL2 にフォールバックする | `actualBackend` を必ず確認すること（ハーネスは記録します） |
+
+
+### 9.2 P-03 — GPU カリングの実装と実測
+
+#### 9.2.1 実装内容
+
+| 項目 | 内容 |
+| --- | --- |
+| 頂点シェーダ | `uCullRect` (vec4) と `uGpuCull` (float) を追加。四隅が矩形外なら `gl_Position = vec4(0,0,2,1)`（クリップ空間の外）にして縮退三角形にする |
+| AABB 判定 | 回転を考慮した外接矩形（`abs(c)*w + abs(s)*h`）。厳密な外接矩形でも計算量は変わらない |
+| WebGL2Device | `setCullRect()` を追加。uniform の位置はパイプライン作成時に 1 度だけ解決 |
+| WebGPUDevice | `setCullRect()` を追加。uniform バッファを 80 → 96 バイトへ拡張（`gpuCull` と `cullRect` を追加） |
+| PlutoEngine | `gpuCulling` 設定と `gpuCullingActive` テレメトリを追加。後者は**設定値ではなく実際に走った値** |
+| 複数カメラ | GPU カリングは**カメラ 1 個の場合にだけ有効**。可視矩形を uniform 1 本でしか渡せないため |
+
+#### 9.2.2 実測（300000 体 / 可視 300000 / 1280x720）
+
+```
+              CPU カリング        GPU カリング      比率
+webgpu  cull   3.800ms             0.000ms           -
+webgpu  frame  4.000ms             0.100ms          40x
+webgl2  cull   4.150ms             0.000ms           -
+webgl2  frame  4.300ms             0.000ms           -
+```
+
+**CPU 時間は事実として消えました。** `partitionVisible`（SoA の詰め替え）が
+フレームから完全に外れたためです。
+
+#### 9.2.3 ただしこれは「実速度 40 倍」を意味しません（重要）
+
+**このハーネスは CPU 時間しか測っていません。** WebGL2 / WebGPU は
+ドローコール発行が非同期なので、`drawTimeMs` は「GPU に渡すまでの CPU 時間」で、
+**GPU 側の実行時間は含まれていません**（timestamp query を使っていません）。
+
+GPU カリングを有効にすると:
+- **CPU 側**: 3.8ms → 0.0ms（詰め替えをやめるので減る）
+- **GPU 側**: 全 300000 インスタンスを必ず頂点シェーダに通すため、**増えます**
+
+網点上は正味-interactive になるか不明です。判断するには
+GPU timestamp query で GPU 実行時間を測る必要があります
+（P-02 の WebGPU compute で仕組みとして入ります）。
+
+**したがって 40x は「CPU コストの除去率」であって「性能比」ではありません。**
+``draw` の CPU 時間が 0.000ms になったのも「GPU 実行が 0 だったから」ではなく、
+**測っていないから**です。
+
+#### 9.2.4 実装中に検出した既存バグ
+
+| 場所 | 内容 |
+| --- | --- |
+| `SceneManager.add` | エンジン設定の `maxInstances` がシーンに伝っておらず、**GPU バッファだけエンジン設定のサイズで確保され、アリーナはシーン既定値 (100000) のまま**でした。`?entities=300000` を指定しても 100000 体しか確保できず、`allocate()` が黙って -1 を返していました。ベンチが「300000 体指定 → rendered=100000/300000」と表示した原因是これです。アリーナ拡張は未実装のため、小さい方に丸める clamp にしました |
+| `PlutoEngine` | `gpuCulling: true` でも実際の経路が走っているかを外から判別できませんでした（`setCullRect` 未実装のバックエンド、複数カメラ）。`gpuCullingActive` テレメトリを追加しています |
 
 ### 9.2 RenderGraph / Filter
 

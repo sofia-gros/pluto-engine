@@ -30,11 +30,35 @@ ${glslInstanceDecl()}
 
 uniform mat4 projectionMatrix;
 
+/**
+ * GPU カリング用の可視矩形（ワールド座標）。
+ * (minX, minY, maxX, maxY)
+ */
+uniform vec4 uCullRect;
+/** GPU カリングを有効にするか。0 = 無効、1 = 有効。 */
+uniform float uGpuCull;
+
 out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
 out float vSpriteFlags;
 out float vVisible;
+
+/**
+ * クワッドのワールド AABB が可視矩形の外なら縮退三角形を返します。
+ *
+ * gl_Position をクリップ空間の外 (z = 2) にすることで、
+ * ラスタライザが面積 0 として破棄します。
+ * これにより CPU 側の partitionVisible (SoA の詰め替え) が不要になり、
+ * インスタンス数に比例する CPU コストが消えます。
+ */
+bool cullOut(vec2 worldCenter, vec2 halfSize) {
+    if (uGpuCull < 0.5) return false;
+    return worldCenter.x + halfSize.x < uCullRect.x
+        || worldCenter.x - halfSize.x > uCullRect.z
+        || worldCenter.y + halfSize.y < uCullRect.y
+        || worldCenter.y - halfSize.y > uCullRect.w;
+}
 
 void main() {
     // iTransform = (posX, posY, scaleX, scaleY)   ※ scale は倍率
@@ -58,6 +82,23 @@ void main() {
     float s = sin(iShape.x);
     vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
     vec2 worldPos = vec2(rotated.x * iFlags.y, rotated.y) + iTransform.xy;
+
+    // 回転を考慮しない AABB（外接矩形）で判定します。
+    // 判定を厳密にすると
+    // シェーダが重くなりますが、外接矩形なら cos/sin の絶対値だけで足ります。
+    float ax = abs(c) * displaySize.x + abs(s) * displaySize.y;
+    float ay = abs(s) * displaySize.x + abs(c) * displaySize.y;
+    if (cullOut(iTransform.xy, vec2(ax, ay) * 0.5)) {
+        // 縮退三角形にしてラスタライザに破棄させます
+        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+        vUV = vec2(0.0);
+        vLayer = 0.0;
+        vTint = vec4(0.0);
+        vSpriteFlags = 0.0;
+        vVisible = 0.0;
+        return;
+    }
+
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
     vUV = vertexUV * iUv.zw + iUv.xy;
     vLayer = iFlags.x;
@@ -119,6 +160,10 @@ interface UniformLocations {
   textureArray: WebGLUniformLocation | null;
   sdfThreshold: WebGLUniformLocation | null;
   sdfSmoothing: WebGLUniformLocation | null;
+  /** GPU カリングの可視矩形 (minX, minY, maxX, maxY) */
+  cullRect: WebGLUniformLocation | null;
+  /** GPU カリングの有効フラグ (0 / 1) */
+  gpuCull: WebGLUniformLocation | null;
 }
 
 export class WebGL2Device implements GraphicsDevice {
@@ -138,6 +183,8 @@ export class WebGL2Device implements GraphicsDevice {
     textureArray: null,
     sdfThreshold: null,
     sdfSmoothing: null,
+    cullRect: null,
+    gpuCull: null,
   };
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
@@ -464,6 +511,8 @@ export class WebGL2Device implements GraphicsDevice {
     if (!this.gl || !this.spritePipeline) return;
     const program = this.spritePipeline.id as WebGLProgram;
     this.uniforms.projectionMatrix = this.gl.getUniformLocation(program, 'projectionMatrix');
+    this.uniforms.cullRect = this.gl.getUniformLocation(program, 'uCullRect');
+    this.uniforms.gpuCull = this.gl.getUniformLocation(program, 'uGpuCull');
     this.uniforms.textureArray = this.gl.getUniformLocation(program, 'textureArray');
     this.uniforms.sdfThreshold = this.gl.getUniformLocation(program, 'sdfThreshold');
     this.uniforms.sdfSmoothing = this.gl.getUniformLocation(program, 'sdfSmoothing');
@@ -536,6 +585,26 @@ export class WebGL2Device implements GraphicsDevice {
         this.gl.uniform1f(this.uniforms.sdfSmoothing, sdfSmoothing);
       }
     }
+  }
+
+  /**
+   * GPU カリングの可視矩形を設定します。
+   *
+   * 有効にすると、頂点シェーダが可視矩形の外にあるクワッドを
+   * 縮退三角形にして破棄します。これにより CPU 側の SoA 詰め替え
+   * （`partitionVisible`）が不要になり、インスタンス数に比例する
+   * CPU コストが消えます。
+   *
+   * @param rect `(minX, minY, maxX, maxY)` のワールド座標 4 要素
+   * @param enabled false の場合は頂点シェーダのカリングを無効にします
+   */
+  setCullRect(rect: Float32Array, enabled: boolean): void {
+    const gl = this.gl;
+    if (!gl || !this.currentPipeline) return;
+    const loc = this.uniforms.cullRect;
+    const on = this.uniforms.gpuCull;
+    if (loc) gl.uniform4f(loc, rect[0], rect[1], rect[2], rect[3]);
+    if (on) gl.uniform1f(on, enabled ? 1 : 0);
   }
 
   /**
@@ -658,6 +727,8 @@ export class WebGL2Device implements GraphicsDevice {
     // 別のプログラムへ切り替わったら VAO と uniform のキャッシュを破棄します。
     this.vaoDirty = true;
     this.uniforms.projectionMatrix = null;
+    this.uniforms.cullRect = null;
+    this.uniforms.gpuCull = null;
     this.uniforms.textureArray = null;
     this.uniforms.sdfThreshold = null;
     this.uniforms.sdfSmoothing = null;

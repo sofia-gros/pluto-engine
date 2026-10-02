@@ -52,6 +52,18 @@ export interface EngineConfig {
    * 通常のゲームでは指定しないでください。
    */
   cpuOnly?: boolean;
+  /**
+   * GPU カリングを有効にします（Phase 8 P-03、既定は false）。
+   *
+   * 有効にすると頂点シェーダが可視矩形の外にあるクワッドを
+   * 縮退三角形にして破棄し、CPU 側の SoA 詰め替えを省きます。
+   * `GraphicsDevice.setCullRect` を実装していないバックエンドでは
+   * 自動的に無効になります。
+   *
+   * **複数カメラを同時に描く場合は無効になります。** 可視矩形を
+   * uniform 1 本でしか渡せないためです。
+   */
+  gpuCulling?: boolean;
   scene: (new () => Scene)[];
 }
 
@@ -206,6 +218,16 @@ export class PlutoEngine {
    * `totalInstanceCount` と `renderCount` を合わせて効果を確認できます。
    */
   public cullTimeMs = 0;
+  /**
+   * 直近のフレームで GPU カリングが実際に有効だったか。
+   *
+   * `config.gpuCulling` を true にしても、バックエンドが
+   * `GraphicsDevice.setCullRect` を実装していない場合や、
+   * カメラが複数ある場合は自動的に無効になります。
+   * **ベンチの報告では設定値ではなくこの実際に走った値を使います**
+   * （Phase 8 P-03 の計測でこれを区別する必要がありました）。
+   */
+  public gpuCullingActive = false;
 
   /** 登録済みインスタンス総数（カリング前） */
   public totalInstanceCount = 0;
@@ -262,20 +284,41 @@ export class PlutoEngine {
         return;
       }
 
-      // カリングは「先頭から連続した区間」として描画するため、
-      // 可視インスタンスを先頭へ寄せる partitionVisible を使います。
-      // 1 カメラなら全件を一度だけ寄せればよく、転送も 1 回で済みます。
+      const useGpuCull =
+        this.config.gpuCulling === true && this.device?.setCullRect !== undefined && camCount === 1;
+      this.gpuCullingActive = useGpuCull;
+
+      /**
+       * カリングは「先頭から連続した区間」として描画するため、
+       * 可視インスタンスを先頭へ寄せる partitionVisible を使います。
+       * 1 カメラなら全件を一度だけ寄せればよく、転送も 1 回で済みます。
+       *
+       * **GPU カリング有効時**は SoA の詰め替えを行いません。
+       * 頂点シェーダが矩形外のクワッドを縮退三角形にして破棄するため、
+       * インスタンス数に比例する CPU コストが消えます
+       * （Phase 8 P-03。実測で CPU カリングがフレームを支配していたため）。
+       */
       const tCullStart = performance.now();
       let maxVisible = totalCount;
-      for (let ci = 0; ci < camCount; ci++) {
-        const cam = this._activeCameras[ci];
+      let renderCount2 = totalCount;
+      if (useGpuCull) {
+        // GPU 側描画します。全件をそのまま draw します。
+        const cam = this._activeCameras[0];
         const rect = this._cameraRect(cam, w, h, this._camRect);
-        const visible = arena.partitionVisible(rect[0], rect[1], rect[2], rect[3]);
-        if (visible < maxVisible) maxVisible = visible;
-        if (maxVisible === 0) break;
+        this.device?.setCullRect?.(rect, true);
+        maxVisible = totalCount;
+      } else {
+        for (let ci = 0; ci < camCount; ci++) {
+          const cam = this._activeCameras[ci];
+          const rect = this._cameraRect(cam, w, h, this._camRect);
+          const visible = arena.partitionVisible(rect[0], rect[1], rect[2], rect[3]);
+          if (visible < maxVisible) maxVisible = visible;
+          if (maxVisible === 0) break;
+        }
       }
       this.cullTimeMs = performance.now() - tCullStart;
-      renderCount = maxVisible;
+      renderCount2 = maxVisible;
+      renderCount = renderCount2;
       this.renderCount = renderCount;
 
       // CPU 系列のベンチモードでは、GPU への転送と draw を省きます。

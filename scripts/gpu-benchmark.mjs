@@ -49,6 +49,14 @@ const SERIES = [
   { key: 'cpu', backend: 'cpu' },
 ];
 
+/**
+ * カリング方式の A/B。
+ *
+ * `cpu` は SoA を詰め替える従来経路、`gpu` は頂点シェーダで縮退三角形に
+ * して破棄する経路（Phase 8 P-03）です。
+ */
+const CULL_MODES = (process.env.CULL_MODES ?? 'cpu,gpu').split(',');
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -132,54 +140,66 @@ const backends = { webgpu: {}, webgl2: {}, cpu: {} };
 const failures = [];
 
 for (const series of SERIES) {
-  for (const entities of args.entities) {
-    const label = `${series.key} @ ${entities}`;
-    process.stdout.write(`[bench] ${label} ... `);
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  for (const cull of CULL_MODES) {
+    for (const entities of args.entities) {
+      const label = `${series.key} cull=${cull} @ ${entities}`;
+      process.stdout.write(`[bench] ${label} ... `);
+      const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
-    // WebGL2 を強制したいときは navigator.gpu を隠します。
-    // （引擎側の backend: 'webgl2' 指定だけでも充分的ですが、
-    //   ブラウザが WebGPU を自動選択しない念のための保険です）
-    if (series.backend === 'webgl2') {
-      await page.addInitScript(() => {
-        Object.defineProperty(navigator, 'gpu', { get: () => undefined });
-      });
-    }
-
-    try {
-      const url =
-        `http://localhost:${PORT}/backend-bench/index.html` +
-        `?backend=${series.backend}&entities=${entities}` +
-        `&frames=${args.frames}&warmup=${args.warmup}`;
-      await page.goto(url, { waitUntil: 'load', timeout: 60000 });
-
-      const result = await page.waitForFunction(
-        () => window.__benchResult ?? window.__benchError ?? null,
-        null,
-        { timeout: 180000, polling: 250 },
-      );
-      const value = await result.jsonValue();
-      if (typeof value === 'string') {
-        throw new Error(value);
+      // WebGL2 を強制したいときは navigator.gpu を隠します。
+      // （引擎側の backend: 'webgl2' 指定だけでも充分的ですが、
+      //   ブラウザが WebGPU を自動選択しない念のための保険です）
+      if (series.backend === 'webgl2') {
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'gpu', { get: () => undefined });
+        });
       }
-      backends[series.key][String(entities)] = value;
-      const drawn = value.renderCount;
-      console.log(
-        `rendered=${drawn}/${entities} ` +
-          `frame median=${value.frameMsMedian.toFixed(3)}ms ` +
-          `cull=${value.cullMsMedian.toFixed(3)}ms ` +
-          `upload=${value.uploadMsMedian.toFixed(3)}ms ` +
-          `draw=${value.drawMsMedian.toFixed(3)}ms`,
-      );
-      if (drawn === 0) {
-        // 全スプライトがカリングで落ちているため比較になりません
-        console.log('  (警告: 描画対象が 0 体です。比較には使えません)');
+
+      try {
+        const url =
+          `http://localhost:${PORT}/backend-bench/index.html` +
+          `?backend=${series.backend}&cull=${cull}&entities=${entities}` +
+          `&frames=${args.frames}&warmup=${args.warmup}`;
+        await page.goto(url, { waitUntil: 'load', timeout: 60000 });
+
+        const result = await page.waitForFunction(
+          () => window.__benchResult ?? window.__benchError ?? null,
+          null,
+          { timeout: 180000, polling: 250 },
+        );
+        const value = await result.jsonValue();
+        if (typeof value === 'string') {
+          throw new Error(value);
+        }
+        if (cull === 'gpu') {
+          backends[`${series.key}#gpucull`] ??= {};
+          backends[`${series.key}#gpucull`][String(entities)] = value;
+        } else {
+          backends[series.key] ??= {};
+          backends[series.key][String(entities)] = value;
+        }
+        const drawn = value.renderCount;
+        const effective = value.gpuCullingActive;
+        console.log(
+          `rendered=${drawn}/${entities} gpucull=${effective} ` +
+            `frame median=${value.frameMsMedian.toFixed(3)}ms ` +
+            `cull=${value.cullMsMedian.toFixed(3)}ms ` +
+            `upload=${value.uploadMsMedian.toFixed(3)}ms ` +
+            `draw=${value.drawMsMedian.toFixed(3)}ms`,
+        );
+        if (cull === 'gpu' && !effective) {
+          console.log('  (警告: GPU カリングが有効になっていません)');
+        }
+        if (drawn === 0 && !CPU_ONLY) {
+          // 全スプライトがカリングで落ちているため比較になりません
+          console.log('  (警告: 描画対象が 0 体です。比較には使えません)');
+        }
+      } catch (err) {
+        console.log('FAILED');
+        failures.push({ series: series.key, cull, entities, error: String(err) });
       }
-    } catch (err) {
-      console.log('FAILED');
-      failures.push({ series: series.key, entities, error: String(err) });
+      await page.close();
     }
-    await page.close();
   }
 }
 
@@ -198,9 +218,9 @@ function checkRequirement2(data) {
   const rows = [];
   for (const entities of args.entities) {
     const k = String(entities);
-    const g = data.webgpu[k];
-    const l = data.webgl2[k];
-    const c = data.cpu[k];
+    const g = data.webgpu?.[k];
+    const l = data.webgl2?.[k];
+    const c = data.cpu?.[k];
     if (!g || !l || !c) continue;
     rows.push({
       entities: Number(entities),
@@ -218,6 +238,35 @@ function checkRequirement2(data) {
   return rows;
 }
 
+/** CPU カリングと GPU カリングの A/B（P-03 の効果測定）。 */
+function checkGpuCulling(data) {
+  const rows = [];
+  for (const series of ['webgpu', 'webgl2']) {
+    for (const entities of args.entities) {
+      const k = String(entities);
+      const cpuMode = data[series]?.[k];
+      const gpuMode = data[`${series}#gpucull`]?.[k];
+      if (!cpuMode || !gpuMode) continue;
+      rows.push({
+        series,
+        entities: Number(entities),
+        cpuCullMs: cpuMode.cullMsMedian,
+        gpuCullMs: gpuMode.cullMsMedian,
+        cpuFrameMs: cpuMode.frameMsMedian,
+        gpuFrameMs: gpuMode.frameMsMedian,
+        // GPU カリングでは renderCount が総数のまま（描画は GPU が落ちます）
+        cpuRendered: cpuMode.renderCount,
+        gpuRendered: gpuMode.renderCount,
+        speedup:
+          gpuMode.frameMsMedian > 0
+            ? Number((cpuMode.frameMsMedian / gpuMode.frameMsMedian).toFixed(3))
+            : null,
+      });
+    }
+  }
+  return rows;
+}
+
 const payload = {
   generatedAt: new Date().toISOString(),
   note: 'backends は Phase 8 P-01/P-05 の 3 系統比較。steering は従来の実測値。',
@@ -225,6 +274,7 @@ const payload = {
   warmup: args.warmup,
   backends,
   requirement2: checkRequirement2(backends),
+  gpuCulling: checkGpuCulling(backends),
   failures,
 };
 
@@ -253,6 +303,18 @@ for (const row of payload.requirement2) {
     `    draw : webgpu=${row.webgpuDrawMs.toFixed(3)} webgl2=${row.webgl2DrawMs.toFixed(3)} ` +
       `cpu=${row.cpuDrawMs.toFixed(3)} -> ${row.drawOk ? 'OK' : 'NG'}`,
   );
+}
+if (payload.gpuCulling.length > 0) {
+  console.log('');
+  console.log('=== GPU カリング (P-03) _CPU 詰め替えとの A/B ===');
+  for (const row of payload.gpuCulling) {
+    console.log(
+      `  ${row.series} ${String(row.entities).padStart(7)} 体: ` +
+        `cull ${row.cpuCullMs.toFixed(3)} -> ${row.gpuCullMs.toFixed(3)}ms, ` +
+        `frame ${row.cpuFrameMs.toFixed(3)} -> ${row.gpuFrameMs.toFixed(3)}ms ` +
+        `(${row.speedup}x)`,
+    );
+  }
 }
 if (failures.length > 0) {
   console.log('');

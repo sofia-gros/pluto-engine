@@ -50,9 +50,12 @@ struct Uniforms {
   sdfThreshold : f32,
   // 輪郭をぼかす幅
   sdfSmoothing : f32,
-  // f32 の並びを 16 バイト境界に合わせるためのパディング
+  // GPU カリングの有効フラグ (0 / 1)
+  gpuCull : f32,
+  // 4 バイト境界に合わせるためのパディング
   pad0 : f32,
-  pad1 : f32,
+  // GPU カリングの可視矩形 (minX, minY, maxX, maxY)
+  cullRect : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms : Uniforms;
@@ -95,6 +98,28 @@ fn vs_main(input : VertexInput) -> VertexOutput {
   let s = sin(input.iShape.x);
   let rotated = vec2<f32>(local.x * c - local.y * s, local.x * s + local.y * c);
   let world = vec2<f32>(rotated.x * input.iFlags.y, rotated.y) + input.iTransform.xy;
+
+  // GPU カリング（Phase 8 P-03）。
+  // 矩形外のクワッドはクリップ空間の外 (z = 2) へ退避させ縮退三角形にし、
+  // ラスタライザに破棄させます。これにより CPU 側の SoA の詰め替え
+  // （partitionVisible）が不要になります。
+  if (uniforms.gpuCull > 0.5) {
+    let ax = abs(c) * displaySize.x + abs(s) * displaySize.y;
+    let ay = abs(s) * displaySize.x + abs(c) * displaySize.y;
+    let hw = ax * 0.5;
+    let hh = ay * 0.5;
+    if (input.iTransform.x + hw < uniforms.cullRect.x
+      || input.iTransform.x - hw > uniforms.cullRect.z
+      || input.iTransform.y + hh < uniforms.cullRect.y
+      || input.iTransform.y - hh > uniforms.cullRect.w) {
+      out.clipPosition = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+      out.uv = vec2<f32>(0.0, 0.0);
+      out.layer = 0.0;
+      out.tint = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+      out.spriteFlags = 0.0;
+      return out;
+    }
+  }
 
   out.clipPosition = uniforms.projectionMatrix * vec4<f32>(world, 0.0, 1.0);
   out.uv = input.vertexUV * input.iUv.zw + input.iUv.xy;
@@ -227,9 +252,10 @@ export class WebGPUDevice implements GraphicsDevice {
     }
     const device = this.device;
 
-    // projectionMatrix (64 バイト) + sdfThreshold / sdfSmoothing / pad
+    // projectionMatrix (64) + sdfThreshold / sdfSmoothing / gpuCull / pad (16)
+    // + cullRect (16) = 96 バイト
     this.uniformBuffer = device.createBuffer({
-      size: 80,
+      size: 96,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     // SDF の既定値。uniform を一度も書かないと未定義値になりグリフが消えます。
@@ -561,6 +587,22 @@ export class WebGPUDevice implements GraphicsDevice {
       matrix.byteOffset,
       64,
     );
+  }
+
+  /**
+   * GPU カリングの可視矩形を設定します（Phase 8 P-03）。
+   *
+   * 有効にすると頂点シェーダが矩形外のクワッドを縮退三角形にして破棄します。
+   * uniform バッファは 96 バイト（offset 80 が gpuCull、84 が cullRect）です。
+   */
+  setCullRect(rect: Float32Array, enabled: boolean): void {
+    const dev = this.device;
+    if (!dev || !this.uniformBuffer) return;
+    // gpuCull (f32) を 76 へ
+    const flag = new Float32Array([enabled ? 1 : 0]);
+    dev.queue.writeBuffer(this.uniformBuffer, 76, flag.buffer as ArrayBuffer, 0, 4);
+    // cullRect (vec4<f32>) を 80 へ
+    dev.queue.writeBuffer(this.uniformBuffer, 80, rect.buffer as ArrayBuffer, rect.byteOffset, 16);
   }
 
   createPipeline(vertSource: string, fragSource: string): PipelineInfo {
