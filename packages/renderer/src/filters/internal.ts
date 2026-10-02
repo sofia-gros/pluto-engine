@@ -437,11 +437,250 @@ function blur(): BlurFilter {
   return filter;
 }
 
+/**
+ * `Bloom` — ブルーム（高輝度部分のぼかし）。
+ *
+ * 2パス（水平・垂直）で実装します。
+ */
+export interface BloomFilter extends FilterDef {
+  setStrength(px: number): void;
+  setThreshold(v: number): void;
+  readonly strength: number;
+  setViewportSize(w: number, h: number): void;
+}
+
+function bloom(): BloomFilter {
+  const uniforms = [new Float32Array(32), new Float32Array(32)];
+  let strength = 4;
+  let threshold = 0.5;
+  let width = 1;
+  let height = 1;
+
+  function writeWeights(): void {
+    const sigma = Math.max(0.0001, strength / 2);
+    const half = (BLUR_TAPS - 1) >> 1;
+    for (let p = 0; p < 2; p++) {
+      const u = uniforms[p];
+      u[0] = p === 0 ? 1 / width : 0;
+      u[1] = p === 0 ? 0 : 1 / height;
+      u[2] = strength;
+      u[3] = threshold;
+      u[9] = p === 0 ? 1 : 0; // params[2].y
+      for (let t = 0; t < BLUR_TAPS; t++) {
+        const x = t - half;
+        u[4 + t] = Math.exp(-(x * x) / (2 * sigma * sigma));
+      }
+    }
+  }
+
+  const wgsl = fragmentWGSL(`
+  let step = u.params[0].xy;
+  let th = u.params[0].w;
+  let isPass0 = u.params[2].y > 0.5;
+
+  var c = textureSampleLevel(srcTex, samp, in.uv, 0.0);
+  if (isPass0) {
+    if (dot(c.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { c = vec4<f32>(0.0); }
+  }
+  c = c * u.params[1].x;
+
+  var s1 = textureSampleLevel(srcTex, samp, in.uv + step, 0.0);
+  var s2 = textureSampleLevel(srcTex, samp, in.uv - step, 0.0);
+  if (isPass0) {
+    if (dot(s1.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s1 = vec4<f32>(0.0); }
+    if (dot(s2.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s2 = vec4<f32>(0.0); }
+  }
+  c += (s1 + s2) * u.params[1].y;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 2.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 2.0, 0.0);
+  if (isPass0) {
+    if (dot(s1.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s1 = vec4<f32>(0.0); }
+    if (dot(s2.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s2 = vec4<f32>(0.0); }
+  }
+  c += (s1 + s2) * u.params[1].z;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 3.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 3.0, 0.0);
+  if (isPass0) {
+    if (dot(s1.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s1 = vec4<f32>(0.0); }
+    if (dot(s2.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s2 = vec4<f32>(0.0); }
+  }
+  c += (s1 + s2) * u.params[1].w;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 4.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 4.0, 0.0);
+  if (isPass0) {
+    if (dot(s1.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s1 = vec4<f32>(0.0); }
+    if (dot(s2.rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) < th) { s2 = vec4<f32>(0.0); }
+  }
+  c += (s1 + s2) * u.params[2].x;
+
+  return c;
+`);
+
+  const filter: BloomFilter = {
+    key: 'Bloom',
+    name: 'Bloom',
+    passCount: 2,
+    webgpuOnly: false,
+    uniform: (i: number): Float32Array => uniforms[i] ?? uniforms[0],
+    wgsl: (): string => wgsl,
+    passSamplesSource: (): boolean => true,
+    setStrength: (px: number): void => {
+      strength = Math.max(0, px);
+      writeWeights();
+    },
+    setThreshold: (v: number): void => {
+      threshold = Math.max(0, v);
+      writeWeights();
+    },
+    get strength(): number {
+      return strength;
+    },
+    setViewportSize: (w: number, h: number): void => {
+      if (w === width && h === height) return;
+      width = w;
+      height = h;
+      writeWeights();
+    },
+  };
+
+  writeWeights();
+  return filter;
+}
+
+/**
+ * `Glow` — グロー（アルファチャンネルの抽出とぼかし）。
+ *
+ * 2パス（水平・垂直）で実装します。
+ */
+export interface GlowFilter extends FilterDef {
+  setStrength(px: number): void;
+  setColor(r: number, g: number, b: number, a: number): void;
+  readonly strength: number;
+  setViewportSize(w: number, h: number): void;
+}
+
+function glow(): GlowFilter {
+  const uniforms = [new Float32Array(32), new Float32Array(32)];
+  let strength = 4;
+  let colorR = 1;
+  let colorG = 1;
+  let colorB = 1;
+  let colorA = 1;
+  let width = 1;
+  let height = 1;
+
+  function writeWeights(): void {
+    const sigma = Math.max(0.0001, strength / 2);
+    const half = (BLUR_TAPS - 1) >> 1;
+    for (let p = 0; p < 2; p++) {
+      const u = uniforms[p];
+      u[0] = p === 0 ? 1 / width : 0;
+      u[1] = p === 0 ? 0 : 1 / height;
+      u[2] = strength;
+      u[3] = 0; // unused
+      u[9] = p === 0 ? 1 : 0; // params[2].y
+      u[12] = colorR; // params[3].x
+      u[13] = colorG; // params[3].y
+      u[14] = colorB; // params[3].z
+      u[15] = colorA; // params[3].w
+      
+      for (let t = 0; t < BLUR_TAPS; t++) {
+        const x = t - half;
+        u[4 + t] = Math.exp(-(x * x) / (2 * sigma * sigma));
+      }
+    }
+  }
+
+  const wgsl = fragmentWGSL(`
+  let step = u.params[0].xy;
+  let isPass0 = u.params[2].y > 0.5;
+  let color = u.params[3];
+
+  var c = textureSampleLevel(srcTex, samp, in.uv, 0.0);
+  if (isPass0) {
+    c = color * c.a;
+  }
+  c = c * u.params[1].x;
+
+  var s1 = textureSampleLevel(srcTex, samp, in.uv + step, 0.0);
+  var s2 = textureSampleLevel(srcTex, samp, in.uv - step, 0.0);
+  if (isPass0) {
+    s1 = color * s1.a;
+    s2 = color * s2.a;
+  }
+  c += (s1 + s2) * u.params[1].y;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 2.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 2.0, 0.0);
+  if (isPass0) {
+    s1 = color * s1.a;
+    s2 = color * s2.a;
+  }
+  c += (s1 + s2) * u.params[1].z;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 3.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 3.0, 0.0);
+  if (isPass0) {
+    s1 = color * s1.a;
+    s2 = color * s2.a;
+  }
+  c += (s1 + s2) * u.params[1].w;
+
+  s1 = textureSampleLevel(srcTex, samp, in.uv + step * 4.0, 0.0);
+  s2 = textureSampleLevel(srcTex, samp, in.uv - step * 4.0, 0.0);
+  if (isPass0) {
+    s1 = color * s1.a;
+    s2 = color * s2.a;
+  }
+  c += (s1 + s2) * u.params[2].x;
+
+  return c;
+`);
+
+  const filter: GlowFilter = {
+    key: 'Glow',
+    name: 'Glow',
+    passCount: 2,
+    webgpuOnly: false,
+    uniform: (i: number): Float32Array => uniforms[i] ?? uniforms[0],
+    wgsl: (): string => wgsl,
+    passSamplesSource: (): boolean => true,
+    setStrength: (px: number): void => {
+      strength = Math.max(0, px);
+      writeWeights();
+    },
+    setColor: (r: number, g: number, b: number, a: number): void => {
+      colorR = r;
+      colorG = g;
+      colorB = b;
+      colorA = a;
+      writeWeights();
+    },
+    get strength(): number {
+      return strength;
+    },
+    setViewportSize: (w: number, h: number): void => {
+      if (w === width && h === height) return;
+      width = w;
+      height = h;
+      writeWeights();
+    },
+  };
+
+  writeWeights();
+  return filter;
+}
+
 export const filters = {
   internal: {
     colorMatrix,
     pixelate,
     vignette,
     blur,
+    bloom,
+    glow,
   },
 } as const;
