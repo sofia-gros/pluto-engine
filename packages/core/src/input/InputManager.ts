@@ -427,7 +427,17 @@ export class InputManager {
     this._previousKeys.clear();
     for (const key of this._currentKeys) this._previousKeys.add(key);
     this._currentKeys.clear();
-    for (const key of this._rawKeys) this._currentKeys.add(key);
+    for (const key of this._rawKeys) {
+      if (!this._previousKeys.has(key)) {
+        this._timeDownMap.set(key, this._currentTimeMs);
+      }
+      this._currentKeys.add(key);
+    }
+    for (const key of this._previousKeys) {
+      if (!this._currentKeys.has(key)) {
+        this._timeUpMap.set(key, this._currentTimeMs);
+      }
+    }
 
     // Pointer: 座標変換はフレーム内で一度だけ行う
     this.prevPointerX = this.pointerX;
@@ -562,6 +572,21 @@ export class InputManager {
   }
   public isKeyJustReleased(code: string): boolean {
     return !this._currentKeys.has(code) && this._previousKeys.has(code);
+  }
+
+  public getKeyTimeDown(code: string): number {
+    return this._timeDownMap.get(code) ?? 0;
+  }
+
+  public getKeyTimeUp(code: string): number {
+    return this._timeUpMap.get(code) ?? 0;
+  }
+
+  public getKeyDuration(code: string): number {
+    if (this._currentKeys.has(code)) {
+      return this._currentTimeMs - (this._timeDownMap.get(code) ?? this._currentTimeMs);
+    }
+    return 0;
   }
 
   // ============================================================

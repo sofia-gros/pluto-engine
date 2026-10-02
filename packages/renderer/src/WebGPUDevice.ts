@@ -374,8 +374,7 @@ export class WebGPUDevice implements GraphicsDevice {
     const requiredSlots = INSTANCE_BUFFERS.filter((b) => b.eager).length + 1;
     if (this.limits.maxVertexBuffers < requiredSlots) {
       console.warn(
-        `[WebGPUDevice] maxVertexBuffers=${this.limits.maxVertexBuffers} < 必要数 ${requiredSlots}。` +
-          '描画が壊れる可能性があります。',
+        `[WebGPUDevice] maxVertexBuffers=${this.limits.maxVertexBuffers} < 必要数 ${requiredSlots}。描画が壊れる可能性があります。`,
       );
     }
 

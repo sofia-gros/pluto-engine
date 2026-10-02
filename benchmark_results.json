@@ -134,10 +134,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930794875177000,
-          1790930794875205600
-        ]
+        "timestampRaw": [1790930794875177000, 1790930794875205600]
       },
       "80000": {
         "requestedBackend": "webgpu",
@@ -176,10 +173,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930796300848000,
-          1790930796300946400
-        ]
+        "timestampRaw": [1790930796300848000, 1790930796300946400]
       },
       "307200": {
         "requestedBackend": "webgpu",
@@ -218,10 +212,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930799569993700,
-          1790930799570355200
-        ]
+        "timestampRaw": [1790930799569993700, 1790930799570355200]
       }
     },
     "webgl2": {
@@ -252,10 +243,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "webgl2",
@@ -284,10 +272,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "webgl2",
@@ -316,10 +301,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     },
     "cpu": {
@@ -360,10 +342,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "cpu",
@@ -402,10 +381,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "cpu",
@@ -444,10 +420,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     },
     "webgpu#gpucull": {
@@ -488,10 +461,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930800790132700,
-          1790930800790161400
-        ]
+        "timestampRaw": [1790930800790132700, 1790930800790161400]
       },
       "80000": {
         "requestedBackend": "webgpu",
@@ -530,10 +500,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930802079023000,
-          1790930802079120400
-        ]
+        "timestampRaw": [1790930802079023000, 1790930802079120400]
       },
       "307200": {
         "requestedBackend": "webgpu",
@@ -572,10 +539,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          1790930804193261600,
-          1790930804193622000
-        ]
+        "timestampRaw": [1790930804193261600, 1790930804193622000]
       }
     },
     "webgpu#computecull": {
@@ -616,10 +580,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 20000,
-        "timestampRaw": [
-          1790930805380558800,
-          1790930805380586500
-        ]
+        "timestampRaw": [1790930805380558800, 1790930805380586500]
       },
       "80000": {
         "requestedBackend": "webgpu",
@@ -658,10 +619,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 80000,
-        "timestampRaw": [
-          1790930806673222700,
-          1790930806673321000
-        ]
+        "timestampRaw": [1790930806673222700, 1790930806673321000]
       },
       "307200": {
         "requestedBackend": "webgpu",
@@ -700,10 +658,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 307200,
-        "timestampRaw": [
-          1790930808824130600,
-          1790930808824494000
-        ]
+        "timestampRaw": [1790930808824130600, 1790930808824494000]
       }
     },
     "webgl2#gpucull": {
@@ -734,10 +689,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "webgl2",
@@ -766,10 +718,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "webgl2",
@@ -798,10 +747,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     },
     "webgl2#computecull": {
@@ -832,10 +778,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "webgl2",
@@ -864,10 +807,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "webgl2",
@@ -896,10 +836,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     },
     "cpu#gpucull": {
@@ -940,10 +877,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "cpu",
@@ -982,10 +916,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "cpu",
@@ -1024,10 +955,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": -1,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     },
     "cpu#computecull": {
@@ -1068,10 +996,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 0,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "80000": {
         "requestedBackend": "cpu",
@@ -1110,10 +1035,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 0,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       },
       "307200": {
         "requestedBackend": "cpu",
@@ -1152,10 +1074,7 @@
         "timestampSupported": true,
         "timestampError": "",
         "visibleDrawn": 0,
-        "timestampRaw": [
-          -1,
-          -1
-        ]
+        "timestampRaw": [-1, -1]
       }
     }
   },

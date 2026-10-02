@@ -462,7 +462,7 @@ export class Scene {
      *
      * 返り値は {@link Text} と同じ arena 上のオブジェクトです。
      */
-    bitmapText: (x = 0, y = 0, text = '', font: ParsedBitmapFont, pageKey?: string) => {
+    bitmapText: (x: number, y: number, text: string, font: ParsedBitmapFont, pageKey?: string) => {
       const t = new Text(
         x,
         y,
@@ -788,8 +788,8 @@ export class Scene {
     // dt を渡すことで Pointer の移動速度 (velocity) を正しく算出できます。
     this.input.update(dt);
     const cam = this.cameras.main;
-    const viewW = this.sys?.scale?.gameSize?.width ?? 0;
-    const viewH = this.sys?.scale?.gameSize?.height ?? 0;
+    const viewW = this.engine?.scale?.gameSize?.width ?? 0;
+    const viewH = this.engine?.scale?.gameSize?.height ?? 0;
     const z = cam.zoom !== 0 ? cam.zoom : 1;
     this.input.worldPointerX = cam.actualX + (this.input.pointerX - viewW * 0.5) / z;
     this.input.worldPointerY = cam.actualY + (this.input.pointerY - viewH * 0.5) / z;
@@ -797,14 +797,14 @@ export class Scene {
       // ループの dt は秒ですが、Phaser 互換の `duration` / `delay` はミリ秒です。
       // 変換をこの境界 1 か所に閉じることで、TweenManager 側は ms 前提で
       // 書き続けられます (Phaser から移植したコードがそのまま動くようにするため)。
-      this._tweens!.update(dt * 1000);
+      this._tweens?.update(dt * 1000);
     }
-    if ((active & Subsystem.Anims) !== 0) this._anim!.update(dt);
-    if ((active & Subsystem.Particles) !== 0) this._particles!.update(dt);
-    if ((active & Subsystem.Sound) !== 0) this._sound!.update();
+    if ((active & Subsystem.Anims) !== 0) this._anim?.update(dt);
+    if ((active & Subsystem.Particles) !== 0) this._particles?.update(dt);
+    if ((active & Subsystem.Sound) !== 0) this._sound?.update();
     if ((active & Subsystem.Physics) !== 0) {
-      this._physics!.update(dt);
-      this._physics!.collide();
+      this._physics?.update(dt);
+      this._physics?.collide();
     }
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {

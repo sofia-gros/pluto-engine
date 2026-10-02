@@ -215,7 +215,7 @@ export class TextureManager {
   // ============================================================
 
   public remove(key: string): boolean {
-    if (this.device && this.device.getTexture(key)) {
+    if (this.device?.getTexture(key)) {
       // 本来は VRAM 解放が必要ですが Phase 8 待ちです
       console.warn(`TextureManager: GPU テクスチャ ${key} の削除は未実装です`);
     }
@@ -233,9 +233,9 @@ export class TextureManager {
   public getFrame(
     textureKey: string,
     frameKey?: number | string,
-  ): import('@pluto-engine/renderer').FrameData | null {
-    const tex = this.get(textureKey);
-    if (!tex) return null;
+  ): import('@pluto-engine/renderer').TextureFrame | null {
+    const tex = this.get(textureKey) as (import('@pluto-engine/renderer').TextureAsset & { frameNames?: Record<string, number> });
+    if (!tex || !tex.frames) return null;
     if (typeof frameKey === 'string') {
       const idx = tex.frameNames?.[frameKey];
       return idx !== undefined ? tex.frames[idx] : null;

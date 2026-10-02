@@ -1,5 +1,5 @@
-import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { Group } from '../arena/Group';
+import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import type { Plugin } from '../scene/Plugin';
 import type { Scene } from '../scene/Scene';
 

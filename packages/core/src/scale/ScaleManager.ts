@@ -28,7 +28,7 @@ export class ScaleManager {
   public readonly gameSize = { width: 0, height: 0 };
   public readonly displaySize = { width: 0, height: 0 };
   public readonly parentSize = { width: 0, height: 0 };
-  public zoom: number = 1;
+  public zoom = 1;
 
   private canvas: HTMLCanvasElement | null = null;
   private resizeListener: () => void;
@@ -104,8 +104,8 @@ export class ScaleManager {
     this.gameSize.height = this.height;
     this.parentSize.width = window.innerWidth;
     this.parentSize.height = window.innerHeight;
-    this.displaySize.width = parseFloat(this.canvas.style.width) || this.width;
-    this.displaySize.height = parseFloat(this.canvas.style.height) || this.height;
+    this.displaySize.width = Number.parseFloat(this.canvas.style.width) || this.width;
+    this.displaySize.height = Number.parseFloat(this.canvas.style.height) || this.height;
     // mode=FITの場合の表示倍率などをzoomとする。通常は1
     this.zoom = this.displaySize.width / this.width;
   }

@@ -339,8 +339,8 @@ export class PlutoEngine {
     this.device.clear(0.01, 0.02, 0.05, 1.0);
     this.device.bindShaders();
 
-    const w = this.canvasElement!.width;
-    const h = this.canvasElement!.height;
+    const w = this.canvasElement?.width ?? this.config.width ?? 800;
+    const h = this.canvasElement?.height ?? this.config.height ?? 600;
 
     // カメラごとに描画します。
     // SoA への GPU 転送は 1 回だけで済みます。増えるのは

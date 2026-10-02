@@ -10,13 +10,13 @@
  */
 
 import type { TextureAsset } from '@pluto-engine/renderer';
+import type { SoundManager } from '../sound/SoundManager';
 import { type ParsedAtlas, parseAtlasJson } from './AtlasParser';
 import {
   type ParsedBitmapFont,
   parseBitmapFontJson,
   parseBitmapFontText,
 } from './BitmapFontParser';
-import type { SoundManager } from '../sound/SoundManager';
 import type { TextureManager } from './TextureManager';
 
 /** 読み込みの種類。 */

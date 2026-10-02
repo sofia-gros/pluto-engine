@@ -99,13 +99,13 @@ export class SoundHandle {
   /** 再生中か */
   public get isPlaying(): boolean {
     const v = this._voice;
-    return v !== null && v.isPlaying;
+    return v?.isPlaying ?? false;
   }
 
   /** 一時停止中か */
   public get isPaused(): boolean {
     const v = this._voice;
-    return v !== null && v.paused;
+    return v?.paused ?? false;
   }
 
   /** 音量 0〜1 */
@@ -141,7 +141,7 @@ export class SoundHandle {
   /** ループ再生するか */
   public get loop(): boolean {
     const v = this._voice;
-    return v !== null && v.loop;
+    return v?.loop ?? false;
   }
   public set loop(val: boolean) {
     const v = this._voice;

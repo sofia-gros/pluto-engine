@@ -350,9 +350,7 @@ export class WebGL2Device implements GraphicsDevice {
     const bytes = this.textureWidth * this.textureHeight * 4 * this.maxLayers;
     const mb = (bytes / 1024 / 1024).toFixed(0);
     console.log(
-      `[WebGL2Device] texture array allocated: ` +
-        `${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers ` +
-        `(= ${mb} MB)`,
+      `[WebGL2Device] texture array allocated: ${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers (= ${mb} MB)`,
     );
     return true;
   }
@@ -370,10 +368,7 @@ export class WebGL2Device implements GraphicsDevice {
 
     if (!this.allocateTextureArray()) {
       throw new Error(
-        'Failed to allocate the texture array: ' +
-          `${this.maxLayers} layers could not be allocated ` +
-          `(contextLost=${this.contextLost}). ` +
-          'GPU memory is insufficient. Reduce the texture array size or layer count.',
+        `Failed to allocate the texture array: ${this.maxLayers} layers could not be allocated (contextLost=${this.contextLost}). GPU memory is insufficient. Reduce the texture array size or layer count.`,
       );
     }
 
@@ -880,13 +875,13 @@ export class WebGL2Device implements GraphicsDevice {
    */
   private _beginGpuTimer(): WebGLQuery | null {
     const gl = this.gl;
-    if (!gl || !this._tsqSupported || this.contextLost) return null;
+    if (!gl || !this._tsqSupported || this.contextLost || !this._tsqExt) return null;
     const slot = this._tsqReusable.pop();
     if (slot === undefined) return null;
     const query = this._tsqQueries[slot];
     if (!query) return null;
     const gl2 = gl as WebGL2RenderingContext;
-    gl2.beginQuery(this._tsqExt!.TIME_ELAPSED_EXT, query);
+    gl2.beginQuery(this._tsqExt.TIME_ELAPSED_EXT, query);
     this._tsqPending[slot] = true;
     this._tsqActive = slot;
     return query;
@@ -894,9 +889,9 @@ export class WebGL2Device implements GraphicsDevice {
 
   private _endGpuTimer(query: WebGLQuery | null): void {
     const gl = this.gl;
-    if (!gl || !query || this._tsqActive === -1) return;
+    if (!gl || !query || this._tsqActive === -1 || !this._tsqExt) return;
     const gl2 = gl as WebGL2RenderingContext;
-    gl2.endQuery(this._tsqExt!.TIME_ELAPSED_EXT);
+    gl2.endQuery(this._tsqExt.TIME_ELAPSED_EXT);
     this._tsqNext = (this._tsqActive + 1) % TSQ_RING;
     this._tsqActive = -1;
   }
