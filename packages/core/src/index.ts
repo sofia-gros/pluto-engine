@@ -19,6 +19,8 @@ export * from './events/DataRegistry';
 export * from './scale/ScaleManager';
 export * from './math/Math';
 export * from './math/Vector2';
+export * from './math/Raycaster';
+export * from './math/ExprParser';
 export * from './input/InputManager';
 export * from './time/TimeStepManager';
 export * from './time/TimerEvent';
