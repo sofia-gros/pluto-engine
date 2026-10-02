@@ -180,12 +180,11 @@ for (const series of SERIES) {
         }
         const drawn = value.renderCount;
         const effective = value.gpuCullingActive;
+        const gpu = value.gpuMsMedian;
         console.log(
           `rendered=${drawn}/${entities} gpucull=${effective} ` +
-            `frame median=${value.frameMsMedian.toFixed(3)}ms ` +
-            `cull=${value.cullMsMedian.toFixed(3)}ms ` +
-            `upload=${value.uploadMsMedian.toFixed(3)}ms ` +
-            `draw=${value.drawMsMedian.toFixed(3)}ms`,
+            `cpu frame=${value.frameMsMedian.toFixed(3)}ms cull=${value.cullMsMedian.toFixed(3)}ms ` +
+            `gpu=${gpu >= 0 ? gpu.toFixed(3) + 'ms' : 'n/a'}`,
         );
         if (cull === 'gpu' && !effective) {
           console.log('  (警告: GPU カリングが有効になっていません)');
@@ -254,12 +253,21 @@ function checkGpuCulling(data) {
         gpuCullMs: gpuMode.cullMsMedian,
         cpuFrameMs: cpuMode.frameMsMedian,
         gpuFrameMs: gpuMode.frameMsMedian,
-        // GPU カリングでは renderCount が総数のまま（描画は GPU が落ちます）
+        // GPU 実行時間 (timestamp query)。-1 は非対応 / 計測失敗。
+        cpuGpuMs: cpuMode.gpuMsMedian,
+        gpuGpuMs: gpuMode.gpuMsMedian,
+        gpuSamples: gpuMode.gpuSampleCount,
+        timestampSupported: gpuMode.timestampSupported,
         cpuRendered: cpuMode.renderCount,
         gpuRendered: gpuMode.renderCount,
-        speedup:
+        cpuSpeedup:
           gpuMode.frameMsMedian > 0
             ? Number((cpuMode.frameMsMedian / gpuMode.frameMsMedian).toFixed(3))
+            : null,
+        /** GPU 時間ベースの改善率。実速度の比較にはこちらを使う。 */
+        gpuTimeRatio:
+          cpuMode.gpuMsMedian > 0 && gpuMode.gpuMsMedian > 0
+            ? Number((cpuMode.gpuMsMedian / gpuMode.gpuMsMedian).toFixed(3))
             : null,
       });
     }
@@ -310,10 +318,21 @@ if (payload.gpuCulling.length > 0) {
   for (const row of payload.gpuCulling) {
     console.log(
       `  ${row.series} ${String(row.entities).padStart(7)} 体: ` +
-        `cull ${row.cpuCullMs.toFixed(3)} -> ${row.gpuCullMs.toFixed(3)}ms, ` +
-        `frame ${row.cpuFrameMs.toFixed(3)} -> ${row.gpuFrameMs.toFixed(3)}ms ` +
-        `(${row.speedup}x)`,
+        `CPU cull ${row.cpuCullMs.toFixed(3)} -> ${row.gpuCullMs.toFixed(3)}ms, ` +
+        `CPU frame ${row.cpuFrameMs.toFixed(3)} -> ${row.gpuFrameMs.toFixed(3)}ms ` +
+        `(${row.cpuSpeedup}x)`,
     );
+    if (row.gpuTimeRatio === null) {
+      console.log(
+        `    GPU time: 計測不可 (timestampSupported=${row.timestampSupported}, ` +
+          `サンプル=${row.gpuSamples})`,
+      );
+    } else {
+      console.log(
+        `    GPU time: ${row.cpuGpuMs.toFixed(3)} -> ${row.gpuGpuMs.toFixed(3)}ms ` +
+          `(実速度 ${row.gpuTimeRatio}x, サンプル ${row.gpuSamples})`,
+      );
+    }
   }
 }
 if (failures.length > 0) {

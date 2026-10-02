@@ -499,7 +499,7 @@ Phase 7 は工作量が多いため、次の 4 分割で進めました。
 | # | タスク | 状態 |
 | --- | --- | --- |
 | P-01 | WebGPU bench harness | **完了**（`apps/demo/backend-bench/`） |
-| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | 未着手 |
+| P-02 | WebGPU compute（culling / Morton sort / indirect draw） | **未着手**（GPU 時間計測の土台のみ / 9.3 参照） |
 | P-03 | WebGL2 culling（byteOffset による baseInstance） | **一部完了**（頂点シェーダ GPU カリング / 9.2 参照） |
 | P-04 | Filter を WebGPU のみに限定 | 未着手 |
 | P-05 | benchmark に WebGPU / WebGL2 / CPU の 3 系統を記録 | **完了**（`scripts/gpu-benchmark.mjs`） |
@@ -605,6 +605,56 @@ GPU timestamp query で GPU 実行時間を測る必要があります
 | --- | --- |
 | `SceneManager.add` | エンジン設定の `maxInstances` がシーンに伝っておらず、**GPU バッファだけエンジン設定のサイズで確保され、アリーナはシーン既定値 (100000) のまま**でした。`?entities=300000` を指定しても 100000 体しか確保できず、`allocate()` が黙って -1 を返していました。ベンチが「300000 体指定 → rendered=100000/300000」と表示した原因是これです。アリーナ拡張は未実装のため、小さい方に丸める clamp にしました |
 | `PlutoEngine` | `gpuCulling: true` でも実際の経路が走っているかを外から判別できませんでした（`setCullRect` 未実装のバックエンド、複数カメラ）。`gpuCullingActive` テレメトリを追加しています |
+
+
+### 9.3 P-02 の現状 — GPU 時間計測の土台（未完）
+
+P-02 本体（WebGPU compute によるカリング / Morton sort / indirect draw）は
+**未着手**です。着手前に「P-03 で提示した GPU 側の副作用を測る」
+必要があるため、先に GPU timestamp query を組み込みました。
+
+#### 9.3.1 実装済み
+
+| 項目 | 内容 |
+| --- | --- |
+| feature 要求 | `adapter.features.has('timestamp-query')` を確認して `requestDevice` に渡す |
+| 描画計測 | 描画パスに `timestampWrites`（begin/end の 2 エントリ）を付与 |
+| 解決 | `resolveQuerySet` → `copyBufferToBuffer` → `mapAsync` で `BigUint64Array` として読み出し |
+| 公開 API | `GraphicsDevice.resolveGpuTimeMs()`（optional）と `isTimestampQuerySupported()` |
+| 診断 | ベンチが `timestampSupported` と `gpuSampleCount` を記録 |
+| 既定 | **無効**。`enableTimestampQuery()` を明示的に呼ばないと入りません |
+
+#### 9.3.2 なぜ既定無効か
+
+**読み出しが値を返しません。** 実測（300000 体 / WebGPU）:
+
+```
+timestampSupported = true    // feature は要求できる
+gpuSampleCount     = 0       // しかし実測値は 1 フレームも取れない
+```
+
+そのため `resolveGpuTimeMs()` は毎回 -1 を返し、ベンチの `gpuMsMedian` も -1 です。
+
+**切り分け済み**: feature 不支持ではありません（`timestampSupported=true`）。
+`mapAsync` が解決しないか例外している側です。候補は次の 3 つです。
+
+1. `copyBufferToBuffer` の先がまだ map 中で、submit が validation error になる
+2. `mapAsync` がキュー完了を待つため、毎フレーム submit すると解決が間に合わない
+3. `BigUint64Array` への解釈または `raw[0]/raw[1]` の順序が想定と違う
+
+まだ 1〜3 の切り分けはしていません。**未検証の経路を既定で描画に載せるのは
+リグレッションの元になる**ため,opt-in にしています。
+
+#### 9.3.3 次の作業
+
+- `enableTimestampQuery()` を有効にした状態で、`mapAsync` が reject しているかを
+  `catch` で可視化（今は `_lastGpuMs = -1` に潰している）
+- `copyBufferToBuffer` を map 中にも発行しないよう、2 フレームalternating にする
+- 値が出たら 9.2.3 の留保を解除し、CPU カリングと GPU カリングを
+  **GPU 時間ベースで**比較し直す
+
+それまでは **P-03 の「40x」は CPU コストの除去率であって性能比ではない**
+という留保を維持します。
 
 ### 9.2 RenderGraph / Filter
 

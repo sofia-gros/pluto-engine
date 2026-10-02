@@ -177,6 +177,21 @@ export interface GraphicsDevice {
   setCullRect?(rect: Float32Array, enabled: boolean): void;
 
   /**
+   * 直近の GPU 実行時間を返します (Phase 8 P-02)。
+   *
+   * ドローコール発行は非同期なので、CPU 時間だけでは
+   * 「カリングを GPU に移した副作用（頂点処理の増）」を観測できません。
+   * WebGPU の timestamp query で実測します。
+   *
+   * 非対応・未計測のときは -1 を返します（optional なので
+   * 未実装のバックエンドではこのメソッド自体がありません）。
+   *
+   * **読み出しは非同期**です。実測できるフレームまで -1 が返るため、
+   * ベンチは連続してフレームを回して中央値を取る必要があります。
+   */
+  resolveGpuTimeMs?(): number;
+
+  /**
    * シェーダーパイプラインを作成します。
    */
   createPipeline(vertSource: string, fragSource: string): PipelineInfo;

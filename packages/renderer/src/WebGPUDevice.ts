@@ -220,6 +220,26 @@ export class WebGPUDevice implements GraphicsDevice {
     // 頂点バッファ数の上限を実際に確認します。
     // 既定 8 のうち、共有 Quad 1 + インスタンス 4 (+ 拡張 1) を使います。
     this.limits = adapter.limits;
+
+    /**
+     * GPU 実行時間を測るための timestamp query を要求します (Phase 8 P-02)。
+     *
+     * ドローコール発行は非同期なので、CPU 時間だけでは
+     * 「カリングを GPU に移した副作用（頂点処理の増）」が見えません。
+     * `gpuMs` で実測できることが P-02 の判断材料です。
+     *
+     * **ただし読み出し（resolveQuerySet → copyBufferToBuffer → mapAsync）が
+     * まだ値を返しません**（実測: timestampSupported=true / サンプル 0）。
+     * 未完のため **`timestampQueryEnabled` で明示的に有効化しない限り
+     * 無効**にします。描画経路に未検証の処理を入れないためです。
+     * 実装状況と切り分け結果は IMPACT_SCOPE.md の 9.3 を参照してください。
+     */
+    if (this._timestampQueryEnabled) {
+      this._timestampSupported = adapter.features.has('timestamp-query');
+    } else {
+      this._timestampSupported = false;
+    }
+    const requiredFeatures = this._timestampSupported ? (['timestamp-query'] as const) : [];
     const requiredSlots = INSTANCE_BUFFERS.filter((b) => b.eager).length + 1;
     if (this.limits.maxVertexBuffers < requiredSlots) {
       console.warn(
@@ -228,7 +248,10 @@ export class WebGPUDevice implements GraphicsDevice {
       );
     }
 
-    this.device = await adapter.requestDevice();
+    this.device = await adapter.requestDevice({
+      requiredFeatures: [...requiredFeatures] as unknown as GPUFeatureName[],
+    });
+    this._setupTimestampQuery();
 
     const context = canvas.getContext('webgpu') as GPUCanvasContext | null;
     if (!context) {
@@ -541,13 +564,78 @@ export class WebGPUDevice implements GraphicsDevice {
     return false;
   }
 
+  /**
+   * timestamp query のリソースを用意します。
+   *
+   * バッファは `MAP_READ | COPY_DST`、クエリセットは 2 エントリです。
+   * 読み出しは {@link resolveGpuTimeMs} から明示的に行います。
+   */
+  private _setupTimestampQuery(): void {
+    const dev = this.device;
+    if (!dev || !this._timestampSupported) return;
+    try {
+      this._timestampQuerySet = dev.createQuerySet({ type: 'timestamp', count: 2 });
+      this._timestampResolve = dev.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+      });
+      this._timestampReadback = dev.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+    } catch {
+      // 環境によっては query set の生成に失敗します。描画は継続します。
+      this._timestampSupported = false;
+      this._timestampQuerySet = null;
+      this._timestampResolve = null;
+      this._timestampReadback = null;
+    }
+  }
+
+  private _timestampSupported = false;
+  /**
+   * timestamp query を有効にするかどうか。**既定は false**。
+   *
+   * 読み出しが値を返さないため、検証前の経路を既定で描画に
+   * 載せないようにします。有効化は {@link enableTimestampQuery} 経由です。
+   */
+  private _timestampQueryEnabled = false;
+
+  /**
+   * timestamp query を有効化します（検証用）。
+   *
+   * 有効化は `init()` より前に呼ぶ必要があります
+   * （device 取得時に feature を要求する必要があるためです）。
+   */
+  public enableTimestampQuery(): void {
+    this._timestampQueryEnabled = true;
+  }
+  private _timestampQuerySet: GPUQuerySet | null = null;
+  private _timestampResolve: GPUBuffer | null = null;
+  private _timestampReadback: GPUBuffer | null = null;
+  /** 直近の resolve 済み GPU 時間 (ms)。未計測なら -1。 */
+  private _lastGpuMs = -1;
+  /** mapAsync  が進行中か。二重マップを避けるために使います。 */
+  private _timestampMapping = false;
+  /** resolve は済んでいて、まだマップしていないデータがあるか。 */
+  private _timestampPendingMap = false;
+
   drawInstanced(activeCount: number, baseInstance = 0): void {
     if (!this.device || !this.context || !this.pipeline || !this.bindGroup) return;
     if (!this.quadBuffer) return;
 
     const encoder = this.device.createCommandEncoder();
     const view = this.context.getCurrentTexture().createView();
-    const pass = encoder.beginRenderPass({
+
+    // timestamp query が使えるなら描画の前後を計測します。
+    // 生の timestamp はローカルの量子化刻みなので、
+    // period を Unknown から 1e-6 秒と仮定して ns として扱います。
+    const useTs =
+      this._timestampSupported &&
+      this._timestampQuerySet !== null &&
+      this._timestampResolve !== null &&
+      !this._timestampMapping;
+    const passDesc: GPURenderPassDescriptor = {
       colorAttachments: [
         {
           view,
@@ -556,7 +644,19 @@ export class WebGPUDevice implements GraphicsDevice {
           storeOp: 'store',
         },
       ],
-    });
+    };
+    if (useTs) {
+      const qs = this._timestampQuerySet;
+      const resolve = this._timestampResolve;
+      if (qs && resolve) {
+        passDesc.timestampWrites = {
+          querySet: qs,
+          beginningOfPassWriteIndex: 0,
+          endOfPassWriteIndex: 1,
+        };
+      }
+    }
+    const pass = encoder.beginRenderPass(passDesc);
 
     pass.setPipeline(this.pipeline);
     pass.setBindGroup(0, this.bindGroup);
@@ -574,7 +674,65 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.draw(4, activeCount, 0, 0);
     pass.end();
 
+    if (useTs) {
+      const qs = this._timestampQuerySet;
+      const resolve = this._timestampResolve;
+      const readback = this._timestampReadback;
+      if (qs && resolve && readback) {
+        encoder.resolveQuerySet(qs, 0, 2, resolve, 0);
+        encoder.copyBufferToBuffer(resolve, 0, readback, 0, 16);
+        this._timestampPendingMap = true;
+      }
+    }
+
     this.device.queue.submit([encoder.finish()]);
+  }
+
+  /**
+   * 直近の GPU 実行時間を返します (ms)。
+   *
+   * 非同期の map 読み出しなので、**実測できる帧まで -1 を返します**。
+   * ベンチは連続してフレームを回して中央値を取ってください。
+   *
+   * @returns GPU 時間 (ms)。非対応・未計測なら -1
+   */
+  resolveGpuTimeMs(): number {
+    const dev = this.device;
+    const dst = this._timestampReadback;
+    if (!dev || !dst || !this._timestampSupported) return -1;
+
+    // 前フレームの resolve 済みデータがあれば、それを読み出します。
+    // 読み出しは mapAsync なので、値が返るのは「1 フレーム遅れ」です。
+    if (this._timestampPendingMap && !this._timestampMapping) {
+      this._timestampPendingMap = false;
+      this._timestampMapping = true;
+      void dst
+        .mapAsync(GPUMapMode.READ)
+        .then(() => {
+          const view = dst.getMappedRange();
+          const raw = new BigUint64Array(view, 0, 2);
+          const begin = Number(raw[0]);
+          const end = Number(raw[1]);
+          dst.unmap();
+          this._lastGpuMs = end > begin ? (end - begin) / 1e6 : -1;
+        })
+        .catch(() => {
+          this._lastGpuMs = -1;
+        })
+        .finally(() => {
+          this._timestampMapping = false;
+        });
+    }
+
+    // 進行中のマップの完了を待つため、今日は前回確定した値を返します。
+    return this._lastGpuMs;
+  }
+
+  /**
+   * timestamp query が使えるかを返します (デバッグ・報告用)。
+   */
+  isTimestampQuerySupported(): boolean {
+    return this._timestampSupported;
   }
 
   setUniformMatrix4fv(name: string, matrix: Float32Array): void {

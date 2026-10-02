@@ -142,6 +142,7 @@ async function main(): Promise<void> {
   const upload: number[] = [];
   const draw: number[] = [];
   const frameTotal: number[] = [];
+  const gpuMs: number[] = [];
 
   // CPU 系列は、同じ可視インスタンスを CPU でラスタライズします。
   // これがないと「draw を省いたフレーム」となり、比較になりません。
@@ -164,6 +165,10 @@ async function main(): Promise<void> {
     upload.push(engine.uploadTimeMs);
     // CPU 系列の「draw」はラスタライズ時間、それ以外はエンジンの drawTimeMs
     draw.push(CPU_ONLY ? tEnd - tStep : engine.drawTimeMs);
+    // GPU 実行時間 (WebGPU の timestamp query)。
+    // 非対応・非同期読み出しのため -1 が混ざるので除外します。
+    const g = engine.device?.resolveGpuTimeMs?.() ?? -1;
+    if (g >= 0) gpuMs.push(g);
   }
 
   const result = {
@@ -187,6 +192,23 @@ async function main(): Promise<void> {
     drawMsMedian: median(draw),
     frameMsMedian: median(frameTotal),
     frameMsP95: p95(frameTotal),
+    /**
+     * GPU 実行時間 (timestamp query)。
+     * 非対応環境や非同期読み出しが間に合わなかった場合は -1 です。
+     * **CPU 時間との比較にはこちらを使う必要があります**
+     * （ドローコール発行は非同期なので CPU 時間だけでは GPU の増加が見えない）。
+     */
+    gpuMsMedian: gpuMs.length > 0 ? median(gpuMs) : -1,
+    gpuSampleCount: gpuMs.length,
+    /**
+     * timestamp query が使えるか（デバッグ・報告用）。
+     * `gpuMsMedian === -1` の原因が「feature 不足」なのか
+     * 「非同期読み出しが未完了」なのかを切り分けるための項目です。
+     */
+    timestampSupported:
+      (
+        engine.device as { isTimestampQuerySupported?: () => boolean }
+      )?.isTimestampQuerySupported?.() ?? false,
   };
 
   (window as unknown as { __benchResult: typeof result }).__benchResult = result;
