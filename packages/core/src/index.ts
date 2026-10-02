@@ -21,6 +21,8 @@ export * from './math/Math';
 export * from './math/Vector2';
 export * from './math/Raycaster';
 export * from './math/ExprParser';
+export * from './math/Curves';
+export * from './math/Path';
 export * from './input/InputManager';
 export * from './time/TimeStepManager';
 export * from './time/TimerEvent';
