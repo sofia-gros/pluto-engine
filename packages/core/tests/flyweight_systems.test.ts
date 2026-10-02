@@ -4,6 +4,7 @@ import {
   Container,
   Group,
   ParticleEmitter,
+  ParticleEmitterZoneShape,
   ParticleManager,
   Scene,
   SoundHandle,
@@ -660,6 +661,258 @@ describe('ParticleEmitter Flyweight (R-03)', () => {
     const pm = new ParticleManager(16, 4);
     expect(pm.particleCount).toBe(0);
     expect(pm.create({ x: 0 })).toBeInstanceOf(ParticleEmitter);
+  });
+});
+
+describe('ParticleEmitter Phase 5 — zone / ops / gravity (SoA 平坦化)', () => {
+  it('own property は id と _manager の 2 個だけ（R-03 維持）', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({ x: 0, y: 0 });
+    if (!e) throw new Error('エミッター生成失敗');
+    expect(Object.getOwnPropertyNames(e).sort()).toEqual(['_manager', 'id']);
+    expect(ownPropertyCount(e)).toBe(2);
+  });
+
+  it('zone パラメータが SoA に反映される', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({ x: 0, y: 0 });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.setZone(ParticleEmitterZoneShape.Line, 0, 0, 100, 50);
+
+    expect(e.zoneShape).toBe(ParticleEmitterZoneShape.Line);
+    const out = new Float32Array(4);
+    expect(e.getZoneParams(out)).toBe(4);
+    expect(out[0]).toBe(0);
+    expect(out[1]).toBe(0);
+    expect(out[2]).toBe(100);
+    expect(out[3]).toBe(50);
+  });
+
+  it('Line zone から射出すると線分上に出る', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    // angle を 0 固定にして速度の向きを X 軸に揃えます。
+    // 位置だけを観測したいので speed 0 とします。
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      zone: { shape: ParticleEmitterZoneShape.Line, params: [10, 20, 110, 20] },
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.setAngle(0, 0);
+    e.setSpeed(0);
+    e.emitParticleAt(20);
+
+    const arena = scene.arena;
+    let inRange = 0;
+    for (let i = 0; i < arena.activeCount; i++) {
+      const x = arena.posX[i];
+      const y = arena.posY[i];
+      // Line zone は y = 20 上、x は 10〜110
+      if (Math.abs(y - 20) < 1e-4 && x >= 10 && x <= 110) inRange++;
+    }
+    expect(inRange).toBe(20);
+  });
+
+  it('Point zone は指定点からだけ射出する', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      zone: { shape: ParticleEmitterZoneShape.Point, params: [33, 44, 0, 0] },
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(3);
+
+    const arena = scene.arena;
+    for (let i = 0; i < arena.activeCount; i++) {
+      expect(arena.posX[i]).toBeCloseTo(33);
+      expect(arena.posY[i]).toBeCloseTo(44);
+    }
+  });
+
+  it('Circle zone は中心からの距離が半径内に収まる', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      zone: { shape: ParticleEmitterZoneShape.Circle, params: [100, 100, 30, 0] },
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(30);
+
+    const arena = scene.arena;
+    for (let i = 0; i < arena.activeCount; i++) {
+      const dx = arena.posX[i] - 100;
+      const dy = arena.posY[i] - 100;
+      // 面一様分布の端点誤差だけを許容します
+      expect(Math.sqrt(dx * dx + dy * dy)).toBeLessThanOrEqual(30 + 1e-3);
+    }
+  });
+
+  it('Random zone は矩形内から一様に選ぶ', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      zone: { shape: ParticleEmitterZoneShape.Random, params: [0, 0, 50, 20] },
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(30);
+
+    const arena = scene.arena;
+    for (let i = 0; i < arena.activeCount; i++) {
+      expect(arena.posX[i]).toBeGreaterThanOrEqual(0);
+      expect(arena.posX[i]).toBeLessThanOrEqual(50);
+      expect(arena.posY[i]).toBeGreaterThanOrEqual(0);
+      expect(arena.posY[i]).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it('ops が SoA に格納され speed を上書きする', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      speed: 10,
+      // 1 秒進めるので寿命は 10 秒必要です
+      lifespan: 10000,
+      angle: { min: 0, max: 0 },
+      ops: [{ kind: 'speed', value: 100 }],
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    expect(e.opCount).toBe(1);
+    expect(e.getOpKind(0)).toBe(0); // speed
+
+    const out = new Float32Array(2);
+    expect(e.getOps(out)).toBe(1);
+    expect(out[0]).toBe(1); // isEnabled
+    expect(out[1]).toBe(100);
+
+    e.emitParticleAt(1);
+    scene.particles.update(1);
+    const arena = scene.arena;
+    // ops の speed 100 が使われる（速度は 0.5〜1.0 倍に揺らぐので範囲で見ます）
+    expect(arena.posX[0]).toBeGreaterThanOrEqual(50);
+    expect(arena.posX[0]).toBeLessThanOrEqual(100);
+  });
+
+  it('ops の enabled=false は無視される', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      speed: 10,
+      lifespan: 10000,
+      angle: { min: 0, max: 0 },
+      ops: [{ kind: 'speed', value: 100, enabled: false }],
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(1);
+    scene.particles.update(1);
+    // ops が無効なので speed 10 が使われる（0.5〜1.0 倍に揺らぐ）
+    const arena = scene.arena;
+    expect(arena.posX[0]).toBeGreaterThanOrEqual(5);
+    expect(arena.posX[0]).toBeLessThanOrEqual(10);
+  });
+
+  it('setParticleGravity が粒子の加速度になる', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      speed: 0,
+      gravityY: 100,
+      lifespan: 10000,
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(1);
+    // 初速 0、重力 100 px/s^2、1 秒で 100 進みます
+    scene.particles.update(1);
+    const arena = scene.arena;
+    expect(arena.posY[0]).toBeCloseTo(100, 3);
+  });
+
+  it('maxAliveParticles を超えたら生成が止まる', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({ x: 0, y: 0, lifespan: 10000, maxAliveParticles: 5 });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(20);
+    expect(e.aliveParticleCount).toBe(5);
+    expect(scene.particles.particleCount).toBe(5);
+  });
+
+  it('粒子が消えると maxAliveParticles の枠が戻る', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({ x: 0, y: 0, lifespan: 100, maxAliveParticles: 3 });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(3);
+    expect(scene.particles.particleCount).toBe(3);
+    // 寿命が切れる
+    scene.particles.update(0.2);
+    expect(scene.particles.particleCount).toBe(0);
+    expect(e.aliveParticleCount).toBe(0);
+    // 枠が戻っているので再度生成できる
+    e.emitParticleAt(3);
+    expect(scene.particles.particleCount).toBe(3);
+  });
+
+  it('duration を超えると自動停止する', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({
+      x: 0,
+      y: 0,
+      frequency: 100,
+      lifespan: 10000,
+      duration: 500,
+    });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.start();
+
+    scene.particles.update(0.3);
+    expect(e.isEmitting).toBe(true);
+    expect(e.elapsed).toBeGreaterThan(200);
+
+    // duration を超えると自動で止まります
+    scene.particles.update(0.3);
+    expect(e.isEmitting).toBe(false);
+
+    const before = scene.particles.particleCount;
+    scene.particles.update(0.3);
+    expect(scene.particles.particleCount).toBe(before);
+  });
+
+  it('timeScale が生存速度を変える', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const e = scene.particles.create({ x: 0, y: 0, lifespan: 1000, timeScale: 2 });
+    if (!e) throw new Error('エミッター生成失敗');
+    e.emitParticleAt(1);
+    // timeScale 2 なので 0.5 秒で寿命の 1000ms が消費される
+    scene.particles.update(0.5);
+    expect(scene.particles.particleCount).toBe(0);
+  });
+
+  it('killAll がそのエミッターの粒子だけ消す', () => {
+    const scene = new Scene({ maxInstances: 128 });
+    const a = scene.particles.create({ x: 0, y: 0, lifespan: 10000 });
+    const b = scene.particles.create({ x: 0, y: 0, lifespan: 10000 });
+    if (!a || !b) throw new Error('エミッター生成失敗');
+    a.emitParticleAt(3);
+    b.emitParticleAt(2);
+    expect(scene.particles.particleCount).toBe(5);
+
+    expect(a.killAll()).toBe(3);
+    expect(scene.particles.particleCount).toBe(2);
+    expect(b.aliveParticleCount).toBe(2);
+  });
+
+  it('Scene.add.particles が Flyweight を返す', () => {
+    const scene = new Scene({ maxInstances: 64 });
+    const e = scene.add.particles(10, 20, undefined, { lifespan: 1000 });
+    if (!e) throw new Error('add.particles が null を返しました');
+    expect(e).toBeInstanceOf(ParticleEmitter);
+    expect(e.x).toBe(10);
+    expect(e.y).toBe(20);
+    expect(ownPropertyCount(e)).toBe(2);
   });
 });
 

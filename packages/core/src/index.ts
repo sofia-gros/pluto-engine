@@ -33,6 +33,7 @@ export * from './tilemap/Tilemap';
 export * from './tilemap/TilemapLayer';
 export * from './particles/ParticleManager';
 export * from './particles/ParticleEmitter';
+export * from './particles/ParticleEmitterZone';
 export * from './physics/ArcadePhysics';
 export * from './physics/Body';
 export * from './physics/World';

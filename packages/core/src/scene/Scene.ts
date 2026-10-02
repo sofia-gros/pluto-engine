@@ -13,7 +13,7 @@ import { InputManager } from '../input/InputManager';
 import { LoaderManager } from '../loader/LoaderManager';
 import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
-import { ParticleManager } from '../particles/ParticleManager';
+import { type EmitterCreateConfig, ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
 import { Body } from '../physics/Body';
 import { World } from '../physics/World';
@@ -428,6 +428,24 @@ export class Scene {
       const g = new Group();
       g.addMultiple(children);
       return g;
+    },
+    /**
+     * パーティクルエミッターを生成します (Phaser 互換の `add.particles`)。
+     *
+     * 返り値は ParticleEmitter Flyweight で、own property は id と _manager の
+     * 2 個だけ (R-03)。設定は ParticleManager の SoA が正本です。
+     *
+     * `textureKey` を渡すと各粒子にそのテクスチャを設定します。
+     * Particles subsystem を有効化するため `Subsystem.Particles` を立てます。
+     */
+    particles: (x = 0, y = 0, textureKey?: string, config: EmitterCreateConfig = {}) => {
+      const emitter = this.particles.create({ x, y, ...config });
+      if (emitter === null) return null;
+      if (textureKey) {
+        const tex = this.textures.get(textureKey) || this.load.get(textureKey);
+        if (tex) emitter.setTexture(tex);
+      }
+      return emitter;
     },
   };
 

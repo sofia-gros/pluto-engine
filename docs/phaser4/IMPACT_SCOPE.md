@@ -329,14 +329,25 @@ Phase 2 の 3.5 とは別に、Phase 4 の実装・テストで検出した不�
 
 ### 6.3 チェックリスト
 
-- [ ] `ParticleManager` に Phaser 互換の `ParticleEmitter` を実装（SoA）
-- [ ] zone を平坦化（`Uint8Array` 形状 ID + `Float32Array` パラメータ）
-- [ ] ops を平坦化（`Float32Array`）
-- [ ] `add.particles` を `Scene.add` に追加
-- [ ] `emitParticle` / `start` / `stop` / `explode` を実装
-- [ ] gravity / lifespan / quantity / frequency を SoA に
-- [ ] `ParticleEmitterZone` の形状 enum を実装（point/line/circle/random/emit）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `ParticleManager` に Phaser 互換の `ParticleEmitter` を実装（SoA）
+- [x] zone を平坦化（`Uint8Array` 形状 ID + `Float32Array` パラメータ）
+- [x] ops を平坦化（`Float32Array`）
+- [x] `add.particles` を `Scene.add` に追加
+- [x] `emitParticle` / `start` / `stop` / `explode` を実装
+- [x] gravity / lifespan / quantity / frequency / maxAliveParticles / duration を SoA に
+- [x] `ParticleEmitterZone` の形状 enum を実装（point/line/circle/random/emit）
+- [x] `bun run test` / `bun run lint` 通過
+
+### 6.4 設計上の補足（当初計画からの逸脱）
+
+| 項目 | 判断 | 理由 |
+| --- | --- | --- |
+| zone のパラメータ数 | **1 形状あたり 4 個に固定**（`ZONE_PARAMS`） | 形状ごとに可変長にすると SoA の確保量と境界チェックが崩れる。zone は生成時の 1 回だけ評価されるため、固定長で問題ない |
+| `Circle` の分布 | 半径 `√u`（**面一様**） | 半径一様だと中心が密で外縁が疎になる。Phaser と同じ面一様にした |
+| `ops` の kind | `Uint8Array` の数値 ID で保持 | Phaser は `ParticleEmitterOp` オブジェクトをリストで持ちますが、SoA では op の並び順・有効フラグ・値・対象パラメータさえあれば十分です |
+| `start()` の挙動 | **即座に粒子を生成しない**。`frequency` に従って `update` 内で生成 | Phaser の `start()` は `quantity` 個を同時に放ちますが、それだと「start 直後の粒子数」が不定になります。`start()` を「毎フレーム生成を始める」ことに限定し、一括生成は `explode()` に委ねます |
+| `maxAliveParticles` の解放 | 粒子に `ownerEmitter: Int32Array` を持たせる | 生成元エミッターが不明なため `killAll` と上限の解放ができません。生成元 ID を SoA で持つことで正確な減算ができます |
+| `setParticleTexture` | 支援（SoA は `Array`） | テクスチャは `TextureAsset` への参照なので `Float32Array` には格納できません。`Group` と同じ「SoA を汚さない参照配列」扱いとします |
 
 ---
 
