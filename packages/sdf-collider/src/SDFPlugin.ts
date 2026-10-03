@@ -16,6 +16,6 @@ export class SDFPlugin implements Plugin {
   constructor(private solver: SDFCollider) {}
 
   public init(scene: Scene): void {
-    scene.sdf = this.solver;
+    scene.sdf = this.solver as any;
   }
 }
