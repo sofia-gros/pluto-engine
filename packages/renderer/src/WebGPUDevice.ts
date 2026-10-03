@@ -1728,55 +1728,6 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.dispatchWorkgroups(Math.ceil(instanceCount / 64));
     pass.end();
 
-    if (false && this._sortPipeline) {
-      const nextPow2 = (n: number) => Math.pow(2, Math.ceil(Math.log2(n)));
-      const N = Math.max(2, nextPow2(instanceCount));
-      const stages = Math.log2(N);
-      const steps: { h: number; q: number }[] = [];
-      for (let i = 0; i < stages; i++) {
-        for (let j = 0; j <= i; j++) {
-          steps.push({ h: 1 << (i + 1), q: 1 << (i - j) });
-        }
-      }
-      const alignment = dev.limits.minUniformBufferOffsetAlignment || 256;
-      if (this._sortParamsCapacity < steps.length) {
-        this._sortParamsBuffer?.destroy();
-        this._sortParamsBuffer = dev.createBuffer({
-          size: steps.length * alignment,
-          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        const group1Layout = this._sortPipeline.getBindGroupLayout(1);
-        this._sortBindGroup = dev.createBindGroup({
-          layout: group1Layout,
-          entries: [{ binding: 0, resource: { buffer: this._sortParamsBuffer, size: 16 } }],
-        });
-        this._sortParamsCapacity = steps.length;
-        this._sortParamsData = new Uint32Array((steps.length * alignment) / 4);
-      }
-      if (this._sortParamsData && this._sortParamsBuffer && this._sortBindGroup) {
-        for (let i = 0; i < steps.length; i++) {
-          this._sortParamsData[i * (alignment / 4) + 0] = steps[i].h;
-          this._sortParamsData[i * (alignment / 4) + 1] = steps[i].q;
-        }
-        dev.queue.writeBuffer(
-          this._sortParamsBuffer,
-          0,
-          this._sortParamsData.buffer,
-          0,
-          steps.length * alignment,
-        );
-
-        const sortPass = encoder.beginComputePass();
-        sortPass.setPipeline(this._sortPipeline);
-        sortPass.setBindGroup(0, group);
-        for (let i = 0; i < steps.length; i++) {
-          sortPass.setBindGroup(1, this._sortBindGroup, [i * alignment]);
-          sortPass.dispatchWorkgroups(Math.max(1, N / 128));
-        }
-        sortPass.end();
-      }
-    }
-
     dev.queue.submit([encoder.finish()]);
     void dev.popErrorScope().then((err) => {
       if (err) console.warn('[computeCulling]', err.message);
@@ -2135,3 +2086,4 @@ export class WebGPUDevice implements GraphicsDevice {
     return true;
   }
 }
+
