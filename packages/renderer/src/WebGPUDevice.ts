@@ -1728,7 +1728,7 @@ export class WebGPUDevice implements GraphicsDevice {
     pass.dispatchWorkgroups(Math.ceil(instanceCount / 64));
     pass.end();
 
-    if (this._sortPipeline) {
+    if (false && this._sortPipeline) {
       const nextPow2 = (n: number) => Math.pow(2, Math.ceil(Math.log2(n)));
       const N = Math.max(2, nextPow2(instanceCount));
       const stages = Math.log2(N);
