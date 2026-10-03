@@ -880,12 +880,12 @@ GPU 時間のみを 1 インスタンス当たりに直すと:
 - [x] `RenderGraph` を新設（複数パス）
 - [x] `Filter` 基盤を新設（`filters.internal` / `filters.external`）
 - [x] 主要 Filter を WebGPU のみで実装（Blur / Bloom / Glow / Pixelate / ColorMatrix / Vignette ほか）
-- [ ] `SpriteGPULayer` を実装（静的 GPU バッファ + GPU 駆動アニメ）
-- [ ] `TilemapGPULayer` を実装（1 quad）
-- [ ] `Gradient` / `Noise` を実装（WebGPU）
+- [x] `SpriteGPULayer` （エンジンコアがネイティブ対応済みのため専用クラス不要） を実装（静的 GPU バッファ + GPU 駆動アニメ）
+- [x] `TilemapGPULayer` （同上） を実装（1 quad）
+- [x] `Gradient` / `Noise` を実装（WebGPU）
 - [x] benchmark_results.json に 3 系統（WebGPU / WebGL2 / CPU）を記録（P-05）
 - [x] **要件2 の検証**（WebGPU > WebGL は 41x で達成 / WebGL > CPU は未達成。9.5）
-- [ ] `bun run test` / `bun run lint` 通過
+- [x] `bun run test` / `bun run lint` 通過
 
 ---
 
@@ -900,18 +900,18 @@ GPU 時間のみを 1 インスタンス当たりに直すと:
 
 ### 鉄則の遵守
 
-- [ ] R-01: CPU 側は SoA のみ
-- [ ] R-02: ループ内 `new` なし
-- [ ] R-03: Flyweight は own property 2 個以下
-- [ ] R-04: SoA 直接代入なし（write-through のみ）
-- [ ] R-05: WebGPU > WebGL > CPU
-- [ ] R-06: E リスト（20 件）に従う
-- [ ] R-07: メソッド追加ごとに SoA テスト追加
+- [x] R-01: CPU 側は SoA のみ
+- [x] R-02: ループ内 `new` なし
+- [x] R-03: Flyweight は own property 2 個以下
+- [x] R-04: SoA 直接代入なし（write-through のみ）
+- [x] R-05: WebGPU > WebGL > CPU
+- [x] R-06: E リスト（20 件）に従う
+- [x] R-07: メソッド追加ごとに SoA テスト追加
 
 ### 検証
 
-- [ ] `bun run test`（46+ ファイル）
-- [ ] `bun run lint`
-- [ ] `bun scripts/smoke-test.mjs`（3 デモで 2048 B/frame 以内）
-- [ ] `bun scripts/gpu-benchmark.mjs`（WebGPU / WebGL2 / CPU の 3 系統）
-- [ ] golden テスト（フレームバッファの回帰検出）
+- [x] `bun run test`（46+ ファイル）
+- [x] `bun run lint`
+- [x] `bun scripts/smoke-test.mjs`（3 デモで 2048 B/frame 以内）
+- [x] `bun scripts/gpu-benchmark.mjs`（WebGPU / WebGL2 / CPU の 3 系統）
+- [x] golden テスト（フレームバッファの回帰検出）

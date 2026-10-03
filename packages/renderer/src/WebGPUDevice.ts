@@ -551,7 +551,7 @@ export class WebGPUDevice implements GraphicsDevice {
     device.queue.writeBuffer(this.quadBuffer, 0, QUAD_VERTICES);
 
     this.textureArray = device.createTexture({
-      size: { width: 2048, height: 2048, depthOrArrayLayers: 64 },
+      size: { width: 2048, height: 2048, depthOrArrayLayers: 16 },
       format: this._swapFormat(),
       dimension: '2d',
       usage:
