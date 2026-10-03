@@ -57,7 +57,7 @@ export class VerletPlugin implements Plugin {
         this.options.iterations ?? 4,
       );
       if (this._scene !== null) {
-        this._scene.verlet = this.solver;
+        this._scene.verlet = this.solver as any;
         // Verlet は群集と同じ系統のサブシステムとして扱います。
         this._scene.markSubsystem(Subsystem.Swarm);
       }

@@ -439,7 +439,7 @@ export class WebGPUDevice implements GraphicsDevice {
     });
     this._filterBindGroupLayout = dev.createBindGroupLayout({
       entries: [
-        { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' as any } },
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
         { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       ],
@@ -724,7 +724,7 @@ export class WebGPUDevice implements GraphicsDevice {
 
     const tmpTexture = device.createTexture({
       size: [width, height, 1],
-      format: 'rgba8unorm',
+      format: 'rgba8unorm' as any,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
     });
 
@@ -759,7 +759,7 @@ export class WebGPUDevice implements GraphicsDevice {
           }
         ` }),
         entryPoint: 'fs',
-        targets: [{ format: 'rgba8unorm' }]
+        targets: [{ format: 'rgba8unorm' as any }]
       },
       primitive: { topology: 'triangle-strip' }
     });
@@ -768,9 +768,9 @@ export class WebGPUDevice implements GraphicsDevice {
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view: tmpTexture.createView(),
-        loadOp: 'clear',
+        loadOp: 'clear' as any as GPULoadOp,
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
-        storeOp: 'store'
+        storeOp: 'store' as any as GPUStoreOp
       }]
     });
     pass.setPipeline(pipeline);
@@ -1319,8 +1319,8 @@ export class WebGPUDevice implements GraphicsDevice {
         {
           view: dstTexture.createView(),
           clearValue: this.clearColor,
-          loadOp: 'clear',
-          storeOp: 'store',
+          loadOp: 'clear' as any as GPULoadOp,
+          storeOp: 'store' as any as GPUStoreOp,
         },
       ],
     });
@@ -1467,8 +1467,8 @@ export class WebGPUDevice implements GraphicsDevice {
         {
           view: this.context.getCurrentTexture().createView(),
           clearValue: this.clearColor,
-          loadOp: 'clear',
-          storeOp: 'store',
+          loadOp: 'clear' as any as GPULoadOp,
+          storeOp: 'store' as any as GPUStoreOp,
         },
       ],
     });
@@ -1824,8 +1824,8 @@ export class WebGPUDevice implements GraphicsDevice {
           clearValue: this.clearColor,
           // Filter 経路では前のパスの結果を引き継ぐので load します
           // 背景で clear します（前フレームの残像を残さないため）
-          loadOp: 'clear',
-          storeOp: 'store',
+          loadOp: 'clear' as any as GPULoadOp,
+          storeOp: 'store' as any as GPUStoreOp,
         },
       ],
     };
