@@ -33,18 +33,8 @@ jobs:
       - name: Build Engine
         run: bun run build
 
-      - name: Build Demo
-        run: VITE_BASE=/pluto-engine/demos/ bun run build
-        working-directory: apps/demo
-
       - name: Build Docs
-        run: bun run docs:build
-        working-directory: docs_site
-
-      - name: Copy Demo to Docs
-        run: |
-          mkdir -p docs_site/.vitepress/dist/demos
-          cp -R apps/demo/dist/* docs_site/.vitepress/dist/demos/
+        run: bunx typedoc
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -52,7 +42,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs_site/.vitepress/dist'
+          path: 'docs_site'
 
   deploy:
     environment:

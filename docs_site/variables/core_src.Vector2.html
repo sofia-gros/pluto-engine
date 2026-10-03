@@ -1,0 +1,471 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="../"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Vector2 | PlutoEngine API Documentation</title><meta name="description" content="Documentation for PlutoEngine API Documentation"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="../assets/style.css"/><link rel="stylesheet" href="../assets/highlight.css"/><script defer src="../assets/main.js"></script><script async src="../assets/icons.js" id="tsd-icons-script"></script><script async src="../assets/search.js" id="tsd-search-script"></script><script async src="../assets/navigation.js" id="tsd-nav-script"></script><script async src="../assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="../index.html" class="title">PlutoEngine API Documentation</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<ul class="tsd-breadcrumb" aria-label="Breadcrumb">
+<li><a href="../modules/core_src.html">core/src</a></li>
+<li><a href="" aria-current="page">Vector2</a></li></ul>
+<h1>Variable Vector2<code class="tsd-tag">Const</code></h1></div>
+<div class="tsd-signature"><span class="tsd-kind-variable">Vector2</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-symbol">{</span><br/>    <span class="tsd-kind-call-signature">Add</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Angle</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Ceil</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">ClampDistance</span><span class="tsd-signature-symbol">(</span><br/>        <span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">min</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">max</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>        <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Copy</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Cross</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Distance</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Divide</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">scalar</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Dot</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Equals</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Floor</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">FromAngle</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">angle</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">length</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Invert</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Length</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">LengthSq</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Linear</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">t</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Negate</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Normalize</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">ProjectUnit</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">point</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Round</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Scale</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">scalar</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">SetLength</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">length</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">SmoothStep</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">t</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Subtract</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/>    <span class="tsd-kind-call-signature">Unit</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">from</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">point</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">;</span><br/><span class="tsd-signature-symbol">}</span><span class="tsd-signature-symbol"> = ...</span></div>
+<div class="tsd-type-declaration">
+<h4>Type Declaration</h4>
+<ul class="tsd-parameters">
+<li class="tsd-parameter">
+<h5 id="add"><span class="tsd-kind-method">Add</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="add-1"><span class="tsd-kind-call-signature">Add</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#add-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out = a + b</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L39">core/src/math/Vector2.ts:39</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="angle"><span class="tsd-kind-method">Angle</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="angle-1"><span class="tsd-kind-call-signature">Angle</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#angle-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>2 点間の角度を返します (ラジアン、Phaser 互換の <code>Angle.Between</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L257">core/src/math/Vector2.ts:257</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="ceil"><span class="tsd-kind-method">Ceil</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="ceil-1"><span class="tsd-kind-call-signature">Ceil</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#ceil-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>小数部分を切り捨てます (<code>out = ceil(a)</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L116">core/src/math/Vector2.ts:116</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="clampdistance"><span class="tsd-kind-method">ClampDistance</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="clampdistance-1"><span class="tsd-kind-call-signature">ClampDistance</span><span class="tsd-signature-symbol">(</span><br/>    <span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">min</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">max</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span><br/>    <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">,</span><br/><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#clampdistance-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>2 点間の距離をクランプします (Phaser 互換の <code>Vector2.DistanceSq</code> 系)。
+<code>out[0]</code> に距離を書きます。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">min</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">max</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L233">core/src/math/Vector2.ts:233</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="copy"><span class="tsd-kind-method">Copy</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="copy-1"><span class="tsd-kind-call-signature">Copy</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#copy-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out</code> に点 A をコピーします。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L32">core/src/math/Vector2.ts:32</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="cross"><span class="tsd-kind-method">Cross</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="cross-1"><span class="tsd-kind-call-signature">Cross</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#cross-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>外積 (z 成分) を <code>out[0]</code> に書きます。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span>
+<div class="tsd-comment tsd-typography"><p>1 要素のバッファ</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L86">core/src/math/Vector2.ts:86</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="distance"><span class="tsd-kind-method">Distance</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="distance-1"><span class="tsd-kind-call-signature">Distance</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#distance-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>2 点間の距離を <code>out[0]</code> に書きます。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L222">core/src/math/Vector2.ts:222</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="divide"><span class="tsd-kind-method">Divide</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="divide-1"><span class="tsd-kind-call-signature">Divide</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">scalar</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#divide-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out = a / scalar</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">scalar</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L60">core/src/math/Vector2.ts:60</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="dot"><span class="tsd-kind-method">Dot</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="dot-1"><span class="tsd-kind-call-signature">Dot</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#dot-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>内積 <code>out = a · b</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span>
+<div class="tsd-comment tsd-typography"><p>1 要素のバッファ</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L76">core/src/math/Vector2.ts:76</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="equals"><span class="tsd-kind-method">Equals</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="equals-1"><span class="tsd-kind-call-signature">Equals</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><a href="#equals-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out</code> と <code>other</code> が同じ参照かどうか。
+<code>in</code> と <code>out</code> を安全に共有できるかの判定に使います。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">boolean</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L286">core/src/math/Vector2.ts:286</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="floor"><span class="tsd-kind-method">Floor</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="floor-1"><span class="tsd-kind-call-signature">Floor</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#floor-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>各成分を 0 方向へ丸めます (<code>out = floor(a)</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L123">core/src/math/Vector2.ts:123</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="fromangle"><span class="tsd-kind-method">FromAngle</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="fromangle-1"><span class="tsd-kind-call-signature">FromAngle</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">angle</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">length</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#fromangle-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>角度と長さから点を作ります (Phaser 互換の <code>Vector2.FromAngle</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">angle</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">length</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span>
+<div class="tsd-comment tsd-typography"><p>2 要素のバッファ</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L248">core/src/math/Vector2.ts:248</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="invert"><span class="tsd-kind-method">Invert</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="invert-1"><span class="tsd-kind-call-signature">Invert</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#invert-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>各成分を符号反転します。Phaser の <code>invert</code> と同じ意味です。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L109">core/src/math/Vector2.ts:109</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="length"><span class="tsd-kind-method">Length</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="length-1"><span class="tsd-kind-call-signature">Length</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#length-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>点の長さ (<code>sqrt(x^2 + y^2)</code>) を返します。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L92">core/src/math/Vector2.ts:92</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="lengthsq"><span class="tsd-kind-method">LengthSq</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="lengthsq-1"><span class="tsd-kind-call-signature">LengthSq</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><a href="#lengthsq-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>点の長さの二乗を返します。平方根が不要な比較に。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">number</span></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L97">core/src/math/Vector2.ts:97</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="linear"><span class="tsd-kind-method">Linear</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="linear-1"><span class="tsd-kind-call-signature">Linear</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">t</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#linear-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>線形補間 (Phaser 互換の <code>Vector2.Linear</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">t</span>: <span class="tsd-signature-type">number</span></span>
+<div class="tsd-comment tsd-typography"><p>補間係数</p>
+</div></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L266">core/src/math/Vector2.ts:266</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="negate"><span class="tsd-kind-method">Negate</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="negate-1"><span class="tsd-kind-call-signature">Negate</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#negate-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out = -a</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L102">core/src/math/Vector2.ts:102</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="normalize"><span class="tsd-kind-method">Normalize</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="normalize-1"><span class="tsd-kind-call-signature">Normalize</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#normalize-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>単位ベクトルにします（長さを 1 に）。</p>
+<p>長さ 0 の点では <code>(0, 0)</code> を返します（<code>SetLength</code> と挙動が違います）。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L167">core/src/math/Vector2.ts:167</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="projectunit"><span class="tsd-kind-method">ProjectUnit</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="projectunit-1"><span class="tsd-kind-call-signature">ProjectUnit</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">point</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#projectunit-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>point</code> を <code>a</code> から見た<strong>単位</strong>方向の位置へ射影します
+(Phaser 互換の <code>Vector2.ProjectUnit</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">point</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span>
+<div class="tsd-comment tsd-typography"><p>2 要素のバッファ。out = 射影点 (a + dir * t)</p>
+</div></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L187">core/src/math/Vector2.ts:187</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="round"><span class="tsd-kind-method">Round</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="round-1"><span class="tsd-kind-call-signature">Round</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#round-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>各成分を丸めます。</p>
+<p><code>Math.round</code> と同じ規則（0.5 は <code>+Infinity</code> 側）を使います。
+つまり <code>-1.5</code> は <code>-1</code> になります。0 方向への丸めが必要な場合は
+呼び出し側で <code>Math.floor(x + 0.5)</code> を書いてください。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L136">core/src/math/Vector2.ts:136</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="scale"><span class="tsd-kind-method">Scale</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="scale-1"><span class="tsd-kind-call-signature">Scale</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">scalar</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#scale-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out = a * scalar</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">scalar</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L53">core/src/math/Vector2.ts:53</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="setlength"><span class="tsd-kind-method">SetLength</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="setlength-1"><span class="tsd-kind-call-signature">SetLength</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">length</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#setlength-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>長さを指定値にします。元の向きは保たれます。</p>
+<p>長さ 0 の点では方向が定義できないため <code>(1, 0)</code> になります。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">length</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L147">core/src/math/Vector2.ts:147</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="smoothstep"><span class="tsd-kind-method">SmoothStep</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="smoothstep-1"><span class="tsd-kind-call-signature">SmoothStep</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">t</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#smoothstep-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p>滑らかな線形補間 (Phaser 互換の <code>Vector2.SmoothStep</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">t</span>: <span class="tsd-signature-type">number</span></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L275">core/src/math/Vector2.ts:275</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="subtract"><span class="tsd-kind-method">Subtract</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="subtract-1"><span class="tsd-kind-call-signature">Subtract</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">a</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">b</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#subtract-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>out = a - b</code></p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">a</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">b</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L46">core/src/math/Vector2.ts:46</a></li></ul></aside></div></li></ul></li>
+<li class="tsd-parameter">
+<h5 id="unit"><span class="tsd-kind-method">Unit</span><span class="tsd-signature-symbol">:</span> function</h5>
+<ul class="tsd-signatures">
+<li class="">
+<div class="tsd-signature tsd-anchor-link" id="unit-1"><span class="tsd-kind-call-signature">Unit</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">from</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">point</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a><span class="tsd-signature-symbol">,</span> <span class="tsd-kind-parameter">out</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a><a href="#unit-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-description">
+<div class="tsd-comment tsd-typography"><p><code>a</code> から <code>point</code> への方向を単位ベクトルとして書き出します
+(Phaser 互換の <code>Vector2.Unit</code>)。</p>
+</div>
+<div class="tsd-parameters">
+<h4 class="tsd-parameters-title">Parameters</h4>
+<ul class="tsd-parameter-list">
+<li><span><span class="tsd-kind-parameter">from</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">point</span>: <a href="../types/core_src.Vec2Like.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Like</a></span></li>
+<li><span><span class="tsd-kind-parameter">out</span>: <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></span></li></ul></div>
+<h4 class="tsd-returns-title">Returns <a href="../types/core_src.Vec2Out.html" class="tsd-signature-type tsd-kind-type-alias">Vec2Out</a></h4><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L205">core/src/math/Vector2.ts:205</a></li></ul></aside></div></li></ul></li></ul></div><aside class="tsd-sources">
+<ul>
+<li>Defined in <a href="https://github.com/sofia-gros/pluto-engine/blob/1b6cf77674182928a482e7e2e0a23a5f3ca3336c/packages/core/src/math/Vector2.ts#L30">core/src/math/Vector2.ts:30</a></li></ul></aside></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="../assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="../index.html">PlutoEngine API Documentation</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer></footer>
+<div class="overlay"></div></body></html>

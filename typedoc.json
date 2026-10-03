@@ -14,13 +14,8 @@
     "packages/verlet-ik/src/index.ts"
   ],
   "out": "docs_site",
-  "plugin": ["typedoc-plugin-markdown"],
   "readme": "none",
   "hideGenerator": true,
-  "theme": "markdown",
-  "markdownItOptions": {
-    "html": true
-  },
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "types": ["@webgpu/types"],
