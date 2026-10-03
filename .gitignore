@@ -12,3 +12,4 @@ scripts/pack.py
 scripts/patch-*.mjs
 scripts/update-ui.mjs
 scripts/bump-version.mjs
+Phaser4/
