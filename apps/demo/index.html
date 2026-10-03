@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlutoEngine Demos</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 2rem;
+    }
+    h1 { margin-bottom: 2rem; border-bottom: 1px solid #334155; padding-bottom: 1rem; }
+    .demo-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .demo-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .demo-card:hover {
+      transform: translateY(-2px);
+      border-color: #38bdf8;
+    }
+    .demo-card h2 { margin: 0 0 0.5rem 0; font-size: 1.25rem; color: #38bdf8; }
+    .demo-card p { margin: 0; color: #94a3b8; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <h1>🎮 PlutoEngine Demos</h1>
+  <div class="demo-list">
+    <a href="/backend-bench/" class="demo-card">
+      <h2>Backend Bench</h2>
+      <p>30万体のスプライトを描画する WebGPU / WebGL2 の高負荷・GPUカリング検証</p>
+    </a>
+    <a href="/swarm-survivors/" class="demo-card">
+      <h2>Swarm Survivors</h2>
+      <p>大量の敵が出現するヴァンパイアサバイバー風のデモゲーム</p>
+    </a>
+    <a href="/rpg/" class="demo-card">
+      <h2>JRPG Demo</h2>
+      <p>Tilemap やアニメーション、当たり判定を用いた RPG 風のデモ</p>
+    </a>
+    <a href="/benchmark/" class="demo-card">
+      <h2>General Benchmark</h2>
+      <p>各種機能のパフォーマンステスト</p>
+    </a>
+  </div>
+</body>
+</html>

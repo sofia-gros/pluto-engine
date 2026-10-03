@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc && copyfiles -u 1 \"src/**/*.wgsl\" dist/",
+    "build": "tsup src/index.ts --format esm && copyfiles -u 1 \"src/**/*.wgsl\" dist/",
     "test": "vitest run"
   },
   "dependencies": {

@@ -454,6 +454,13 @@ class BenchmarkScene extends Scene {
       posX[i] += vx[i] * dt;
       posY[i] += vy[i] * dt;
     }
+    // Phase 8: Write-Through Architecture
+    // 直接 SoA 配列を書き換えたため、手動で GPU アップロード用のパックバッファを同期します。
+    for (let i = 0; i < activeCount; i++) {
+      this.arena.packedTransform[i * 4 + 0] = posX[i];
+      this.arena.packedTransform[i * 4 + 1] = posY[i];
+    }
+    this.arena.dirtyTransformGroup = true;
     this.arena.dirtyPos = true;
 
     // HUD更新
