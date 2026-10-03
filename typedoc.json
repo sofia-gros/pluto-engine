@@ -1,0 +1,31 @@
+{
+  "name": "PlutoEngine API Documentation",
+  "entryPoints": [
+    "packages/core/src/index.ts",
+    "packages/renderer/src/index.ts",
+    "packages/xpbd/src/index.ts",
+    "packages/continuum/src/index.ts",
+    "packages/morton/src/index.ts",
+    "packages/ai/src/index.ts",
+    "packages/audio/src/index.ts",
+    "packages/pluto/src/index.ts",
+    "packages/poisson/src/index.ts",
+    "packages/sdf-collider/src/index.ts",
+    "packages/verlet-ik/src/index.ts"
+  ],
+  "out": "docs_site",
+  "plugin": ["typedoc-plugin-markdown"],
+  "readme": "none",
+  "hideGenerator": true,
+  "theme": "markdown",
+  "markdownItOptions": {
+    "html": true
+  },
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["@webgpu/types"],
+    "skipLibCheck": true,
+    "noEmitOnError": false
+  },
+  "exclude": ["**/dist/**", "**/node_modules/**", "**/tests/**", "**/*.test.ts", "vitest*.ts"]
+}

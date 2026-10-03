@@ -1,7 +1,7 @@
 {
   "name": "pluto-engine-monorepo",
   "private": true,
-  "workspaces": ["packages/*", "apps/*", "docs_site"],
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "dev": "bun run --cwd apps/demo dev",
     "build:all": "bun scripts/build-all.mjs",
@@ -18,6 +18,8 @@
     "@vitest/browser": "^2.0.0",
     "@webgpu/types": "^0.1.74",
     "playwright": "^1.63.0",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.13.1",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },
