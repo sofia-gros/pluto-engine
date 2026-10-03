@@ -100,6 +100,17 @@ export interface GraphicsDevice {
   getTexture(key: string): TextureAsset | undefined;
 
   /**
+   * プロシージャルテクスチャをGPUで生成し、TextureAssetとして登録します。
+   */
+  generateProceduralTexture(
+    key: string,
+    type: 'gradient' | 'noise',
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null;
+
+  /**
    * 画面をクリアします。
    */
   clear(r: number, g: number, b: number, a: number): void;

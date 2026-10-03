@@ -192,6 +192,44 @@ export class TextureManager {
   }
 
   /**
+   * プロシージャルなグラデーションテクスチャを生成・GPU転送します。
+   */
+  public generateGradient(
+    key: string,
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (this.device && this.device.generateProceduralTexture) {
+      const asset = this.device.generateProceduralTexture(key, 'gradient', width, height, options);
+      if (asset) {
+        this.textures.set(key, asset);
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * プロシージャルなノイズテクスチャを生成・GPU転送します。
+   */
+  public generateNoise(
+    key: string,
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (this.device && this.device.generateProceduralTexture) {
+      const asset = this.device.generateProceduralTexture(key, 'noise', width, height, options);
+      if (asset) {
+        this.textures.set(key, asset);
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  /**
    * 登録済みテクスチャを取得します。
    */
   public get(key: string): TextureAsset | undefined {

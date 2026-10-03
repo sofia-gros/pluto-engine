@@ -491,6 +491,102 @@ export class WebGL2Device implements GraphicsDevice {
     return this.textures.get(key);
   }
 
+  generateProceduralTexture(
+    key: string,
+    type: 'gradient' | 'noise',
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (!this.gl) return null;
+    const gl = this.gl;
+
+    const fb = gl.createFramebuffer();
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+    const vertSource = `#version 300 es
+    in vec2 aPos;
+    out vec2 vUv;
+    void main() {
+      vUv = aPos * 0.5 + 0.5;
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }`;
+
+    let fragSource = '';
+    if (type === 'gradient') {
+      fragSource = `#version 300 es
+        precision highp float;
+        in vec2 vUv;
+        out vec4 outColor;
+        void main() {
+            outColor = vec4(vUv.x, vUv.y, 1.0, 1.0);
+        }`;
+    } else {
+      fragSource = `#version 300 es
+        precision highp float;
+        in vec2 vUv;
+        out vec4 outColor;
+        float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+        }
+        void main() {
+            float n = random(vUv);
+            outColor = vec4(n, n, n, 1.0);
+        }`;
+    }
+
+    const shaderVert = this.compileShader(gl.VERTEX_SHADER, vertSource);
+    const shaderFrag = this.compileShader(gl.FRAGMENT_SHADER, fragSource);
+    const program = gl.createProgram()!;
+    gl.attachShader(program, shaderVert);
+    gl.attachShader(program, shaderFrag);
+    gl.linkProgram(program);
+
+    gl.useProgram(program);
+
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+    const aPosLoc = gl.getAttribLocation(program, 'aPos');
+    gl.enableVertexAttribArray(aPosLoc);
+    gl.vertexAttribPointer(aPosLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.viewport(0, 0, width, height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    gl.deleteBuffer(quadBuffer);
+    gl.deleteProgram(program);
+    gl.deleteShader(shaderVert);
+    gl.deleteShader(shaderFrag);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    gl.deleteTexture(tex);
+
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    const rowBytes = width * 4;
+    const tmp = new Uint8Array(rowBytes);
+    for (let y = 0; y < height >> 1; y++) {
+      const top = y * rowBytes;
+      const bottom = (height - 1 - y) * rowBytes;
+      for (let i = 0; i < rowBytes; i++) tmp[i] = pixels[top + i];
+      for (let i = 0; i < rowBytes; i++) pixels[top + i] = pixels[bottom + i];
+      for (let i = 0; i < rowBytes; i++) pixels[bottom + i] = tmp[i];
+    }
+
+    const finalImgData = new ImageData(new Uint8ClampedArray(pixels.buffer), width, height);
+    return this.uploadTexture(key, finalImgData, options);
+  }
+
   initPipelines(): void {
     this.spritePipeline = this.createPipeline(SPRITE_VERT_GLSL, SPRITE_FRAG_GLSL);
     this.createQuadBuffer();

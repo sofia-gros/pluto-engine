@@ -764,6 +764,100 @@ export class WebGPUDevice implements GraphicsDevice {
     return this.textures.get(key);
   }
 
+  generateProceduralTexture(
+    key: string,
+    type: 'gradient' | 'noise',
+    width: number,
+    height: number,
+    options?: any
+  ): TextureAsset | null {
+    if (!this.device || !this.textureArray) return null;
+    void options;
+    const device = this.device;
+    const layerIndex = this.textures.size % 64;
+
+    const tmpTexture = device.createTexture({
+      size: [width, height, 1],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC
+    });
+
+    const pipeline = device.createRenderPipeline({
+      layout: 'auto',
+      vertex: {
+        module: device.createShaderModule({ code: `
+          @vertex fn vs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+            var pos = array<vec2<f32>, 4>(
+              vec2<f32>(-1.0, -1.0), vec2<f32>( 1.0, -1.0),
+              vec2<f32>(-1.0,  1.0), vec2<f32>( 1.0,  1.0)
+            );
+            return vec4<f32>(pos[vi], 0.0, 1.0);
+          }
+        ` }),
+        entryPoint: 'vs'
+      },
+      fragment: {
+        module: device.createShaderModule({ code: type === 'gradient' ? `
+          @fragment fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let uv = pos.xy / vec2<f32>(${width}.0, ${height}.0);
+            return vec4<f32>(uv.x, uv.y, 1.0, 1.0);
+          }
+        ` : `
+          fn random(st: vec2<f32>) -> f32 {
+            return fract(sin(dot(st.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453123);
+          }
+          @fragment fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+            let uv = pos.xy / vec2<f32>(${width}.0, ${height}.0);
+            let n = random(uv);
+            return vec4<f32>(n, n, n, 1.0);
+          }
+        ` }),
+        entryPoint: 'fs',
+        targets: [{ format: 'rgba8unorm' }]
+      },
+      primitive: { topology: 'triangle-strip' }
+    });
+
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: tmpTexture.createView(),
+        loadOp: 'clear',
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        storeOp: 'store'
+      }]
+    });
+    pass.setPipeline(pipeline);
+    pass.draw(4);
+    pass.end();
+
+    encoder.copyTextureToTexture(
+      { texture: tmpTexture },
+      { texture: this.textureArray, origin: { x: 0, y: 0, z: layerIndex } },
+      { width, height, depthOrArrayLayers: 1 }
+    );
+    device.queue.submit([encoder.finish()]);
+
+    tmpTexture.destroy();
+
+    const frames: TextureFrame[] = [];
+    const normW = this.textureWidth;
+    const normH = this.textureHeight;
+    frames.push({ uvX: 0, uvY: 0, uvW: width / normW, uvH: height / normH });
+
+    const asset: TextureAsset = {
+      key,
+      layerIndex,
+      width,
+      height,
+      frameWidth: width,
+      frameHeight: height,
+      frames,
+    };
+    this.textures.set(key, asset);
+    return asset;
+  }
+
   clear(r: number, g: number, b: number, a: number): void {
     this.clearColor = { r, g, b, a };
   }
