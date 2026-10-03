@@ -220,9 +220,7 @@ describe('XPBDSolver: broadphase pairs', () => {
   test('pairs containing invalid indices are skipped', () => {
     const p = makeParticles([0.9, 1.1], [0, 0]);
     const pairs = Int32Array.from([-1, 1, 0, -1, 0, 1]);
-    expect(() =>
-      XPBDSolver.step(p, 1 / 60, { pairs, pairCount: 3 }),
-    ).not.toThrow();
+    expect(() => XPBDSolver.step(p, 1 / 60, { pairs, pairCount: 3 })).not.toThrow();
   });
 
   test('brute force mode still resolves overlaps', () => {

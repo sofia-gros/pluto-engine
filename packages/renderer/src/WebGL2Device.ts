@@ -30,11 +30,35 @@ ${glslInstanceDecl()}
 
 uniform mat4 projectionMatrix;
 
+/**
+ * GPU カリング用の可視矩形（ワールド座標）。
+ * (minX, minY, maxX, maxY)
+ */
+uniform vec4 uCullRect;
+/** GPU カリングを有効にするか。0 = 無効、1 = 有効。 */
+uniform float uGpuCull;
+
 out vec2 vUV;
 out float vLayer;
 out vec4 vTint;
 out float vSpriteFlags;
 out float vVisible;
+
+/**
+ * クワッドのワールド AABB が可視矩形の外なら縮退三角形を返します。
+ *
+ * gl_Position をクリップ空間の外 (z = 2) にすることで、
+ * ラスタライザが面積 0 として破棄します。
+ * これにより CPU 側の partitionVisible (SoA の詰め替え) が不要になり、
+ * インスタンス数に比例する CPU コストが消えます。
+ */
+bool cullOut(vec2 worldCenter, vec2 halfSize) {
+    if (uGpuCull < 0.5) return false;
+    return worldCenter.x + halfSize.x < uCullRect.x
+        || worldCenter.x - halfSize.x > uCullRect.z
+        || worldCenter.y + halfSize.y < uCullRect.y
+        || worldCenter.y - halfSize.y > uCullRect.w;
+}
 
 void main() {
     // iTransform = (posX, posY, scaleX, scaleY)   ※ scale は倍率
@@ -58,6 +82,23 @@ void main() {
     float s = sin(iShape.x);
     vec2 rotated = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
     vec2 worldPos = vec2(rotated.x * iFlags.y, rotated.y) + iTransform.xy;
+
+    // 回転を考慮しない AABB（外接矩形）で判定します。
+    // 判定を厳密にすると
+    // シェーダが重くなりますが、外接矩形なら cos/sin の絶対値だけで足ります。
+    float ax = abs(c) * displaySize.x + abs(s) * displaySize.y;
+    float ay = abs(s) * displaySize.x + abs(c) * displaySize.y;
+    if (cullOut(iTransform.xy, vec2(ax, ay) * 0.5)) {
+        // 縮退三角形にしてラスタライザに破棄させます
+        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+        vUV = vec2(0.0);
+        vLayer = 0.0;
+        vTint = vec4(0.0);
+        vSpriteFlags = 0.0;
+        vVisible = 0.0;
+        return;
+    }
+
     gl_Position = projectionMatrix * vec4(worldPos, 0.0, 1.0);
     vUV = vertexUV * iUv.zw + iUv.xy;
     vLayer = iFlags.x;
@@ -119,7 +160,20 @@ interface UniformLocations {
   textureArray: WebGLUniformLocation | null;
   sdfThreshold: WebGLUniformLocation | null;
   sdfSmoothing: WebGLUniformLocation | null;
+  /** GPU カリングの可視矩形 (minX, minY, maxX, maxY) */
+  cullRect: WebGLUniformLocation | null;
+  /** GPU カリングの有効フラグ (0 / 1) */
+  gpuCull: WebGLUniformLocation | null;
 }
+
+/**
+ * timestamp query のリングバッファ長。
+ *
+ * 1 本では結果が返るまで次の draw を出せず Moreover、フレームを止めると
+ * 時刻測定そのものがボトルネックになります。3 本で「2〜3 フレーム遅れ」を許容し、
+ * 中央値でなら影響しません。
+ */
+const TSQ_RING = 3;
 
 export class WebGL2Device implements GraphicsDevice {
   private gl: WebGL2RenderingContext | null = null;
@@ -138,6 +192,8 @@ export class WebGL2Device implements GraphicsDevice {
     textureArray: null,
     sdfThreshold: null,
     sdfSmoothing: null,
+    cullRect: null,
+    gpuCull: null,
   };
   private quadBuffer: WebGLBuffer | null = null;
   private textureArray: WebGLTexture | null = null;
@@ -212,6 +268,8 @@ export class WebGL2Device implements GraphicsDevice {
       throw new Error('WebGL2 is not supported');
     }
     this.gl = gl;
+    // GPU 時間計測の拡張はここで要求します（それより後で createQuery できません）
+    this._setupTimestampQuery();
 
     // コンテキスト喪失を検出します。
     // 喪失中は一切描画せず、黙って 60 FPS を走り続けます
@@ -292,9 +350,7 @@ export class WebGL2Device implements GraphicsDevice {
     const bytes = this.textureWidth * this.textureHeight * 4 * this.maxLayers;
     const mb = (bytes / 1024 / 1024).toFixed(0);
     console.log(
-      `[WebGL2Device] texture array allocated: ` +
-        `${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers ` +
-        `(= ${mb} MB)`,
+      `[WebGL2Device] texture array allocated: ${this.textureWidth}x${this.textureHeight} x ${this.maxLayers} layers (= ${mb} MB)`,
     );
     return true;
   }
@@ -312,10 +368,7 @@ export class WebGL2Device implements GraphicsDevice {
 
     if (!this.allocateTextureArray()) {
       throw new Error(
-        'Failed to allocate the texture array: ' +
-          `${this.maxLayers} layers could not be allocated ` +
-          `(contextLost=${this.contextLost}). ` +
-          'GPU memory is insufficient. Reduce the texture array size or layer count.',
+        `Failed to allocate the texture array: ${this.maxLayers} layers could not be allocated (contextLost=${this.contextLost}). GPU memory is insufficient. Reduce the texture array size or layer count.`,
       );
     }
 
@@ -438,6 +491,102 @@ export class WebGL2Device implements GraphicsDevice {
     return this.textures.get(key);
   }
 
+  generateProceduralTexture(
+    key: string,
+    type: 'gradient' | 'noise',
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (!this.gl) return null;
+    const gl = this.gl;
+
+    const fb = gl.createFramebuffer();
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+    const vertSource = `#version 300 es
+    in vec2 aPos;
+    out vec2 vUv;
+    void main() {
+      vUv = aPos * 0.5 + 0.5;
+      gl_Position = vec4(aPos, 0.0, 1.0);
+    }`;
+
+    let fragSource = '';
+    if (type === 'gradient') {
+      fragSource = `#version 300 es
+        precision highp float;
+        in vec2 vUv;
+        out vec4 outColor;
+        void main() {
+            outColor = vec4(vUv.x, vUv.y, 1.0, 1.0);
+        }`;
+    } else {
+      fragSource = `#version 300 es
+        precision highp float;
+        in vec2 vUv;
+        out vec4 outColor;
+        float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+        }
+        void main() {
+            float n = random(vUv);
+            outColor = vec4(n, n, n, 1.0);
+        }`;
+    }
+
+    const shaderVert = this.compileShader(gl.VERTEX_SHADER, vertSource);
+    const shaderFrag = this.compileShader(gl.FRAGMENT_SHADER, fragSource);
+    const program = gl.createProgram()!;
+    gl.attachShader(program, shaderVert);
+    gl.attachShader(program, shaderFrag);
+    gl.linkProgram(program);
+
+    gl.useProgram(program);
+
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+    const aPosLoc = gl.getAttribLocation(program, 'aPos');
+    gl.enableVertexAttribArray(aPosLoc);
+    gl.vertexAttribPointer(aPosLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.viewport(0, 0, width, height);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+    gl.deleteBuffer(quadBuffer);
+    gl.deleteProgram(program);
+    gl.deleteShader(shaderVert);
+    gl.deleteShader(shaderFrag);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    gl.deleteTexture(tex);
+
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    const rowBytes = width * 4;
+    const tmp = new Uint8Array(rowBytes);
+    for (let y = 0; y < height >> 1; y++) {
+      const top = y * rowBytes;
+      const bottom = (height - 1 - y) * rowBytes;
+      for (let i = 0; i < rowBytes; i++) tmp[i] = pixels[top + i];
+      for (let i = 0; i < rowBytes; i++) pixels[top + i] = pixels[bottom + i];
+      for (let i = 0; i < rowBytes; i++) pixels[bottom + i] = tmp[i];
+    }
+
+    const finalImgData = new ImageData(new Uint8ClampedArray(pixels.buffer), width, height);
+    return this.uploadTexture(key, finalImgData, options);
+  }
+
   initPipelines(): void {
     this.spritePipeline = this.createPipeline(SPRITE_VERT_GLSL, SPRITE_FRAG_GLSL);
     this.createQuadBuffer();
@@ -464,6 +613,8 @@ export class WebGL2Device implements GraphicsDevice {
     if (!this.gl || !this.spritePipeline) return;
     const program = this.spritePipeline.id as WebGLProgram;
     this.uniforms.projectionMatrix = this.gl.getUniformLocation(program, 'projectionMatrix');
+    this.uniforms.cullRect = this.gl.getUniformLocation(program, 'uCullRect');
+    this.uniforms.gpuCull = this.gl.getUniformLocation(program, 'uGpuCull');
     this.uniforms.textureArray = this.gl.getUniformLocation(program, 'textureArray');
     this.uniforms.sdfThreshold = this.gl.getUniformLocation(program, 'sdfThreshold');
     this.uniforms.sdfSmoothing = this.gl.getUniformLocation(program, 'sdfSmoothing');
@@ -536,6 +687,26 @@ export class WebGL2Device implements GraphicsDevice {
         this.gl.uniform1f(this.uniforms.sdfSmoothing, sdfSmoothing);
       }
     }
+  }
+
+  /**
+   * GPU カリングの可視矩形を設定します。
+   *
+   * 有効にすると、頂点シェーダが可視矩形の外にあるクワッドを
+   * 縮退三角形にして破棄します。これにより CPU 側の SoA 詰め替え
+   * （`partitionVisible`）が不要になり、インスタンス数に比例する
+   * CPU コストが消えます。
+   *
+   * @param rect `(minX, minY, maxX, maxY)` のワールド座標 4 要素
+   * @param enabled false の場合は頂点シェーダのカリングを無効にします
+   */
+  setCullRect(rect: Float32Array, enabled: boolean): void {
+    const gl = this.gl;
+    if (!gl || !this.currentPipeline) return;
+    const loc = this.uniforms.cullRect;
+    const on = this.uniforms.gpuCull;
+    if (loc) gl.uniform4f(loc, rect[0], rect[1], rect[2], rect[3]);
+    if (on) gl.uniform1f(on, enabled ? 1 : 0);
   }
 
   /**
@@ -658,6 +829,8 @@ export class WebGL2Device implements GraphicsDevice {
     // 別のプログラムへ切り替わったら VAO と uniform のキャッシュを破棄します。
     this.vaoDirty = true;
     this.uniforms.projectionMatrix = null;
+    this.uniforms.cullRect = null;
+    this.uniforms.gpuCull = null;
     this.uniforms.textureArray = null;
     this.uniforms.sdfThreshold = null;
     this.uniforms.sdfSmoothing = null;
@@ -725,8 +898,150 @@ export class WebGL2Device implements GraphicsDevice {
     // VAO の属性指定は setupInstancedAttributes 側で済んでいるため、
     // ここでは draw のみ発行します。
     void baseInstance;
+    const query = this._beginGpuTimer();
     this.gl.drawArraysInstanced(this.gl.TRIANGLE_STRIP, 0, 4, activeCount);
+    this._endGpuTimer(query);
   }
+
+  // ---------------------------------------------------------------------
+  // GPU 時間計測 (Phase 8 P-02)
+  //
+  // WebGPU の timestamp query に対応する WebGL2 側の実装です。
+  // `EXT_disjoint_timer_query_webgl2` が無ければ計測できないので、
+  // 非対応環境では -1 を返します（比較表には「計測不可」と出ます）。
+  //
+  // 查询は 1 本では再利用できません（結果が返るまで次のフレームを出せないため）。
+  // そのため 3 本をリングバッファにして、**2〜3 フレーム遅れのサンプル**を
+  // 受けます。中央値を取るため 1〜2 フレームの遅れは測定に影響しません。
+  // ---------------------------------------------------------------------
+
+  /** GPU 時間計測が有効か（`enableTimestampQuery` 後かつ拡張が存在） */
+  isTimestampQuerySupported(): boolean {
+    return this._tsqSupported;
+  }
+
+  /** 読み出しに失敗したときの理由（切り分け用） */
+  lastTimestampError(): string {
+    return this._tsqError;
+  }
+
+  /**
+   * 直近に読み出せた GPU 時間 (ms) を返します。計測できなければ -1。
+   *
+   * `GPU_DISJOINT_EXT` が立ったフレームの値は破棄します
+   * （timer query の値は交差時に不正になるためです）。
+   */
+  resolveGpuTimeMs(): number {
+    const gl = this.gl;
+    if (!gl || !this._tsqSupported || this._tsqError) return -1;
+    const ext = this._tsqExt;
+    if (!ext) return -1;
+
+    // 完了済みのサンプルから最も新しいものを 1 つだけ採用します。
+    let taken = false;
+    for (let k = 0; k < TSQ_RING; k++) {
+      const slot = (this._tsqNext + k) % TSQ_RING;
+      const query = this._tsqQueries[slot];
+      if (!query || this._tsqPending[slot] !== true) continue;
+      const available = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE) as boolean;
+      if (!available) continue;
+      // GPU 側が別の作業中なら値は信用できません
+      const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT) as boolean;
+      if (disjoint) {
+        this._tsqPending[slot] = false;
+        continue;
+      }
+      const ns = gl.getQueryParameter(query, gl.QUERY_RESULT) as number;
+      this._tsqPending[slot] = false;
+      if (!taken) {
+        this._lastGpuMs = ns / 1e6;
+        taken = true;
+      }
+      // 読み終えたスロットは次のサンプルに再利用します
+      this._tsqReusable.push(slot);
+    }
+    return this._lastGpuMs;
+  }
+
+  /**
+   * 直近の draw の計測を開始します。
+   *
+   * リングに空きが無ければ計測をスキップします
+   * （强制性で待たせると 오히려 計測そのものがボトルネックになるため）。
+   */
+  private _beginGpuTimer(): WebGLQuery | null {
+    const gl = this.gl;
+    if (!gl || !this._tsqSupported || this.contextLost || !this._tsqExt) return null;
+    const slot = this._tsqReusable.pop();
+    if (slot === undefined) return null;
+    const query = this._tsqQueries[slot];
+    if (!query) return null;
+    const gl2 = gl as WebGL2RenderingContext;
+    gl2.beginQuery(this._tsqExt.TIME_ELAPSED_EXT, query);
+    this._tsqPending[slot] = true;
+    this._tsqActive = slot;
+    return query;
+  }
+
+  private _endGpuTimer(query: WebGLQuery | null): void {
+    const gl = this.gl;
+    if (!gl || !query || this._tsqActive === -1 || !this._tsqExt) return;
+    const gl2 = gl as WebGL2RenderingContext;
+    gl2.endQuery(this._tsqExt.TIME_ELAPSED_EXT);
+    this._tsqNext = (this._tsqActive + 1) % TSQ_RING;
+    this._tsqActive = -1;
+  }
+
+  /** timestamp query を有効化します。`init()` より前に呼ぶ必要があります。 */
+  enableTimestampQuery(): void {
+    this._tsqEnabled = true;
+  }
+
+  /**
+   * `init()` の中で拡張を要求します。
+   *
+   * 拡張の要求は `init()` の后才有效地行えます
+   * （WebGPU の timestamp-query feature と同じ制約です）。
+   */
+  private _setupTimestampQuery(): void {
+    const gl = this.gl;
+    if (!gl || !this._tsqEnabled) {
+      this._tsqSupported = false;
+      return;
+    }
+    // WebGL2 版という名前の拡張が標準です（旧来の WebGL1 名は使えません）
+    const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') as {
+      TIME_ELAPSED_EXT: number;
+      GPU_DISJOINT_EXT: number;
+      QUERY_COUNTER_BITS_EXT: number;
+    } | null;
+    if (!ext) {
+      this._tsqSupported = false;
+      this._tsqError = 'EXT_disjoint_timer_query_webgl2 がありません';
+      return;
+    }
+    this._tsqExt = ext;
+    for (let k = 0; k < TSQ_RING; k++) {
+      this._tsqQueries[k] = gl.createQuery();
+      this._tsqReusable.push(k);
+    }
+    this._tsqSupported = true;
+  }
+
+  private _tsqEnabled = false;
+  private _tsqSupported = false;
+  private _tsqExt: {
+    TIME_ELAPSED_EXT: number;
+    GPU_DISJOINT_EXT: number;
+    QUERY_COUNTER_BITS_EXT: number;
+  } | null = null;
+  private _tsqQueries: (WebGLQuery | null)[] = new Array(TSQ_RING).fill(null);
+  private _tsqPending: boolean[] = new Array(TSQ_RING).fill(false);
+  private _tsqReusable: number[] = [];
+  private _tsqNext = 0;
+  private _tsqActive = -1;
+  private _lastGpuMs = -1;
+  private _tsqError = '';
 
   destroy(): void {
     if (this.gl) {

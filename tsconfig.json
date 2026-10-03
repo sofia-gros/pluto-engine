@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["@webgpu/types"],
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "baseUrl": ".",
+    "paths": {
+      "@pluto-engine/*": ["packages/*/src/index.ts"]
+    }
+  },
+  "exclude": ["**/tests/**", "**/*.test.ts", "vitest*.ts"]
+}

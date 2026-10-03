@@ -164,7 +164,7 @@ export class EikonalField {
    * 壁マークをすべて解除します。
    */
   public clearWalls(): void {
-      // スタック順序のまま処理し、値の改善があるものだけ再登録します
+    // スタック順序のまま処理し、値の改善があるものだけ再登録します
   }
 
   private reset(): void {
@@ -209,7 +209,7 @@ export class EikonalField {
   private _markAllUnreachable(): void {
     const n = this.width * this.height;
     for (let i = 0; i < n; i++) this.unreachable[i] = 1;
-  }  /**
+  } /**
    * 距離場から勾配を計算します。
    * 中心差分を使い、勾配を平滑化してから正規化します。
    */

@@ -100,6 +100,17 @@ export interface GraphicsDevice {
   getTexture(key: string): TextureAsset | undefined;
 
   /**
+   * プロシージャルテクスチャをGPUで生成し、TextureAssetとして登録します。
+   */
+  generateProceduralTexture(
+    key: string,
+    type: 'gradient' | 'noise',
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null;
+
+  /**
    * 画面をクリアします。
    */
   clear(r: number, g: number, b: number, a: number): void;
@@ -161,6 +172,63 @@ export interface GraphicsDevice {
    * uniform マトリックスを設定します。
    */
   setUniformMatrix4fv(name: string, matrix: Float32Array): void;
+
+  /**
+   * GPU カリングの可視矩形を設定します（Phase 8 P-03）。
+   *
+   * 有効にすると頂点シェーダが矩形外のクワッドを縮退三角形へ変換し、
+   * ラスタライザに破棄させます。これにより CPU 側の SoA の詰め替え
+   * （`partitionVisible`）が不要になります。
+   *
+   * 未実装のバックエンドでは何もしません（optional）。
+   *
+   * @param rect `(minX, minY, maxX, maxY)` のワールド座標 4 要素
+   * @param enabled false で頂点シェーダのカリングを無効にします
+   */
+  setCullRect?(rect: Float32Array, enabled: boolean): void;
+
+  /**
+   * 直近の GPU 実行時間を返します (Phase 8 P-02)。
+   *
+   * ドローコール発行は非同期なので、CPU 時間だけでは
+   * 「カリングを GPU に移した副作用（頂点処理の増）」を観測できません。
+   * WebGPU の timestamp query で実測します。
+   *
+   * 非対応・未計測のときは -1 を返します（optional なので
+   * 未実装のバックエンドではこのメソッド自体がありません）。
+   *
+   * **読み出しは非同期**です。実測できるフレームまで -1 が返るため、
+   * ベンチは連続してフレームを回して中央値を取る必要があります。
+   */
+  resolveGpuTimeMs?(): number;
+
+  /**
+   * compute カリングを実行し、間接描画引数を更新します (Phase 8 P-02)。
+   *
+   * 頂点シェーダによる GPU カリング（P-03）と違い、**可視インスタンスだけを
+   * 描画します**。CPU コスト，切れない上に GPU 側も減るため、両方の 利得を
+   * 同時に得られます。コストは画面外も compute が 1 件ずつ判定する点です。
+   *
+   * 対応していないバックエンドでは何もしず false を返します（optional）。
+   *
+   * @param rect 可視矩形 (minX, minY, maxX, maxY)
+   * @param instanceCount 判定対象のインスタンス数
+   * @returns dispatch を行ったか
+   */
+  beginComputeCulling?(rect: Float32Array, instanceCount: number): boolean;
+
+  /** compute カリングが使える状態か (Phase 8 P-02)。 */
+  isComputeCullingSupported?(): boolean;
+
+  /**
+   * compute カリングで数えた可視インスタンス数を返します (Phase 8 P-02)。
+   *
+   * **間接描画は CPU から見た描画数を返さないため、.compute カリングの
+   * 実効性を示す唯一の証拠です。** ベンチはこれを報告します。
+   *
+   * 読み出しは非同期です。実測できるフレームまで -1 を返します。
+   */
+  resolveVisibleCount?(): number;
 
   /**
    * シェーダーパイプラインを作成します。

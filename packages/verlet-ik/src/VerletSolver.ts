@@ -215,7 +215,13 @@ export class VerletSolver {
    * 根元に速度を与えることで、鎖全体がその向きへ引かれます。
    * 演出上の「狙う」動作に使います。
    */
-  public steerRoot(index: number, x: number, y: number, velocityX: number, velocityY: number): void {
+  public steerRoot(
+    index: number,
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+  ): void {
     this.pin(index, x, y);
     const offset = index << 1;
     // 根元に速度を与えると、鎖全体がその向きへ引かれます。

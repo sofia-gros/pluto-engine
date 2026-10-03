@@ -192,6 +192,44 @@ export class TextureManager {
   }
 
   /**
+   * プロシージャルなグラデーションテクスチャを生成・GPU転送します。
+   */
+  public generateGradient(
+    key: string,
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (this.device && this.device.generateProceduralTexture) {
+      const asset = this.device.generateProceduralTexture(key, 'gradient', width, height, options);
+      if (asset) {
+        this.textures.set(key, asset);
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * プロシージャルなノイズテクスチャを生成・GPU転送します。
+   */
+  public generateNoise(
+    key: string,
+    width: number,
+    height: number,
+    options?: any,
+  ): TextureAsset | null {
+    if (this.device && this.device.generateProceduralTexture) {
+      const asset = this.device.generateProceduralTexture(key, 'noise', width, height, options);
+      if (asset) {
+        this.textures.set(key, asset);
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  /**
    * 登録済みテクスチャを取得します。
    */
   public get(key: string): TextureAsset | undefined {
@@ -208,5 +246,65 @@ export class TextureManager {
     return (
       this.textures.has(key) || (this.device ? this.device.getTexture(key) !== undefined : false)
     );
+  }
+
+  // ============================================================
+  // Phaser 互換 API
+  // ============================================================
+
+  public remove(key: string): boolean {
+    if (this.device?.getTexture(key)) {
+      // 本来は VRAM 解放が必要ですが Phase 8 待ちです
+      console.warn(`TextureManager: GPU テクスチャ ${key} の削除は未実装です`);
+    }
+    return this.textures.delete(key);
+  }
+
+  public list(): string[] {
+    return Array.from(this.textures.keys());
+  }
+
+  public getKeys(): string[] {
+    return this.list();
+  }
+
+  public getFrame(
+    textureKey: string,
+    frameKey?: number | string,
+  ): import('@pluto-engine/renderer').TextureFrame | null {
+    const tex = this.get(textureKey) as import('@pluto-engine/renderer').TextureAsset & {
+      frameNames?: Record<string, number>;
+    };
+    if (!tex || !tex.frames) return null;
+    if (typeof frameKey === 'string') {
+      const idx = tex.frameNames?.[frameKey];
+      return idx !== undefined ? tex.frames[idx] : null;
+    }
+    return tex.frames[frameKey ?? 0] ?? null;
+  }
+
+  public refresh(): this {
+    return this; // WebGL/WebGPU の配列テクスチャは動的再構築が複雑なため現在 no-op
+  }
+
+  public addSpriteSheet(
+    key: string,
+    image: HTMLImageElement | HTMLCanvasElement,
+    config: { frameWidth: number; frameHeight: number; startFrame?: number; endFrame?: number },
+  ): TextureAsset {
+    return this.addSpritesheet(key, image, config);
+  }
+
+  public addCanvas(key: string, canvas: HTMLCanvasElement): TextureAsset {
+    return this.addImage(key, canvas);
+  }
+
+  public async addBase64(key: string, data: string): Promise<TextureAsset> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(this.addImage(key, img));
+      img.onerror = () => reject(new Error(`addBase64 failed for ${key}`));
+      img.src = data;
+    });
   }
 }

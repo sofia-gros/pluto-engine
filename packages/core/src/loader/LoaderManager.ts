@@ -10,6 +10,7 @@
  */
 
 import type { TextureAsset } from '@pluto-engine/renderer';
+import type { SoundManager } from '../sound/SoundManager';
 import { type ParsedAtlas, parseAtlasJson } from './AtlasParser';
 import {
   type ParsedBitmapFont,
@@ -19,7 +20,15 @@ import {
 import type { TextureManager } from './TextureManager';
 
 /** 読み込みの種類。 */
-export type AssetType = 'image' | 'spritesheet' | 'atlas' | 'bitmapfont' | 'json' | 'csv' | 'yaml';
+export type AssetType =
+  | 'image'
+  | 'spritesheet'
+  | 'atlas'
+  | 'bitmapfont'
+  | 'json'
+  | 'csv'
+  | 'yaml'
+  | 'audio';
 
 /** `spritesheet` の設定。Phaser と同じ `{ frameWidth, frameHeight }` 形式です。 */
 export interface SpritesheetConfig {
@@ -87,6 +96,7 @@ export class LoaderManager {
   private _cache: Map<string, unknown> = new Map();
   private _isLoading = false;
   private _textureManager: TextureManager | null = null;
+  private _soundManagerFactory: (() => SoundManager) | null = null;
 
   /** イベント名 → リスナ。Phaser 互換の `on` / `once` / `off` を使います。 */
   private _listeners: Map<string, Listener[]> = new Map();
@@ -100,6 +110,13 @@ export class LoaderManager {
    */
   public setTextureManager(textureManager: TextureManager): void {
     this._textureManager = textureManager;
+  }
+
+  /**
+   * SoundManager のファクトリを設定します (遅延生成用)。
+   */
+  public setSoundManagerFactory(factory: () => SoundManager): void {
+    this._soundManagerFactory = factory;
   }
 
   // ============================================================
@@ -258,6 +275,18 @@ export class LoaderManager {
     return this;
   }
 
+  /**
+   * オーディオアセットをキューに追加します。
+   */
+  public audio(key: string, url: string | string[]): this {
+    // urls 配列の場合は最初の 1 件を使用します (フォールバックは未実装)
+    const urlStr = Array.isArray(url) ? url[0] : url;
+    if (urlStr) {
+      this._queue.push({ key, url: urlStr, type: 'audio' });
+    }
+    return this;
+  }
+
   /** キューに入っているアセットの数 */
   public get pendingCount(): number {
     return this._queue.length;
@@ -356,6 +385,16 @@ export class LoaderManager {
         case 'csv':
         case 'yaml': {
           this._cache.set(item.key, await response.text());
+          break;
+        }
+        case 'audio': {
+          const arrayBuffer = await response.arrayBuffer();
+          if (this._soundManagerFactory) {
+            const sm = this._soundManagerFactory();
+            await sm.loadAudioData(item.key, arrayBuffer);
+          }
+          // キャッシュには raw arrayBuffer を持たせるか、soundManager に委ねる
+          this._cache.set(item.key, arrayBuffer);
           break;
         }
       }
@@ -493,6 +532,27 @@ export class LoaderManager {
   /** キーがキャッシュされているか (Phaser 互換の exists) */
   public exists(key: string): boolean {
     return this._cache.has(key);
+  }
+
+  /**
+   * キャッシュとキューを初期化します (Phaser互換)。
+   */
+  public reset(): void {
+    this.clear();
+  }
+
+  /**
+   * 現在の読み込みを中断します (Phaser互換)。
+   */
+  public abort(): void {
+    this._queue.length = 0;
+  }
+
+  /**
+   * progress イベントを購読します (Phaser互換)。
+   */
+  public onProgress(callback: (value: number) => void): this {
+    return this.on('progress', callback as unknown as LoaderEvents['progress']);
   }
 
   /**

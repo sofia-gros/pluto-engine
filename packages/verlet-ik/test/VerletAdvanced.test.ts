@@ -249,7 +249,7 @@ describe('VerletSolver - addChain (ロープ/触手生成)', () => {
     s.steerRoot(root, 100, 0, 20, 0);
     for (let i = 0; i < 20; i++) s.update(1 / 60);
     // 根元が右へ動いた結果、末端も右へ寄る
-    expect(s.positions[(4) * 2]).toBeGreaterThan(0);
+    expect(s.positions[4 * 2]).toBeGreaterThan(0);
   });
 
   it('重力下の鎖は根元からの距離保ちながら垂れ下がる', () => {
@@ -391,9 +391,7 @@ describe('Tentacle', () => {
     const s = new VerletSolver(4096, 8192, 4);
     const tentacles: Tentacle[] = [];
     for (let i = 0; i < 20; i++) {
-      tentacles.push(
-        new Tentacle(s, i * 10, 0, { segments: 10, segmentLength: 6, gravityY: 300 }),
-      );
+      tentacles.push(new Tentacle(s, i * 10, 0, { segments: 10, segmentLength: 6, gravityY: 300 }));
     }
     for (let i = 0; i < 60; i++) {
       s.update(1 / 60);

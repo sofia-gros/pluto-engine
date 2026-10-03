@@ -86,6 +86,45 @@ export class TilemapLayer {
     return this._map.getTileIndexAt(this.index, tileX, tileY);
   }
 
+  /**
+   * ワールド座標 (`px, py`) にあるタイルの gid を返します
+   * (Phaser 互換の `findTileAt`)。
+   *
+   * `tileIndex()` はタイル座標、本メソッドはピクセル座標です。
+   *
+   * @returns gid。範囲外または空きタイルなら -1
+   */
+  findTileAt(px: number, py: number): number {
+    return this._map.findTileAt(this.index, px, py);
+  }
+
+  /**
+   * ワールド矩形内のタイル gid を `out` へ書き込みます
+   * (Phaser 互換の `getTilesWithinWorldXY`)。
+   *
+   * ホットパスでは `out` を呼び出し側で使い回してください。
+   *
+   * @returns 書き出したタイル数
+   */
+  getTilesWithinWorldXY(
+    out: Int32Array,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): number {
+    return this._map.getTilesWithinWorldXY(out, this.index, x, y, width, height);
+  }
+
+  /**
+   * 指定タイル座標に gid を書き込みます (Phaser 互換の `putTileAt`)。
+   *
+   * @returns 書き込みに成功したか
+   */
+  putTileAt(tileX: number, tileY: number, gid: number): boolean {
+    return this._map.setTileAt(this.index, tileX, tileY, gid);
+  }
+
   /** 指定タイル座標が衝突タイルか */
   collides(tileX: number, tileY: number): boolean {
     return this._map.hasCollisionAt(this.index, tileX, tileY);

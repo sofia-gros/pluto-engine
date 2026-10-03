@@ -89,7 +89,6 @@ export function parseBitmapFontText(text: string): ParsedBitmapFont {
     if (line.startsWith('char ')) {
       const c = readChar(line);
       if (c !== null) result.chars.push(c);
-      continue;
     }
   }
 

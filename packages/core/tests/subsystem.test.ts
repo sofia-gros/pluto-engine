@@ -106,7 +106,8 @@ describe('ゼロコスト・サブシステム (遅延アクティベーショ�
   it('particles は生成時に init 済み', () => {
     const scene = new Scene({ maxInstances: 300 });
     void scene.particles;
-    expect(scene.particles.life.length).toBe(300);
+    // SoA は capacity どおり確保されていること
+    expect(scene.particles.particleCapacity).toBe(300);
   });
 
   it('未使用サブシステムでは update を回しても何も起きない (スキップ経路)', () => {

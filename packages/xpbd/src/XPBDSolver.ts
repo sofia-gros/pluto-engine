@@ -67,7 +67,6 @@ export interface XPBDSolverOptions {
   preSolveInvDt?: number;
 }
 
-
 /** 黄金角。劣決定な分離軸を振り分けるために使います。 */
 const TWO_PI = Math.PI * 2;
 
@@ -211,7 +210,12 @@ export class XPBDSolver {
    * Broadphase は呼び出し側の責務なので、ここでは解析だけを行います。
    * リストには i < j の順でペアを並べます。
    */
-  private static _solvePairs(p: XPBDParticles, pairs: Int32Array, pairCount: number, alpha: number): void {
+  private static _solvePairs(
+    p: XPBDParticles,
+    pairs: Int32Array,
+    pairCount: number,
+    alpha: number,
+  ): void {
     for (let k = 0; k < pairCount; k++) {
       const i = pairs[k * 2];
       const j = pairs[k * 2 + 1];

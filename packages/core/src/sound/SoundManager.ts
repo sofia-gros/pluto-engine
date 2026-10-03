@@ -99,13 +99,13 @@ export class SoundHandle {
   /** 再生中か */
   public get isPlaying(): boolean {
     const v = this._voice;
-    return v !== null && v.isPlaying;
+    return v?.isPlaying ?? false;
   }
 
   /** 一時停止中か */
   public get isPaused(): boolean {
     const v = this._voice;
-    return v !== null && v.paused;
+    return v?.paused ?? false;
   }
 
   /** 音量 0〜1 */
@@ -141,7 +141,7 @@ export class SoundHandle {
   /** ループ再生するか */
   public get loop(): boolean {
     const v = this._voice;
-    return v !== null && v.loop;
+    return v?.loop ?? false;
   }
   public set loop(val: boolean) {
     const v = this._voice;
@@ -907,6 +907,25 @@ export class SoundManager {
    * @param y リスナー Y
    * @param z リスナー Z
    */
+  public get listenerX(): number {
+    return this.context.listener.positionX?.value ?? 0;
+  }
+  public set listenerX(v: number) {
+    if (this.context.listener.positionX !== undefined) this.context.listener.positionX.value = v;
+  }
+  public get listenerY(): number {
+    return this.context.listener.positionY?.value ?? 0;
+  }
+  public set listenerY(v: number) {
+    if (this.context.listener.positionY !== undefined) this.context.listener.positionY.value = v;
+  }
+  public get listenerZ(): number {
+    return this.context.listener.positionZ?.value ?? 0;
+  }
+  public set listenerZ(v: number) {
+    if (this.context.listener.positionZ !== undefined) this.context.listener.positionZ.value = v;
+  }
+
   public setListenerPosition(x: number, y: number, z = 100): this {
     const listener = this.context.listener;
     if (listener.positionX !== undefined) {

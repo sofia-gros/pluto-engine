@@ -59,6 +59,148 @@ export class Tilemap {
   private tileRows = 1;
 
   /**
+   * 空のレイヤーを生成します (Phaser 互換の `createBlankLayer`)。
+   *
+   * 生成直後は全セルが 0 (空き) です。gid を書き込むには
+   * {@link setTileAt} を使ってください。
+   *
+   * @returns TilemapLayer ハンドル。上限に達した場合は null
+   */
+  public createBlankLayer(): TilemapLayer | null {
+    if (this.layersData.length >= this.maxLayers) {
+      console.warn('Tilemap: レイヤー数が上限に達しました。');
+      return null;
+    }
+    const l = this.layersData.length;
+    const cellCount = this.cellsPerLayer;
+    this.layersData.push(new Array<number>(cellCount).fill(0));
+    this.flatTiles = this._growFlatTiles(l + 1);
+    this.activeTiles.set(l, new Int32Array(cellCount).fill(-1));
+    this.collision = this._growUint8(this.collision, (l + 1) * cellCount);
+    this.layerScrollX = this._growFloat32(this.layerScrollX, l + 1);
+    this.layerScrollY = this._growFloat32(this.layerScrollY, l + 1);
+    return this.getLayer(l);
+  }
+
+  /**
+   * Tiled JSON のレイヤー指定から TilemapLayer を作成します
+   * (Phaser 互換の `createLayer`)。
+   *
+   * 本クラスはコンストラクタで全 tilelayer を読み込むため、
+   * このメソッドは**既存のレイヤーインデックス指定**という
+   * Phaser 互換シグネチャを Provides します。存在しない index なら null を返します。
+   *
+   * @param index レイヤーインデックス。`layerName` を指定した場合は無視されます
+   * @param _layerName 未使用（名前引きは本クラスのスコープ外）
+   * @param _tileset 未使用（タイルセットはコンストラクタで確定済み）
+   */
+  public createLayer(index: number, _layerName?: string, _tileset?: string): TilemapLayer | null {
+    return this.isLayerValid(index) ? this.getLayer(index) : null;
+  }
+
+  /**
+   * 指定タイル座標に gid を書き込みます (Phaser 互換の `putTileAt`)。
+   *
+   * @returns 書き込みに成功したか（範囲外なら false）
+   */
+  public setTileAt(layerIndex: number, tileX: number, tileY: number, gid: number): boolean {
+    if (!this.isLayerValid(layerIndex)) return false;
+    if (tileX < 0 || tileX >= this.mapWidth) return false;
+    if (tileY < 0 || tileY >= this.mapHeight) return false;
+    const i = layerIndex * this.cellsPerLayer + tileY * this.mapWidth + tileX;
+    this.flatTiles[i] = gid;
+    // layersData と flatTiles の二重管理を避けて.flatTiles を正本にしています。
+    this.layersData[layerIndex][tileY * this.mapWidth + tileX] = gid;
+    return true;
+  }
+
+  /**
+   * ワールド座標 (`px, py`) にあるタイルの gid を返します
+   * (Phaser 互換の `findTileAt`)。
+   *
+   * `getTileIndexAt` と違い、**ピクセル座標**で引きます。
+   *
+   * @returns gid。範囲外または空きタイルなら -1
+   */
+  public findTileAt(layerIndex: number, px: number, py: number): number {
+    if (!this.isLayerValid(layerIndex)) return -1;
+    const tx =
+      Math.floor(px / this.tileSize) - Math.floor(this.layerScrollX[layerIndex] / this.tileSize);
+    const ty =
+      Math.floor(py / this.tileSize) - Math.floor(this.layerScrollY[layerIndex] / this.tileSize);
+    if (tx < 0 || tx >= this.mapWidth) return -1;
+    if (ty < 0 || ty >= this.mapHeight) return -1;
+    const gid = this.flatTiles[layerIndex * this.cellsPerLayer + ty * this.mapWidth + tx];
+    return gid > 0 ? gid : -1;
+  }
+
+  /**
+   * ワールド矩形内に収まるタイルの gid を `out` へ書き込みます
+   * (Phaser 互換の `getTilesWithinWorldXY`)。
+   *
+   * ホットパスで呼ばれるため、戻り値の配列は生成しません。
+   * 呼び出し側は `out` を使い回してください。
+   *
+   * @param out 書き込み先バッファ
+   * @param layerIndex レイヤーインデックス
+   * @param x ワールド X
+   * @param y ワールド Y
+   * @param width ワールド幅 (px)
+   * @param height ワールド高 (px)
+   * @returns 書き出したタイル数
+   */
+  public getTilesWithinWorldXY(
+    out: Int32Array,
+    layerIndex: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): number {
+    if (!this.isLayerValid(layerIndex)) return 0;
+    const offX = Math.floor(this.layerScrollX[layerIndex] / this.tileSize);
+    const offY = Math.floor(this.layerScrollY[layerIndex] / this.tileSize);
+
+    const startX = Math.max(0, Math.floor(x / this.tileSize) - offX);
+    const startY = Math.max(0, Math.floor(y / this.tileSize) - offY);
+    const endX = Math.min(this.mapWidth - 1, Math.floor((x + width) / this.tileSize) - offX);
+    const endY = Math.min(this.mapHeight - 1, Math.floor((y + height) / this.tileSize) - offY);
+
+    const cap = out.length;
+    let n = 0;
+    for (let ty = startY; ty <= endY; ty++) {
+      for (let tx = startX; tx <= endX; tx++) {
+        if (n >= cap) return n;
+        const gid = this.flatTiles[layerIndex * this.cellsPerLayer + ty * this.mapWidth + tx];
+        if (gid > 0) out[n++] = gid;
+      }
+    }
+    return n;
+  }
+
+  /** レイヤー数の上限 */
+  private readonly maxLayers = 64;
+
+  /** `flatTiles` をレイヤー数に合わせて拡張します。 */
+  private _growFlatTiles(layers: number): Int32Array {
+    const next = new Int32Array(this.cellsPerLayer * layers);
+    next.set(this.flatTiles);
+    return next;
+  }
+
+  private _growUint8(src: Uint8Array, length: number): Uint8Array {
+    const next = new Uint8Array(length);
+    next.set(src);
+    return next;
+  }
+
+  private _growFloat32(src: Float32Array, length: number): Float32Array {
+    const next = new Float32Array(length);
+    next.set(src);
+    return next;
+  }
+
+  /**
    * 衝突 information の SoA (layerIndex * w * h + mapIndex -> 1 = 衝突あり)。
    * `setCollisionByIndex` で設定します。
    */
@@ -217,6 +359,17 @@ export class Tilemap {
     if (!this.isLayerValid(index)) return;
     this.layerScrollX[index] = x;
     this.layerScrollY[index] = y;
+  }
+
+  /** 指定タイル座標の gid を返します (Phaser 互換の `index`)。
+   *
+   * `findTileAt` はピクセル座標、本メソッドはタイル座標です。
+   *
+   * @returns gid。範囲外なら -1
+   */
+  public findTile(layerIndex: number, tileX: number, tileY: number): number {
+    const gid = this.getTileIndexAt(layerIndex, tileX, tileY);
+    return gid > 0 ? gid : -1;
   }
 
   /**

@@ -60,7 +60,7 @@ export class DataRegistry {
    */
   public has(ns: string, key: string): boolean {
     const m = this._namespaces.get(ns);
-    return m !== undefined && m.has(key);
+    return m?.has(key) ?? false;
   }
 
   /**
@@ -154,7 +154,7 @@ export class DataRegistry {
     if (index === undefined) return 0;
     const slot = index.get(key);
     if (slot === undefined) return 0;
-    return this._floatStore.get(ns)![slot];
+    return this._floatStore.get(ns)?.[slot] ?? 0;
   }
 
   /**

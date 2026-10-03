@@ -67,8 +67,9 @@ describe('TexturePacker アトラスの解析', () => {
   it('不正な入力では空の結果を返す', () => {
     expect(parseAtlasJson(null).frames).toHaveLength(0);
     expect(parseAtlasJson({}).frames).toHaveLength(0);
-    expect(parseAtlasJson({ frames: { bad: { frame: { x: 0, y: 0, w: 0, h: 5 } } } })
-      .frames).toHaveLength(0);
+    expect(
+      parseAtlasJson({ frames: { bad: { frame: { x: 0, y: 0, w: 0, h: 5 } } } }).frames,
+    ).toHaveLength(0);
   });
 
   it('frame をnested させて直接 frame を持つ形式も読む', () => {

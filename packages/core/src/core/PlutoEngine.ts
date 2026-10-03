@@ -9,8 +9,8 @@
  * 毎フレームの書き込みのみを行います。
  */
 
-import { INSTANCE_BUFFERS, createGraphicsDevice } from '@pluto-engine/renderer';
-import type { BufferInfo, GraphicsDevice } from '@pluto-engine/renderer';
+import { INSTANCE_BUFFERS, RenderGraph, createGraphicsDevice } from '@pluto-engine/renderer';
+import type { BufferInfo, FilterDef, GraphicsDevice } from '@pluto-engine/renderer';
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import { ScaleManager, ScaleMode } from '../scale/ScaleManager';
 import type { Camera } from '../scene/Camera';
@@ -44,6 +44,64 @@ export interface EngineConfig {
    * 'auto' (既定) は WebGPU を試し、失敗したら WebGL2 へ落ちます。
    */
   backend?: 'auto' | 'webgpu' | 'webgl2';
+  /**
+   * CPU 系列的ベンチ用。true のとき clear / 転送 / draw をすべてスキップし、
+   * シーン更新とカリングだけを走らせます。
+   *
+   * 要件2（WebGPU > WebGL > CPU）の CPU 基準を測るためのモードです。
+   * 通常のゲームでは指定しないでください。
+   */
+  cpuOnly?: boolean;
+  /**
+   * GPU カリングを有効にします（Phase 8 P-03、既定は false）。
+   *
+   * 有効にすると頂点シェーダが可視矩形の外にあるクワッドを
+   * 縮退三角形にして破棄し、CPU 側の SoA 詰め替えを省きます。
+   * `GraphicsDevice.setCullRect` を実装していないバックエンドでは
+   * 自動的に無効になります。
+   *
+   * **複数カメラを同時に描く場合は無効になります。** 可視矩形を
+   * uniform 1 本でしか渡せないためです。
+   */
+  gpuCulling?: boolean;
+  /**
+   * WebGPU の timestamp query を有効化します (Phase 8 P-02、既定は false)。
+   *
+   * **読み出しが値を返さない既知の問題**があります
+   * （IMPACT_SCOPE.md の 9.3）。診断用にのみ使う想定です。
+   */
+  gpuTimestampQuery?: boolean;
+  /**
+   * compute カリング + 間接描画を有効にします (Phase 8 P-02、既定は false)。
+   *
+   * 頂点シェーダ GPU カリング（P-03）と違い、可視インスタンスだけを
+   * 描画します。CPU コストが切れた上に GPU 側も減ります。
+   * WebGPU のみ対応で、compute と indirect draw を使います。
+   */
+  gpuComputeCulling?: boolean;
+
+  /**
+   * シーン全体にかかるフィルタ列 (`filters.internal`)。
+   *
+   * 例: `[filters.internal.vignette()]`
+   *
+   * **既定は空**です（未検証経路を描画に載せないため）。
+   * Filter を 1 個でも入れると描画は offscreen → filter → canvas の
+   * 多重パスになります。WebGL2 など Filter 非対応のバックエンドでは
+   * 自動的に無視され、従来どおり直接描画します。
+   *
+   * フィルタのインスタンスは毎フレーム `new` しないでください。
+   * この設定は 1 度だけ呼びます。
+   */
+  filters?: readonly FilterDef[];
+
+  /**
+   * 外部フィルタ列 (`filters.external`)。
+   *
+   * `filters` の後に同じ順序で適用されます。WebGPU のみ対応です。
+   */
+  externalFilters?: readonly FilterDef[];
+
   scene: (new () => Scene)[];
 }
 
@@ -91,6 +149,14 @@ export class PlutoEngine {
     });
 
     this.time = new TimeStepManager();
+
+    // Filter チェーンは設定時に確定します（毎フレームの確保を避けるため）
+    this.renderGraph = new RenderGraph();
+    this.config.filters = config.filters ?? [];
+    this.config.externalFilters = config.externalFilters ?? [];
+    if (this.config.filters.length > 0 || this.config.externalFilters.length > 0) {
+      this.renderGraph.setFilters(this.config.filters, this.config.externalFilters);
+    }
 
     const fps = this.config.fps ?? {};
     this.loop = new GameLoop(
@@ -142,7 +208,11 @@ export class PlutoEngine {
     this.canvasElement = canvas;
     this.scale.setCanvas(canvas);
 
-    this.device = await createGraphicsDevice(canvas, { backend: this.config.backend });
+    this.device = await createGraphicsDevice(canvas, {
+      backend: this.config.backend,
+      timestampQuery: this.config.gpuTimestampQuery === true,
+      computeCulling: this.config.gpuComputeCulling === true,
+    });
     this.device.initPipelines();
 
     const maxInstances = this.config.maxInstances!;
@@ -198,6 +268,37 @@ export class PlutoEngine {
    * `totalInstanceCount` と `renderCount` を合わせて効果を確認できます。
    */
   public cullTimeMs = 0;
+  /**
+   * 直近のフレームで GPU カリングが実際に有効だったか。
+   *
+   * `config.gpuCulling` を true にしても、バックエンドが
+   * `GraphicsDevice.setCullRect` を実装していない場合や、
+   * カメラが複数ある場合は自動的に無効になります。
+   * **ベンチの報告では設定値ではなくこの実際に走った値を使います**
+   * （Phase 8 P-03 の計測でこれを区別する必要がありました）。
+   */
+  public gpuCullingActive = false;
+  /**
+   * 直近のフレームで compute カリング（間接描画）が実際に使われたか。
+   * `gpuCullingActive` と同じ理由で、設定値ではなく実測値を報告します。
+   */
+  public computeCullingActive = false;
+
+  /**
+   * 直近のフレームで Filter（RenderGraph 経路）が実際に使われたか。
+   *
+   * 設定値ではなく実測値を報告します。バックエンドが WebGPU でなく、
+   * `webgpuOnly` のフィルタが除外された場合にも false になります。
+   */
+  public filtersActive = false;
+
+  /**
+   * Filter チェーンと多重パス構成（Phase 8 RenderGraph）。
+   *
+   * 公開しているため、`engine.renderGraph.setFilters(...)` で
+   * 実行時にフィルタを差し替えられます。
+   */
+  public readonly renderGraph: RenderGraph;
 
   /** 登録済みインスタンス総数（カリング前） */
   public totalInstanceCount = 0;
@@ -238,8 +339,8 @@ export class PlutoEngine {
     this.device.clear(0.01, 0.02, 0.05, 1.0);
     this.device.bindShaders();
 
-    const w = this.canvasElement!.width;
-    const h = this.canvasElement!.height;
+    const w = this.canvasElement?.width ?? this.config.width ?? 800;
+    const h = this.canvasElement?.height ?? this.config.height ?? 600;
 
     // カメラごとに描画します。
     // SoA への GPU 転送は 1 回だけで済みます。増えるのは
@@ -253,22 +354,72 @@ export class PlutoEngine {
         this.drawTimeMs = performance.now() - tFrameStart;
         return;
       }
-
-      // カリングは「先頭から連続した区間」として描画するため、
-      // 可視インスタンスを先頭へ寄せる partitionVisible を使います。
-      // 1 カメラなら全件を一度だけ寄せればよく、転送も 1 回で済みます。
+      const useComputeCull =
+        this.config.gpuComputeCulling === true &&
+        this.device?.beginComputeCulling !== undefined &&
+        this.device?.isComputeCullingSupported?.() === true &&
+        camCount === 1;
+      const useGpuCull =
+        !useComputeCull &&
+        this.config.gpuCulling === true &&
+        this.device?.setCullRect !== undefined &&
+        camCount === 1;
+      this.computeCullingActive = useComputeCull;
+      this.gpuCullingActive = useGpuCull;
+      /**
+       * カリングは「先頭から連続した区間」として描画するため、
+       * 可視インスタンスを先頭へ寄せる partitionVisible を使います。
+       * 1 カメラなら全件を一度だけ寄せればよく、転送も 1 回で済みます。
+       *
+       * **GPU カリング有効時**は SoA の詰め替えを行いません。
+       * 頂点シェーダが矩形外のクワッドを縮退三角形にして破棄するため、
+       * インスタンス数に比例する CPU コストが消えます
+       * （Phase 8 P-03。実測で CPU カリングがフレームを支配していたため）。
+       */
       const tCullStart = performance.now();
       let maxVisible = totalCount;
-      for (let ci = 0; ci < camCount; ci++) {
-        const cam = this._activeCameras[ci];
+      if (useComputeCull) {
+        /**
+         * compute カリング（Phase 8 P-02）。
+         * 可視インスタンスだけを間接描画するため、CPU 側の詰め替えも
+         * 頂点シェーダでの縮退三角形も不要です。
+         */
+        const cam0 = this._activeCameras[0];
+        const rect0 = this._cameraRect(cam0, w, h, this._camRect);
+        const dispatched = this.device?.beginComputeCulling?.(rect0, totalCount) === true;
+        if (dispatched) {
+          maxVisible = totalCount;
+        } else {
+          // dispatch に失敗したら頂点シェーダ経路へ落とします
+          this.computeCullingActive = false;
+        }
+      } else if (useGpuCull) {
+        // GPU 側描画します。全件をそのまま draw します。
+        const cam = this._activeCameras[0];
         const rect = this._cameraRect(cam, w, h, this._camRect);
-        const visible = arena.partitionVisible(rect[0], rect[1], rect[2], rect[3]);
-        if (visible < maxVisible) maxVisible = visible;
-        if (maxVisible === 0) break;
+        this.device?.setCullRect?.(rect, true);
+        maxVisible = totalCount;
+      } else {
+        for (let ci = 0; ci < camCount; ci++) {
+          const cam = this._activeCameras[ci];
+          const rect = this._cameraRect(cam, w, h, this._camRect);
+          const visible = arena.partitionVisible(rect[0], rect[1], rect[2], rect[3]);
+          if (visible < maxVisible) maxVisible = visible;
+          if (maxVisible === 0) break;
+        }
       }
       this.cullTimeMs = performance.now() - tCullStart;
       renderCount = maxVisible;
       this.renderCount = renderCount;
+
+      // CPU 系列のベンチモードでは、GPU への転送と draw を省きます。
+      // カリングまでが CPU 側の処理なので、ここで止めることで
+      // 要件2 の CPU 基準値になります（clear は描画なので含めません）。
+      if (this.config.cpuOnly === true) {
+        this.uploadTimeMs = 0;
+        this.drawTimeMs = performance.now() - tCullStart;
+        return;
+      }
 
       if (renderCount > 0) {
         // 並びが変わったため、転送をここで行います
@@ -276,13 +427,35 @@ export class PlutoEngine {
         this._uploadDirtyGroups(arena, renderCount);
         this.uploadTimeMs = performance.now() - tUploadStart;
 
-        for (let ci = 0; ci < camCount; ci++) {
-          const cam = this._activeCameras[ci];
-          this._writeProjection(cam, w, h);
-          this.device.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
-          this.device.setupInstancedAttributes(this.gpuBuffers, renderCount, 0);
-          this.device.drawInstanced(renderCount, 0);
+        /**
+         * Filter が設定されている場合は RenderGraph が scene の描画と
+         * フィルタの適用を 1 つのパス列としてまとめます。
+         *
+         * Filter が 0 個のときは従来どおり swapchain へ直接描画するため、
+         * 既存挙動は完全に保存されます（既定オフ）。
+         */
+        const drawScene = (): void => {
+          for (let ci = 0; ci < camCount; ci++) {
+            const cam = this._activeCameras[ci];
+            this._writeProjection(cam, w, h);
+            this.device?.setUniformMatrix4fv('projectionMatrix', this._projMatrix);
+            this.device?.setupInstancedAttributes(this.gpuBuffers, renderCount, 0);
+            this.device?.drawInstanced(renderCount, 0);
+          }
+        };
+
+        if (this.renderGraph.hasFilters) {
+          // 実際に RenderGraph が scene 描画を受け持ったかを記録します。
+          // `hasFilters` は設定値なので、実測値として報告するのは
+          // `sceneDrawCalls` と device 側の `filterStatus` です。
+          const ok = this.renderGraph.render(drawScene, w, h, this.device);
+          this.filtersActive = ok;
+        } else {
+          this.filtersActive = false;
+          drawScene();
         }
+      } else {
+        this.filtersActive = false;
       }
     } else {
       this.cullTimeMs = 0;

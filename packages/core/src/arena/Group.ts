@@ -19,6 +19,11 @@ export class Group {
   private readonly _items: unknown[] = [];
   private _alive = true;
   private _visible = true;
+  /**
+   * 追加時に呼ばれるフック (null = 何もしない)。
+   * `physics.add.staticGroup` が immovable を立てるために使います。
+   */
+  private _onAdd: ((item: unknown) => void) | null = null;
 
   /**
    * 所属スプライトを追加します。
@@ -32,7 +37,17 @@ export class Group {
       if (this._items[i] === item) return false;
     }
     this._items.push(item);
+    this._onAdd?.(item);
     return true;
+  }
+
+  /**
+   * 追加時に呼ぶフックを登録します。
+   * `physics.add.staticGroup` の immovable 実効化用です。
+   */
+  public setOnAddHook(hook: ((item: unknown) => void) | null): this {
+    this._onAdd = hook;
+    return this;
   }
 
   /**

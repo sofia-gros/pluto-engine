@@ -156,8 +156,7 @@ export class ContinuumCrowds {
         const row = y * w;
         for (let x = 1; x < w - 1; x++) {
           const idx = row + x;
-          const sum =
-            p[idx - 1] + p[idx + 1] + p[idx - w] + p[idx + w] + div[idx] * k;
+          const sum = p[idx - 1] + p[idx + 1] + p[idx - w] + p[idx + w] + div[idx] * k;
           const v = sum * 0.25;
           // UIC: 負の圧力は発生させない
           next[idx] = v > 0 ? v : 0;

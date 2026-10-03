@@ -90,7 +90,7 @@ export class Player {
     this.vy = inputDir.y * speed;
     this.x += this.vx * dt;
     this.y += this.vy * dt;
-    
+
     if (inputDir.x > 0.1) {
       this.sprite.setFlipX(false);
       this.sprite.play('walking_side', true);
@@ -150,7 +150,7 @@ export class Player {
           const oy = this.y + Math.sin(ang) * orbDist;
           swarm.applyAreaDamage(
             ox,
-             oy,
+            oy,
             14 * areaScale,
             (10 + orbitLvl * 4) * atkMult,
             6 * knockMult,
@@ -255,39 +255,25 @@ export class ContinuumFlowGrid {
     this.pressure = this.crowd.pressure;
     this.precomputedVx = this.crowd.fieldVx;
     this.precomputedVy = this.crowd.fieldVy;
-
-    this._dirX = new Float32Array(this.size);
-    this._dirY = new Float32Array(this.size);
   }
 
   /**
    * プレイヤー位置を中心にグリッド原点を移動し、
-   * 全セルを「プレイヤーへ向かう方向」で埋めます。
+   * エンジン組み込みの solveNavigation (アイコナール方程式) を用いて
+   * 全セルの目標方向場を構築します。
    */
   updatePlayerCenter(px: number, py: number): void {
     this.originX = px - this.width * 0.5;
     this.originY = py - this.height * 0.5;
 
-    const halfW = this.width * 0.5;
-    const halfH = this.height * 0.5;
-    for (let r = 0; r < this.rows; r++) {
-      const cy = (r + 0.5) * this.cellSize;
-      const dy = cy - halfH;
-      const row = r * this.cols;
-      for (let c = 0; c < this.cols; c++) {
-        const cx = (c + 0.5) * this.cellSize;
-        const dx = cx - halfW;
-        const d2 = dx * dx + dy * dy;
-        const invDist = 1.0 / (Math.sqrt(d2) + 0.001);
-        this._dirX[row + c] = -dx * invDist;
-        this._dirY[row + c] = -dy * invDist;
-      }
-    }
+    // プレイヤーは常にグリッドの中心にいるため、中央のセルをゴールとします
+    const goalCol = Math.floor(this.cols / 2);
+    const goalRow = Math.floor(this.rows / 2);
+    const goalIndex = goalRow * this.cols + goalCol;
 
-    // 目標方向を ContinuumCrowds へ渡す
-    for (let i = 0; i < this.size; i++) {
-      this.crowd.setTargetDirectionRaw(i, this._dirX[i], this._dirY[i]);
-    }
+    // エンジンの機能 (EikonalField) に委譲して経路場を解きます
+    // 障害物がないため、isWall は常に false を返します
+    this.crowd.solveNavigation(goalIndex, () => false);
   }
 
   /**
@@ -416,14 +402,14 @@ export class SwarmSystem {
     if (id === -1) return;
 
     if (type === 1) {
-       sprite.play('walking_other_side');
+      sprite.play('walking_other_side');
     } else if (type === 2) {
-       sprite.play('walking_back');
+      sprite.play('walking_back');
     } else if (type === 3) {
-       sprite.play('walking_front');
-       sprite.setTintFill(0xffcccc);
+      sprite.play('walking_front');
+      sprite.setTintFill(0xffcccc);
     } else {
-       sprite.play('walking_front');
+      sprite.play('walking_front');
     }
     sprite.setFlipX(false);
 
@@ -447,9 +433,9 @@ export class SwarmSystem {
     const sprite = this.scene.add.sprite(x, y, 'chars');
     sprite.setFrame(1);
     if (type === 1) {
-       sprite.setTintFill(0xffff00);
+      sprite.setTintFill(0xffff00);
     } else {
-       sprite.setTintFill(0x00aaff);
+      sprite.setTintFill(0x00aaff);
     }
     sprite.setDisplaySize(14, 14);
     this.dsprite[i] = sprite;
@@ -576,6 +562,7 @@ export class SwarmSystem {
         flow.density[gy * cols + gx] += 1.0;
       }
     }
+    flow.updatePlayerCenter(px, py);
     flow.solvePoissonUIC();
     flow.precomputeVelocityField();
 
@@ -611,6 +598,8 @@ export class SwarmSystem {
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
       const id = indexToId[i];
+      if (this.hp[id] <= 0) continue; // 敵のみ処理
+
       const ex = posX[i];
       const ey = posY[i];
       const lx = ex - ox;
@@ -660,6 +649,7 @@ export class SwarmSystem {
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
       const id = indexToId[i];
+      if (this.hp[id] <= 0) continue;
       posX[i] += vx[id] * dt;
       posY[i] += vy[id] * dt;
     }
@@ -669,6 +659,7 @@ export class SwarmSystem {
     // =========================================================================
     for (let i = 0; i < activeCount; i++) {
       const id = indexToId[i];
+      if (this.hp[id] <= 0) continue;
       if (vx[id] > 2) facing[i] = 1.0;
       else if (vx[id] < -2) facing[i] = -1.0;
       // 空間ハッシュは ID で登録します。後続の Pass 5 も ID 前提で動きます。
@@ -685,8 +676,9 @@ export class SwarmSystem {
     const maxY = py + maxReach;
 
     for (let i = 0; i < activeCount; i++) {
-      if (i === pIdx) continue;
       const id = indexToId[i];
+      if (this.hp[id] <= 0) continue;
+      
       const ex = posX[i];
       const ey = posY[i];
 
@@ -724,10 +716,15 @@ export class SwarmSystem {
     let pairCount = 0;
 
     for (let i = 0; i < activeCount && pairCount * 2 < pairs.length - 2; i++) {
+      const id = indexToId[i];
+      if (this.hp[id] <= 0) continue;
+
       const eRadius = frameW[i] * scaleX[i] * 0.42;
       const count = this.scene.spatialHash.query(posX[i], posY[i], eRadius * 2, scratch);
       for (let j = 0; j < count; j++) {
         const otherId = scratch[j];
+        if (this.hp[otherId] <= 0) continue;
+
         // 空間ハッシュは ID を返すため、密添字へ変換して比較します。
         const other = this.scene.arena.idToIndex[otherId];
         // 各ペアを 1 度だけ処理する
@@ -744,10 +741,15 @@ export class SwarmSystem {
       particles.count = activeCount;
       // 半径は SoA から読み戻すため、ここへ写す (毎フレームの割り当ては無い)
       for (let i = 0; i < activeCount; i++) {
+        const id = indexToId[i];
+        if (this.hp[id] <= 0) {
+          particles.invMasses[i] = 0.0;
+          continue;
+        }
         particles.radii[i] = frameW[i] * scaleX[i] * 0.42;
         // プレイヤーは群集の押し出し対象ではありません。
         // 動かすと操作感が悪く、かつ毎フレーム位置が上書きされます。
-        particles.invMasses[i] = i === pIdx ? 0.0 : 1.0;
+        particles.invMasses[i] = 1.0;
       }
       // posX / posY はアリーナの配列を直接参照するため、鍵は密添字です。
       XPBDSolver.resolveOverlaps(particles, dt, {
@@ -794,6 +796,18 @@ export class SwarmSystem {
         }
       }
     }
+
+    // =========================================================================
+    // Pass 6: Sync Transforms (Phase 8 Write-Through Architecture)
+    // =========================================================================
+    // 直接 SoA 配列を書き換えたため、手動で GPU アップロード用のパックバッファを同期します。
+    for (let i = 0; i < activeCount; i++) {
+      const id = indexToId[i];
+      if (this.hp[id] <= 0) continue;
+      this.scene.arena.packedTransform[i * 4 + 0] = posX[i];
+      this.scene.arena.packedTransform[i * 4 + 1] = posY[i];
+    }
+    this.scene.arena.dirtyTransformGroup = true;
   }
 
   applyAreaDamage(

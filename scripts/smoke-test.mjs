@@ -256,7 +256,7 @@ async function measureHeapGrowth(cdp, page, samples = 4, framesPerSample = 240) 
   // ここを短くすると「ゼロアロケーションではない」と誤判定します。
   await page.waitForTimeout(2500);
   await forceGC();
-    // さらに rAF を 300 フレーム走らせて、最適化を落ち着かせます。
+  // さらに rAF を 300 フレーム走らせて、最適化を落ち着かせます。
   await runFrames(page, 300);
   await forceGC();
 
@@ -281,8 +281,7 @@ async function measureHeapGrowth(cdp, page, samples = 4, framesPerSample = 240) 
   const sorted = [...usable].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   // 偶数個なら中央 2 つの平均を取ります。
-  const median =
-    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 
   return {
     perSample,
@@ -419,8 +418,7 @@ for (const target of TARGETS) {
                     // ループは 60 FPS で動き続けるため FPS で見抜けません。
                     glError: gl.getError(),
                     contextLost:
-                      e?.device?.isContextLost?.() === true ||
-                      gl.isContextLost?.() === true,
+                      e?.device?.isContextLost?.() === true || gl.isContextLost?.() === true,
                   };
                 }
               } catch (err) {

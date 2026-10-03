@@ -240,10 +240,10 @@ describe('Phaser 互換 - tweens.add', () => {
     expect(scene.tweens.count).toBe(1);
     expect(scene.arena.posX[idx]).toBe(0);
 
-    scene.sysUpdate(0.500);
+    scene.sysUpdate(0.5);
     expect(scene.arena.posX[idx]).toBeCloseTo(50, 0);
 
-    scene.sysUpdate(0.500);
+    scene.sysUpdate(0.5);
     expect(scene.arena.posX[idx]).toBe(100);
     // 完了後は解放されます
     expect(scene.tweens.count).toBe(0);
@@ -273,7 +273,7 @@ describe('Phaser 互換 - tweens.add', () => {
     const b = scene.add.sprite(0, 0);
 
     scene.tweens.add({ targets: [a, b], props: { x: 50 }, duration: 100 });
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
 
     expect(scene.arena.posX[a.index]).toBe(50);
     expect(scene.arena.posX[b.index]).toBe(50);
@@ -290,15 +290,15 @@ describe('Phaser 互換 - tweens.add', () => {
       delay: 500,
     });
 
-    scene.sysUpdate(0.400);
+    scene.sysUpdate(0.4);
     expect(scene.arena.posX[sprite.index]).toBe(0);
 
     // 遅延の境界ちょうどではまだ 0 です (経過時間が 0 なので)
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
     expect(scene.arena.posX[sprite.index]).toBe(0);
 
     // 遅延を抜けた後は進行します
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
     expect(scene.arena.posX[sprite.index]).toBeGreaterThan(0);
   });
 
@@ -316,14 +316,12 @@ describe('Phaser 互換 - tweens.add', () => {
       ease: 'Quad.easeIn',
     });
 
-    linear.sysUpdate(0.250);
-    eased.sysUpdate(0.250);
+    linear.sysUpdate(0.25);
+    eased.sysUpdate(0.25);
 
     // Quad.easeIn は 0.25^2 = 0.0625 なので 100 ではなく約 6.25
     expect(linear.arena.posX[a.index]).toBeCloseTo(25, 1);
-    expect(eased.arena.posX[b.index]).toBeLessThan(
-      linear.arena.posX[a.index] / 2,
-    );
+    expect(eased.arena.posX[b.index]).toBeLessThan(linear.arena.posX[a.index] / 2);
   });
 
   it('yoyo で往復する', () => {
@@ -410,7 +408,7 @@ describe('Phaser 互換 - tweens.add', () => {
     expect(killed).toBe(1);
     expect(scene.tweens.count).toBe(1);
 
-    scene.sysUpdate(0.500);
+    scene.sysUpdate(0.5);
     expect(scene.arena.posX[a.index]).toBe(0);
     expect(scene.arena.posX[b.index]).toBeGreaterThan(0);
   });
@@ -455,12 +453,12 @@ describe('Phaser 互換 - tweens.add', () => {
       onStart: () => starts++,
     });
 
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
     expect(starts).toBe(0);
 
-    scene.sysUpdate(0.200);
+    scene.sysUpdate(0.2);
     expect(starts).toBe(1);
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
     expect(starts).toBe(1);
   });
 
@@ -476,9 +474,9 @@ describe('Phaser 互換 - tweens.add', () => {
       onUpdate: () => updates++,
     });
 
-    scene.sysUpdate(0.100);
-    scene.sysUpdate(0.100);
-    scene.sysUpdate(0.100);
+    scene.sysUpdate(0.1);
+    scene.sysUpdate(0.1);
+    scene.sysUpdate(0.1);
     expect(updates).toBe(3);
   });
 
@@ -543,10 +541,10 @@ describe('Phaser 互換 - tweens.add', () => {
     expect(scene.arena.posX[idx]).toBe(100);
     expect(order).toEqual(['first']);
 
-    scene.sysUpdate(0.500);
+    scene.sysUpdate(0.5);
     expect(scene.arena.posX[idx]).toBe(150);
 
-    scene.sysUpdate(0.500);
+    scene.sysUpdate(0.5);
     expect(scene.arena.posX[idx]).toBe(200);
     expect(order).toEqual(['first', 'second']);
     expect(scene.tweens.count).toBe(0);

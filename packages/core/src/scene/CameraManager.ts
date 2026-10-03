@@ -64,6 +64,14 @@ export class CameraManager {
   }
 
   /**
+   * すべてのカメラのリストを返します (Phaser 互換の this.cameras.getCameras)。
+   * ゼロアロケーション（使い回し）のため、内部配列をそのまま返します。
+   */
+  public getCameras(): Camera[] {
+    return this._cameras;
+  }
+
+  /**
    * 描画対象となるカメラを列挙します。
    * 毎フレーム new しないよう、呼び出し側の配列へ書き込みます。
    *

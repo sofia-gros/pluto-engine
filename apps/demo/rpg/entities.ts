@@ -577,8 +577,7 @@ export class Monster {
 
     // 行動は SoA Utility AI が決めています。
     // 遷移グラフを個体に持たせないため、個体追加が他へ影響しません。
-    const action =
-      this.aiRef !== null ? this.aiRef.actionOf(this.aiIndex) : MonsterAction.Idle;
+    const action = this.aiRef !== null ? this.aiRef.actionOf(this.aiIndex) : MonsterAction.Idle;
 
     const invDist = dist > 1e-4 ? 1.0 / dist : 0;
     const nx = dx * invDist;
@@ -622,12 +621,8 @@ export class Monster {
       if (!world.isBlocked(this.x, nextY, this.radius)) this.y = nextY;
     }
 
-      // 距離に関係なく発射します
-    if (
-      (this.type === 'skeleton' || this.isBoss) &&
-      this.actionTimer <= 0 &&
-      dist > 1e-4
-    ) {
+    // 距離に関係なく発射します
+    if ((this.type === 'skeleton' || this.isBoss) && this.actionTimer <= 0 && dist > 1e-4) {
       this.actionTimer = this.isBoss ? 2.5 : 2.0;
       const spd = this.isBoss ? 180 : 200;
       return {

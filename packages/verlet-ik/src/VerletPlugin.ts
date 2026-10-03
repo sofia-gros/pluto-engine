@@ -68,11 +68,7 @@ export class VerletPlugin implements Plugin {
   /**
    * 触手 (マントや揺れの演出用) を作ります。
    */
-  public createTentacle(
-    rootX: number,
-    rootY: number,
-    options: TentacleOptions = {},
-  ): Tentacle {
+  public createTentacle(rootX: number, rootY: number, options: TentacleOptions = {}): Tentacle {
     return new Tentacle(this.build(), rootX, rootY, options);
   }
 

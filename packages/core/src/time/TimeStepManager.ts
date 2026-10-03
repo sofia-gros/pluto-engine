@@ -129,7 +129,7 @@ export class TimeStepManager {
    * @returns タイマー ID (removeEvent に渡します)
    */
   public delayedCall(delayMs: number, callback: (...args: any[]) => void, args?: any[]): number {
-    const id = this._acquire(delayMs, callback, false, 0, args);
+    const id = this._acquire(delayMs, callback, false, undefined, args);
     return id;
   }
 
@@ -142,7 +142,7 @@ export class TimeStepManager {
       config.delay,
       config.callback,
       config.loop === true,
-      config.repeatDelay ?? 0,
+      config.repeatDelay,
       config.args,
     );
   }
@@ -155,7 +155,7 @@ export class TimeStepManager {
     delayMs: number,
     callback: (...args: any[]) => void,
     loop: boolean,
-    repeatDelayMs: number,
+    repeatDelayMs: number | undefined,
     args: any[] | undefined,
   ): number {
     if (this._freeListHead >= this.timerCapacity) {
@@ -167,8 +167,8 @@ export class TimeStepManager {
     this._paused[id] = 0;
     this._elapsedMs[id] = 0;
     this._delayMs[id] = delayMs;
-    // repeatDelay が 0 以下の場合は delay と同じ間隔で繰り返す
-    this._repeatDelayMs[id] = repeatDelayMs > 0 ? repeatDelayMs : delayMs;
+    // repeatDelay が未指定の場合は delay と同じ間隔で繰り返す
+    this._repeatDelayMs[id] = repeatDelayMs !== undefined ? repeatDelayMs : delayMs;
     this._loop[id] = loop ? 1 : 0;
     this._hasFired[id] = 0;
     this._callbacks[id] = callback;

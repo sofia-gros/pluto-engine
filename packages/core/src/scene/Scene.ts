@@ -5,15 +5,18 @@ import { Text, type TextStyle } from '../arena/Text';
 import { FontAtlas, type FontAtlasOptions } from '../text/FontAtlas';
 
 import { AnimationManager } from '../anim/AnimationManager';
+import { BitmapFontGlyphSource } from '../arena/BitmapFontGlyphSource';
 import { InstanceBufferArena as ArenaClass } from '../arena/InstanceBufferArena';
+import { ShapeKind, ShapeManager } from '../arena/Shape';
 import type { PlutoEngine } from '../core/PlutoEngine';
 import { DataRegistry } from '../events/DataRegistry';
 import { EventEmitter } from '../events/EventEmitter';
 import { InputManager } from '../input/InputManager';
+import type { ParsedBitmapFont } from '../loader/BitmapFontParser';
 import { LoaderManager } from '../loader/LoaderManager';
 import { TextureManager } from '../loader/TextureManager';
 import { mathHelpers } from '../math/Math';
-import { ParticleManager } from '../particles/ParticleManager';
+import { type EmitterCreateConfig, ParticleManager } from '../particles/ParticleManager';
 import { ArcadePhysics } from '../physics/ArcadePhysics';
 import { Body } from '../physics/Body';
 import { World } from '../physics/World';
@@ -429,7 +432,276 @@ export class Scene {
       g.addMultiple(children);
       return g;
     },
+    /**
+     * パーティクルエミッターを生成します (Phaser 互換の `add.particles`)。
+     *
+     * `textureKey` を渡すと各粒子にそのテクスチャを設定します。
+     * Particles subsystem を有効化するため `Subsystem.Particles` を立てます。
+     */
+    particles: (
+      x = 0,
+      y = 0,
+      textureKey: string | undefined = undefined,
+      config: EmitterCreateConfig = {},
+    ) => {
+      const emitter = this.particles.create({ x, y, ...config });
+      if (emitter === null) return null;
+      if (textureKey) {
+        const tex = this.textures.get(textureKey) || this.load.get(textureKey);
+        if (tex) emitter.setTexture(tex);
+      }
+      return emitter;
+    },
+    /**
+     * ビットマップフォントのテキストを生成します
+     * (Phaser 互換の `add.bitmapText`)。
+     *
+     * BMFont (AngelCode) の解析結果と、ページ画像のテクスチャキーを受け取ります。
+     * ページ画像は TextureManager に登録済みである必要があります
+     * （未登録の場合はアトラス全体を 1 文字 1 クイッドとして描画するフォールバックになります）。
+     *
+     * 返り値は {@link Text} と同じ arena 上のオブジェクトです。
+     */
+    bitmapText: (x: number, y: number, text: string, font: ParsedBitmapFont, pageKey?: string) => {
+      const t = new Text(
+        x,
+        y,
+        text,
+        { fontSize: font.size, lineSpacing: font.lineHeight },
+        this.arena,
+      );
+      t.setGlyphSource(new BitmapFontGlyphSource(font, this.textures.get(pageKey ?? '')));
+      return t;
+    },
   };
+
+  /**
+   * 静的シェイプを生成します (Phaser 互換の `add.rectangle` ほか)。
+   *
+   * シェイプは canvas にベイクしてテクスチャ化します。同じ寸法は
+   * 1 枚しかベイクされないため、多数生成しても GPU レイヤーは増えません。
+   *
+   * 返り値は形状 ID (`ShapeManager` のインデックス) で、
+   * Sprite と同じアarena 上に存在します。
+   *
+   * **注意**: `add.graphics` (動的 command buffer) は却下 (E-02) です。
+   * 現在のシェイプは生成時に確定する静的形状のみです。
+   */
+  private _addShape(
+    kind: number,
+    width: number,
+    height: number,
+    aux2: number,
+    aux3: number,
+    color: number,
+    alpha: number,
+  ): number {
+    const shapes = (this._shapes ??= new ShapeManager(this.arena, (key, canvas) =>
+      this.textures.addCanvas(key, canvas),
+    ));
+    return shapes.add(kind, width, height, aux2, aux3, color, alpha);
+  }
+
+  /** 矩形 (Phaser 互換の `add.rectangle`) */
+  public addRectangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Rectangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 円 (Phaser 互換の `add.circle`) */
+  public addCircle(x: number, y: number, radius: number, color = 0xffffff, alpha = 1): number {
+    const id = this._addShape(ShapeKind.Circle, radius * 2, radius * 2, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 楕円 (Phaser 互換の `add.ellipse`) */
+  public addEllipse(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Ellipse, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 三角形 (Phaser 互換の `add.triangle`) */
+  public addTriangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Triangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 星形 (Phaser 互換の `add.star`) */
+  public addStar(
+    x: number,
+    y: number,
+    points: number,
+    radius: number,
+    innerRadius = radius / 2,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(
+      ShapeKind.Star,
+      radius * 2,
+      radius * 2,
+      points,
+      innerRadius / radius,
+      color,
+      alpha,
+    );
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 角丸矩形 (Phaser 互換の `add.roundRect` / `add.roundrect`) */
+  public addRoundRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius = 8,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.RoundRect, width, height, radius, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 線 (Phaser 互換の `add.line`) */
+  public addLine(
+    x: number,
+    y: number,
+    length: number,
+    lineWidth = 1,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Line, length, lineWidth, lineWidth, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 格子 (Phaser 互換の `add.grid`) */
+  public addGrid(
+    x: number,
+    y: number,
+    cellWidth: number,
+    cellHeight: number,
+    cells = 2,
+    lineWidth = 1,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(
+      ShapeKind.Grid,
+      cellWidth * cells,
+      cellHeight * cells,
+      cells,
+      lineWidth,
+      color,
+      alpha,
+    );
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 等角三角形 (Phaser 互換の `add.isotriangle`) */
+  public addIsoTriangle(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.IsoTriangle, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 等角ダイヤ (Phaser 互換の `add.isodiamond` / `isobox`) */
+  public addIsoDiamond(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.IsoDiamond, width, height, 0, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 四辺形 (Phaser 互換の `add.quad`) */
+  public addQuad(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    inset = 0,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Quad, width, height, inset, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 円弧 (Phaser 互換の `add.arc`) */
+  public addArc(
+    x: number,
+    y: number,
+    radius: number,
+    lineWidth = 2,
+    color = 0xffffff,
+    alpha = 1,
+  ): number {
+    const id = this._addShape(ShapeKind.Arc, radius * 2, radius * 2, lineWidth, 0, color, alpha);
+    if (id >= 0) this._setShapePos(id, x, y);
+    return id;
+  }
+
+  /** 生成済みシェイプ先頭の位置を書き込みます。 */
+  private _setShapePos(shapeId: number, x: number, y: number): void {
+    const arenaId = this.shapes.ids[shapeId];
+    if (arenaId < 0) return;
+    const dense = this.arena.idToIndex[arenaId];
+    if (dense < 0) return;
+    this.arena.setPosX(dense, x);
+    this.arena.setPosY(dense, y);
+  }
+
+  /** 静的シェイプの SoA。初回参照時に生成します。 */
+  public get shapes(): ShapeManager {
+    return (this._shapes ??= new ShapeManager(this.arena, (key, canvas) =>
+      this.textures.addCanvas(key, canvas),
+    ));
+  }
+
+  private _shapes: ShapeManager | null = null;
 
   constructor(props: SceneProps | string = {}) {
     let maxInstances = 100000;
@@ -447,6 +719,7 @@ export class Scene {
     this.input = new InputManager();
     this.textures = new TextureManager();
     this.load = new LoaderManager(this.textures);
+    this.load.setSoundManagerFactory(() => this.sound);
     this.cameras = new CameraManager(this);
     this.camera = this.cameras.main;
   }
@@ -514,18 +787,24 @@ export class Scene {
     }
     // dt を渡すことで Pointer の移動速度 (velocity) を正しく算出できます。
     this.input.update(dt);
+    const cam = this.cameras.main;
+    const viewW = this.engine?.scale?.gameSize?.width ?? 0;
+    const viewH = this.engine?.scale?.gameSize?.height ?? 0;
+    const z = cam.zoom !== 0 ? cam.zoom : 1;
+    this.input.worldPointerX = cam.actualX + (this.input.pointerX - viewW * 0.5) / z;
+    this.input.worldPointerY = cam.actualY + (this.input.pointerY - viewH * 0.5) / z;
     if ((active & Subsystem.Tweens) !== 0) {
       // ループの dt は秒ですが、Phaser 互換の `duration` / `delay` はミリ秒です。
       // 変換をこの境界 1 か所に閉じることで、TweenManager 側は ms 前提で
       // 書き続けられます (Phaser から移植したコードがそのまま動くようにするため)。
-      this._tweens!.update(dt * 1000);
+      this._tweens?.update(dt * 1000);
     }
-    if ((active & Subsystem.Anims) !== 0) this._anim!.update(dt);
-    if ((active & Subsystem.Particles) !== 0) this._particles!.update(dt);
-    if ((active & Subsystem.Sound) !== 0) this._sound!.update();
+    if ((active & Subsystem.Anims) !== 0) this._anim?.update(dt);
+    if ((active & Subsystem.Particles) !== 0) this._particles?.update(dt);
+    if ((active & Subsystem.Sound) !== 0) this._sound?.update();
     if ((active & Subsystem.Physics) !== 0) {
-      this._physics!.update(dt);
-      this._physics!.collide();
+      this._physics?.update(dt);
+      this._physics?.collide();
     }
     this.update(dt);
     for (let i = 0; i < this._plugins.length; i++) {

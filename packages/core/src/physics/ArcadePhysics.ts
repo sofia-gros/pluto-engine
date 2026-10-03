@@ -1,3 +1,4 @@
+import { Group } from '../arena/Group';
 import type { InstanceBufferArena } from '../arena/InstanceBufferArena';
 import type { Plugin } from '../scene/Plugin';
 import type { Scene } from '../scene/Scene';
@@ -107,6 +108,19 @@ export class ArcadePhysics implements Plugin {
   public immovable: Uint8Array;
   /** ワールド境界で反弹する (1 = 有効) */
   public collideWorldBounds: Uint8Array;
+  /**
+   * 動摩擦 (0 のときは無効)。
+   * `update` で速度を毎フレームこの割合だけ減衰させます。
+   * `drag` と違い、**加速度が 0 のときだけ**作用します。
+   */
+  public friction: Float32Array;
+  /**
+   * 静摩擦。速度がこの値以下になったら摩擦による減速を打ち切って
+   * 完全停止させます (0 のときは何も起こりません)。
+   */
+  public frictionStatic: Float32Array;
+  /** 物理演算の対象にするか (0 = 無効、1 = 有効) */
+  public enable: Uint8Array;
 
   // ============================================================
   // World (シーン全体で 1 つ)
@@ -139,6 +153,44 @@ export class ArcadePhysics implements Plugin {
      */
     existing: <T extends PhysicsTarget>(target: T): T => {
       return target;
+    },
+
+    /**
+     * 物理演算対象の {@link Group} を作成します
+     * (Phaser 互換の `physics.add.group`)。
+     *
+     * 設計上の判断 (IMPACT_SCOPE 3.2 の判定 D):
+     * Group は SoA 化しない使い回し `Array` で、アリーナは汚しません。
+     * 本メソッドはグループ用の器を返すだけで、SoA への登録は
+     * 呼び出し側が `body` 経由で個別に行います。
+     *
+     * @param children 初期メンバー
+     */
+    group: <T>(children?: readonly T[]): Group => {
+      const g = new Group();
+      if (children) g.addMultiple(children as T[]);
+      return g;
+    },
+
+    /**
+     * Immovable な {@link Group} を作成します
+     * (Phaser 互換の `physics.add.staticGroup`)。
+     *
+     * `group` と違い、所属メンバーを「動かない SoA」として実効化します。
+     * `body` を公開するオブジェクト (Sprite) には immovable を立て、
+     * そうでないメンバーは.Group 側の記録だけに留めます。
+     *
+     * @param children 初期メンバー
+     */
+    staticGroup: <T>(children?: readonly T[]): Group => {
+      const g = new Group();
+      // 以降 add() されたメンバーにも immovable を立てるため、フックを登録します
+      g.setOnAddHook((item) => {
+        const child = item as { body?: { setImmovable?: (v: boolean) => void } } | null;
+        child?.body?.setImmovable?.(true);
+      });
+      if (children) g.addMultiple(children as T[]);
+      return g;
     },
 
     /**
@@ -224,6 +276,11 @@ export class ArcadePhysics implements Plugin {
     this.offsetY = new Float32Array(maxInstances);
     this.immovable = new Uint8Array(maxInstances);
     this.collideWorldBounds = new Uint8Array(maxInstances);
+    // 摩擦は既定で無効 (0)。静摩擦も 0 なので停止補間は起きません。
+    this.friction = new Float32Array(maxInstances);
+    this.frictionStatic = new Float32Array(maxInstances);
+    // 物理は既定で有効 (1)。`disable()` で個別に止められます。
+    this.enable = new Uint8Array(maxInstances).fill(1);
   }
 
   /**
@@ -287,6 +344,32 @@ export class ArcadePhysics implements Plugin {
     if (i < 0) return;
     this.maxVelX[i] = maxVx;
     this.maxVelY[i] = maxVy;
+  }
+
+  /**
+   * 動摩擦と静摩擦を設定します (Phaser 互換の `setFriction`)。
+   *
+   * 動摩擦は**加速度が 0 のときだけ**速度を減衰させます。
+   * 加速度中有は fricton の影響を受けません。
+   *
+   * @param value 動摩擦 (0〜1)。0 のときは無効
+   * @param staticValue 静摩擦。速度がこれ以下で完全停止。0 なら停止しない
+   */
+  public setFriction(id: number, value: number, staticValue = 0): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.friction[i] = value < 0 ? 0 : value > 1 ? 1 : value;
+    this.frictionStatic[i] = staticValue < 0 ? 0 : staticValue;
+  }
+
+  /**
+   * 物理演算の有効・無効を切り替えます (Phaser 互換の `enable` / `disable`)。
+   * 無効なエンティティは `update` の積分から除外されます。
+   */
+  public setEnabled(id: number, value: boolean): void {
+    const i = this._idx(id);
+    if (i < 0) return;
+    this.enable[i] = value ? 1 : 0;
   }
 
   /**
@@ -456,6 +539,24 @@ export class ArcadePhysics implements Plugin {
     return i < 0 ? 0 : this.bounce[i];
   }
 
+  /** 動摩擦 (0 のときは無効) */
+  public getFriction(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.friction[i];
+  }
+
+  /** 静摩擦 */
+  public getFrictionStatic(id: number): number {
+    const i = this._idx(id);
+    return i < 0 ? 0 : this.frictionStatic[i];
+  }
+
+  /** 物理演算の対象になっているか */
+  public getEnabled(id: number): boolean {
+    const i = this._idx(id);
+    return i >= 0 && this.enable[i] === 1;
+  }
+
   /** 反発係数を設定します。0〜1 にクランプします。 */
   public setBounce(id: number, v: number): void {
     const i = this._idx(id);
@@ -530,6 +631,10 @@ export class ArcadePhysics implements Plugin {
     // read-modify-write なので、値を読み直してから書き戻す形になります
     // （ここが最も実行回数の多いループですが、SoA 読み込み + ミラー書き込みのみです）。
     for (let i = 0; i < count; i++) {
+      // 0. enable が 0 のエンティティは積分しない。
+      // 判定 (`processOverlaps` / `processColliders`) は別系統なので影響しません。
+      if (this.enable[i] === 0) continue;
+
       let vx = this.velX[i];
       let vy = this.velY[i];
 
@@ -550,6 +655,23 @@ export class ArcadePhysics implements Plugin {
       const my = this.maxVelY[i];
       if (my > 0 && vy > my) vy = my;
       else if (my > 0 && vy < -my) vy = -my;
+
+      // 3.5 動摩擦・静摩擦
+      // drag と違い、**この軸に加速度が架かっている間は作用しません**。
+      // これにより「押し続けて滑る」挙動と「放したあと滑って止まる」挙動を分離できます。
+      const f = this.friction[i];
+      if (f > 0) {
+        if (this.accelX[i] === 0) {
+          vx -= vx * f;
+          const fsx = this.frictionStatic[i];
+          if (fsx > 0 && vx > -fsx && vx < fsx) vx = 0;
+        }
+        if (this.accelY[i] === 0) {
+          vy -= vy * f;
+          const fsy = this.frictionStatic[i];
+          if (fsy > 0 && vy > -fsy && vy < fsy) vy = 0;
+        }
+      }
 
       this.velX[i] = vx;
       this.velY[i] = vy;
@@ -864,13 +986,31 @@ export class ArcadePhysics implements Plugin {
     return buf.posX.length;
   }
 
+  /**
+   * バッファ要素の当たり判定半径を返します。
+   *
+   * 優先順位:
+   * 1. `PhysicsBuffer.radius`（明示指定。スカラー or 配列）
+   * 2. `PhysicsBuffer.scale`（旧 API。`scale * 0.42`）
+   * 3. `InstanceBufferArena` の `frameWidth * scaleX * 0.5`
+   * 4. フォールバック 16
+   *
+   * 3 が無いと SoA アリーナ対象の半径が常に 16 に固定され、
+   * 小さいスプライトでの AABB 枝刈りが効かなくなります。
+   */
   private _getBufRadius(buf: InstanceBufferArena | PhysicsBuffer, index: number): number {
+    if ('radius' in buf && buf.radius) {
+      if (typeof buf.radius === 'number') return buf.radius;
+      const r = buf.radius[index];
+      if (typeof r === 'number') return r;
+    }
     if ('scale' in buf && buf.scale) {
       return buf.scale[index] * 0.42;
     }
-    if ('radius' in buf) {
-      if (typeof buf.radius === 'number') return buf.radius;
-      if (buf.radius && typeof buf.radius[index] === 'number') return buf.radius[index];
+    // InstanceBufferArena には `scale` が無い（`scaleX` / `scaleY` が別配列）ため、
+    // 表示寸法から半径を導出します。
+    if ('frameWidth' in buf && 'scaleX' in buf) {
+      return buf.frameWidth[index] * buf.scaleX[index] * 0.5;
     }
     return 16;
   }

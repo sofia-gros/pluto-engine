@@ -205,7 +205,11 @@ export class SDFCollider {
   }
 
   /** isSolid が (wantSolid === true) と一致するセルを距離 0 の種にする */
-  private _seed(g: Float32Array, isSolid: (x: number, y: number) => boolean, wantSolid: boolean): void {
+  private _seed(
+    g: Float32Array,
+    isSolid: (x: number, y: number) => boolean,
+    wantSolid: boolean,
+  ): void {
     const w = this.width;
     const h = this.height;
     for (let i = 0; i < w * h; i++) {

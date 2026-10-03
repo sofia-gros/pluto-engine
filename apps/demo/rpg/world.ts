@@ -405,10 +405,7 @@ export class RPGWorld {
     halfH: number,
   ): void {
     const left = Math.max(0, Math.floor((cx - halfW) / this.tileSize));
-    const right = Math.min(
-      this.mapWidth - 1,
-      Math.floor((cx + halfW) / this.tileSize),
-    );
+    const right = Math.min(this.mapWidth - 1, Math.floor((cx + halfW) / this.tileSize));
     const top = Math.max(0, Math.floor((cy - halfH) / this.tileSize));
     const bottom = Math.min(this.mapHeight - 1, Math.floor((cy + halfH) / this.tileSize));
 
@@ -422,10 +419,10 @@ export class RPGWorld {
   /**
    * 壁の法線に沿って滑らかに移動します。
    *
-    * 素朴な X/Y 軸分離 AABB 判定では、角に斜めから当たると
-    * 安全な方向が残らず移動が止まってしまいます。
-    * ここでは移動ベクトルを SDF の法線へ射影することで、
-    * 壁に接触したまま滑れるようにします。
+   * 素朴な X/Y 軸分離 AABB 判定では、角に斜めから当たると
+   * 安全な方向が残らず移動が止まってしまいます。
+   * ここでは移動ベクトルを SDF の法線へ射影することで、
+   * 壁に接触したまま滑れるようにします。
    *
    * @param out 長さ 2 以上の Float32Array [x, y]
    * @returns 実際に移動したか
