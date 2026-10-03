@@ -1,7 +1,7 @@
 {
   "name": "pluto-engine-monorepo",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "docs_site"],
   "scripts": {
     "build:all": "bun scripts/build-all.mjs",
     "build": "bun run build:all",

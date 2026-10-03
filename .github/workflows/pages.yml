@@ -33,8 +33,12 @@ jobs:
       - name: Build Engine
         run: bun run build
 
-      - name: Build Docs
+      - name: Generate API Docs
         run: bunx typedoc
+
+      - name: Build Docs (VitePress)
+        run: bun run docs:build
+        working-directory: docs_site
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -42,7 +46,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs_site'
+          path: 'docs_site/.vitepress/dist'
 
   deploy:
     environment:

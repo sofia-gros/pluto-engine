@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlutoEngine Benchmark</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; color: #0f0; font-family: monospace; }
+    canvas { display: block; image-rendering: pixelated; }
+    #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); padding: 10px; border: 1px solid #0f0; }
+    h1 { margin: 0 0 10px 0; font-size: 16px; }
+  </style>
+  <script type="module" crossorigin src="/pluto-engine/demos/assets/benchmark-DzfSaqWi.js"></script>
+  <link rel="modulepreload" crossorigin href="/pluto-engine/demos/assets/index-BHyN-INv.js">
+  <link rel="modulepreload" crossorigin href="/pluto-engine/demos/assets/index-kf00V5in.js">
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="ui">
+    <h1>PlutoEngine Stress Test</h1>
+    <div id="stats"></div>
+  </div>
+  
+  <div id="chart-container" style="display: none; position: absolute; top: 10px; right: 10px; width: 600px; height: 400px; background: rgba(0,0,0,0.9); padding: 10px; border: 1px solid #0f0;">
+    <canvas id="benchmark-chart"></canvas>
+  </div>
+
+</body>
+</html>
+

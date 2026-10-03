@@ -13,9 +13,14 @@
     "packages/sdf-collider/src/index.ts",
     "packages/verlet-ik/src/index.ts"
   ],
-  "out": "docs_site",
+  "out": "docs_site/api",
+  "plugin": ["typedoc-plugin-markdown"],
   "readme": "none",
   "hideGenerator": true,
+  "theme": "markdown",
+  "markdownItOptions": {
+    "html": true
+  },
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "types": ["@webgpu/types"],
