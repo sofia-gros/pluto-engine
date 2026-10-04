@@ -2,6 +2,8 @@
 
 ゲーム開発において、真の「中毒性」と「爽快感」を決定づける最後のスパイスは、**画面の揺れ（スクリーンシェイク）、被弾時の閃光（ヒットフラッシュ）、そして耳に響く小気味よい効果音（SE）**です！
 
+PlutoEngine v1.2.1 のアーキテクチャでは、**WebGPU** による描画レイヤーや **InstanceBufferArena** への SoA (Structure of Arrays) アクセスを活かし、パフォーマンスを一切犠牲にすることなく極上の演出を実現します。
+
 第9章では、外部のアセットファイル（MP3やWAV）を一切ロードすることなく、ブラウザ標準の **Web Audio API によるゼロ遅延・プロシージャル効果音生成** と、**非線形カメラトラウマによる画面振動システム** を組み込みます！
 
 ---
@@ -38,7 +40,7 @@ export class SwarmSurvivorScene extends Scene {
       // 非線形シェイク強度 (trauma の 2 乗)
       const shake = this.cameraTrauma * this.cameraTrauma * this.maxShakeOffset;
 
-      // カメラ座標を振動させる
+      // WebGPUのRenderGraphに渡すカメラ座標を振動させる
       this.camera.x = (Math.random() * 2 - 1) * shake;
       this.camera.y = (Math.random() * 2 - 1) * shake;
     } else {
@@ -48,22 +50,23 @@ export class SwarmSurvivorScene extends Scene {
   }
 ```
 
-敵に強力な一撃が当たったときや、プレイヤーが被弾したときに `this.addTrauma(0.15)` を呼び出します！
+敵に強力な一撃が当たったときや、プレイヤーが被弾したときに `this.addTrauma(0.15)` を呼び出します。毎フレーム呼ばれる `update` 内で `new` によるオブジェクト生成は一切行わず、ゼロアロケーションを徹底しています！
 
 ---
 
 ## 2. 被弾時の閃光 (Hit Flash)
 
-敵に攻撃が当たった瞬間に、敵のスプライト色を**純白 (0xffffff)** に切り替え、数フレーム後に元の赤色に戻すことで、圧倒的な打撃感を生み出します。
+敵に攻撃が当たった瞬間に、敵のスプライト色を**純白 (0xffffffff)** に切り替え、数フレーム後に元の赤色に戻すことで、圧倒的な打撃感を生み出します。v1.2.1 では `InstanceBufferArena` の SoA (Structure of Arrays) 構造を直接操作します。
 
 ```typescript
   public damageEnemy(enemyIndex: number, amount: number): void {
     const id = this.enemyIds[enemyIndex];
 
-    // 一瞬だけ純白に光らせる
-    this.arena.tint[id] = 0xffffffff;
+    // InstanceBufferArena (SoA) の Uint32Array を直接書き換えて純白に光らせる
+    this.arena.tints[id] = 0xffffffff;
 
     // Tweenを使って元の赤色 (0xef4444) に戻す (80ms)
+    // 内部ではフライウェイト(Flyweight)パターンによりゼロアロケーションで処理されます
     this.tweens.add(
       id,
       TweenProperty.TINT,
@@ -75,7 +78,7 @@ export class SwarmSurvivorScene extends Scene {
     // 画面をごくわずかに揺らす
     this.addTrauma(0.04);
 
-    // ... 前章のダメージ処理 ...
+    // ... XPBDPluginによる衝撃伝播やダメージ処理 ...
   }
 ```
 
@@ -173,7 +176,7 @@ class SoundEffects {
 }
 ```
 
-これをシーン内に `private sfx = new SoundEffects();` として保持し：
+これをシーン内に `private sfx = new SoundEffects();` として一度だけ保持し：
 - 敵に攻撃が当たった時: `this.sfx.playHit();`
 - ジェムを拾った時: `this.sfx.playGem();`
 - レベルアップした時: `this.sfx.playLevelUp();`
@@ -183,7 +186,7 @@ class SoundEffects {
 
 ## 4. リアルタイム・パフォーマンスモニターの追加
 
-画面の右上に、現在のFPS（フレームレート）と、アクティブなエンティティ総数を表示するパフォーマンスカウンターを設置します。
+画面の右上に、現在のFPS（フレームレート）と、アクティブなエンティティ総数を表示するパフォーマンスカウンターを設置します。PlutoEngine v1.2.1 の MortonPlugin (空間ハッシュ) と XPBDPlugin (物理演算) がどれほど高速か確認しましょう。
 
 ```typescript
   private fpsCounterText!: Text;
@@ -196,7 +199,7 @@ class SoundEffects {
   }
 
   private updatePerformanceMonitor(): void {
-    // アリーナの現在アクティブなスプライト総数を取得
+    // InstanceBufferArena の現在アクティブなスプライト総数を取得
     const activeEntities = this.arena.activeCount;
     const currentFps = Math.round(1 / (this.time.delta || 0.016));
 
@@ -213,7 +216,7 @@ class SoundEffects {
 敵を斬りつけるたびに画面が心地よく震え、純白のフラッシュが瞬き、小気味よい打撃音が連打されます。
 ジェムを連続で吸い込むと「ピロロロロ！」と気持ちいいハイトーンが響き渡り、レベルアップ時には輝かしいコードが鳴り響きます。
 
-右上のカウンターには、**数千体のエンティティがひしめき合っているにもかかわらず、堂々と 60FPS / 144FPS を維持している証拠**が表示されているはずです！
+右上のカウンターには、**数千体のエンティティがひしめき合っているにもかかわらず、WebGPU バックエンドにより堂々と 60FPS / 144FPS を維持している証拠**が表示されているはずです！
 
 いよいよ物語はクライマックスへ突入します。
 最終第10章では、画面全体を埋め尽くす弾幕と突進攻撃を繰り出す**巨大ボスモンスター（Swarm Titan）**を降臨させ、ゲームを勝利・ゲームオーバーの完全なループとして完結させます！

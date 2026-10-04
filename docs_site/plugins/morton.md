@@ -1,6 +1,6 @@
 # モートン順序と空間分割 (Morton Order / Z-Curve)
 
-PlutoEngine は、数万のエンティティの衝突判定や描画順序の最適化のために、空間分割アルゴリズムである「モートン順序（Z-Curve）」プラグインを提供します。
+PlutoEngine v1.2.1 は、数万のエンティティの衝突判定や描画順序の最適化のために、空間分割アルゴリズムである「モートン順序（Z-Curve）」プラグインを提供します。
 
 ## モートン順序とは？
 
@@ -15,9 +15,9 @@ Y座標: 101
 
 ## CPU ベースの空間ハッシュ
 
-一般的な四分木（Quadtree）は、木構造の生成やノードの再帰的走査でメモリアロケーション（GC）とポインタチェイスが発生するため、データ指向設計に反します。
+一般的な四分木（Quadtree）は、木構造の生成やノードの再帰的走査でメモリアロケーション（GC）とポインタチェイスが発生するため、データ指向設計（SoA）に反します。
 
-PlutoEngine では、エンティティのX, Y座標からモートンコードを計算し、CPU 上でエンティティを空間的に近い順に並び替えます。これにより、広域衝突判定（Broad-phase Collision Detection）やカリングが、ポインタを一切使わない1次元配列のバイナリサーチや線形走査だけで高速に完了します。
+PlutoEngine v1.2.1 では、エンティティのX, Y座標からモートンコードを計算し、CPU 上でエンティティを空間的に近い順に並び替えます。これにより、広域衝突判定（Broad-phase Collision Detection）やカリングが、ポインタを一切使わない `Uint32Array` の1次元配列のバイナリサーチや線形走査だけでゼロアロケーションで高速に完了します。
 
 > [!NOTE]
 > WGSL コンピュートシェーダによる GPU ソートは将来の対応として検討中です。現行の実装は CPU 側で完結しています。
@@ -41,8 +41,8 @@ class MyScene extends Scene {
   }
 
   update() {
-    // Use it via this.spatialHash
-    // this.spatialHash...
+    // 毎フレームのゼロアロケーション空間ハッシュ更新
+    this.spatialHash.update(this.arena.posX, this.arena.posY, this.arena.activeCount);
   }
 }
 ```

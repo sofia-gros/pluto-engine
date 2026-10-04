@@ -1,6 +1,6 @@
 # SDFとポアソンディスクサンプリング (SDF Text & Poisson)
 
-2Dゲームにおいて、高品質なフォントレンダリングと自然なオブジェクト配置は重要です。PlutoEngineではこれをSDFプラグインで解決します。
+2Dゲームにおいて、高品質なフォントレンダリングと自然なオブジェクト配置は重要です。PlutoEngine v1.2.1 ではこれをSDFプラグインで解決します。
 
 ## SDF (Signed Distance Field) フォント
 
@@ -35,8 +35,8 @@ class MyScene extends Scene {
   }
 
   update() {
-    // Use it via this.sdf
-    // this.sdf...
+    // SDFコライダの更新処理 (GCフリー)
+    this.sdf.updateCollisions(this.arena);
   }
 }
 ```

@@ -3,29 +3,29 @@
 敵を倒したら、プレイヤーを強化するための報酬が必要です。
 サバイバー系ゲームの中毒性のある要素が、**敵が消滅した瞬間に飛び散る大量の経験値ジェム（XP Gems）と、それを磁石のように引き寄せてレベルアップする仕組み**です。
 
-第7章では、PlutoEngine の**フリーリスト（Free List）によるスロット再利用の真骨頂**を体験しながら、ジェム収集とプレイヤー強化システムを実装します。
+第7章では、PlutoEngine v1.2.1 の**`InstanceBufferArena`を用いたフリーリスト（Free List）によるスロット再利用の真骨頂**を体験しながら、ジェム収集とプレイヤー強化システムを実装します。
 
 ---
 
 ## 1. フリーリストが生み出す「完全循環エコシステム」
 
-敵が倒れたとき、敵のIDは `this.arena.free(enemyId)` によってアリーナのフリーリストへ返却されます。
-そして、その直後に `this.add.sprite(ex, ey, 10)` で経験値ジェムを生成するとどうなるでしょうか？
+敵が倒れたとき、敵のIDは `this.instances.free(enemyId)` によってアリーナのフリーリストへ返却されます。
+そして、その直後に経験値ジェムを生成するとどうなるでしょうか？
 
 ```
-[ 敵が死亡 ] --> arena.free(id: 42) を呼ぶ (フリーリストに返却)
+[ 敵が死亡 ] --> instances.free(id: 42) を呼ぶ (フリーリストに返却)
                     │
-[ ジェム生成 ] <-- arena.allocate() が同じ (id: 42) を即座に払い出す！
+[ ジェム生成 ] <-- instances.allocate() が同じ (id: 42) を即座に払い出す！
 ```
 
 **敵が死んでジェムが生まれる際、メモリアリーナの消費量は一切増えません。**
-同じメモリスロットがそのままジェムとして再利用されるため、何万体の敵を倒してもヒープメモリのフットプリントは完全に一定に保たれます。
+同じメモリスロットがそのままジェムとして再利用されるため、何万体の敵を倒してもヒープメモリのフットプリントは完全に一定に保たれ、ガベージコレクションによるスパイクも発生しません。
 
 ---
 
 ## 2. 経験値ジェムプールの設計
 
-ジェムも同様に SoA 配列で管理します。
+ジェムも同様に SoA (Structure of Arrays) パターンで管理します。
 
 ```typescript
 const MAX_GEMS = 5000;
@@ -57,11 +57,11 @@ export class SwarmSurvivorScene extends Scene {
 
     if (this.enemyHp[enemyIndex] <= 0) {
       const id = this.enemyIds[enemyIndex];
-      const ex = this.arena.posX[id];
-      const ey = this.arena.posY[id];
+      const ex = this.instances.posX[id];
+      const ey = this.instances.posY[id];
 
-      // 1. 敵スプライトをアリーナに返却
-      this.arena.free(id);
+      // 1. 敵インスタンスを InstanceBufferArena に返却
+      this.instances.free(id);
 
       // 2. 敵プールから O(1) スワップ削除
       const last = --this.enemyCount;
@@ -72,12 +72,14 @@ export class SwarmSurvivorScene extends Scene {
       // 3. ジェムのスポーン (最大容量内)
       if (this.gemCount < MAX_GEMS) {
         // 先ほど解放されたスロットが即座に再利用される！
-        const gem = this.add.sprite(ex, ey, 10);
-        // エメラルドグリーン (0x34d399) の発光ジェム
-        gem.setTint(0x34d399);
+        const gemId = this.instances.allocate();
+        this.instances.posX[gemId] = ex;
+        this.instances.posY[gemId] = ey;
+        this.instances.scale[gemId] = 10;
+        this.instances.color[gemId] = 0x34d399; // エメラルドグリーンの発光ジェム
 
         const gIdx = this.gemCount++;
-        this.gemIds[gIdx] = gem.id;
+        this.gemIds[gIdx] = gemId;
         this.gemValues[gIdx] = 10; // 10 XP
       }
     }
@@ -89,6 +91,7 @@ export class SwarmSurvivorScene extends Scene {
 ## 4. ジェムの磁気吸引と獲得 (`updateGems`)
 
 プレイヤーがジェムの磁石範囲（`magnetRadius`）に近づくと、ジェムがプレイヤーに向かって加速しながら吸い寄せられます。プレイヤーに触れると経験値が加算されます。
+この処理内でも `new` によるメモリアロケーションを一切行わず、SoA配列に対して直接計算を適用します。
 
 ```typescript
   private updateGems(dt: number): void {
@@ -96,8 +99,8 @@ export class SwarmSurvivorScene extends Scene {
     const py = this.player.y;
     const magnetSq = this.magnetRadius * this.magnetRadius;
     const pickupDistSq = 20 * 20; // 回収距離 20px
-    const posX = this.arena.posX;
-    const posY = this.arena.posY;
+    const posX = this.instances.posX;
+    const posY = this.instances.posY;
 
     for (let i = this.gemCount - 1; i >= 0; i--) {
       const id = this.gemIds[i];
@@ -121,7 +124,7 @@ export class SwarmSurvivorScene extends Scene {
           this.gainXp(this.gemValues[i]);
 
           // ジェムをアリーナから解放
-          this.arena.free(id);
+          this.instances.free(id);
 
           // ジェムプールから O(1) スワップ削除
           const last = --this.gemCount;
@@ -184,6 +187,7 @@ export class SwarmSurvivorScene extends Scene {
 
 ゲームを動かし、ブレードやダガーで敵を倒してみてください。
 敵が消滅した場所にエメラルド色のジェムが散らばり、プレイヤーが近づくと吸い寄せられてレベルアップするゲームサイクルが動作します。
+また WebGPU バックエンドの `RenderGraph` によって、膨大なジェムが描画されても極めて高いパフォーマンスを維持していることが確認できるはずです。
 
 現在、レベルやステータスはコンソールに出力されていますが、画面上に数字やHPバーがなければプレイヤーに伝わりません。
 続く第8章では、PlutoEngine の `add.text` と **ゼロアロケーション・Tweenシステム**を使って、HUDとダメージ数字（ポップアニメーション）を実装します。

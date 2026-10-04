@@ -1,7 +1,6 @@
 # オーディオプラグイン (SoundManager)
 
-`@pluto-engine/audio` は、Web Audio API をフル活用した強力なサウンドシステムです。
-大量の敵が同時に爆発した際などに音が割れる（クリッピングする）のを防ぐマスターリミッターや、GC（ガベージコレクション）スパイクを防ぐオーディオノードのプーリング機構を内蔵しています。
+`@pluto-engine/audio` は、Web Audio API をフル活用した強力なサウンドシステムです。PlutoEngine v1.2.1 では、大量の敵が同時に爆発した際などに音が割れる（クリッピングする）のを防ぐマスターリミッターや、GC（ガベージコレクション）スパイクを防ぐオーディオノードの事前割り当てプーリング機構を内蔵しています。
 
 ## インストールと登録
 
@@ -15,7 +14,7 @@ export class MyScene extends Scene {
   }
 
   public create() {
-    // 音を再生
+    // 事前割り当て済みプールから音を再生 (GCフリー)
     this.sound.play('explosion', { volume: 0.8 });
   }
 }
@@ -24,7 +23,7 @@ export class MyScene extends Scene {
 ## 主な機能
 
 ### 1. ゼロアロケーション・プーリング
-Web Audio APIの仕様上 `AudioBufferSourceNode` は使い捨てですが、PlutoEngine では空間オーディオ用の `PannerNode` や音量制御の `GainNode` を再利用可能な `VoiceNode` としてプールし、メモリ確保のオーバーヘッドを極限まで削っています。
+Web Audio APIの仕様上 `AudioBufferSourceNode` は使い捨てですが、PlutoEngine では空間オーディオ用の `PannerNode` や音量制御の `GainNode` を再利用可能な `VoiceNode` としてプールし、メモリ確保のオーバーヘッドを極限まで削っています。再生ループ内でのオブジェクトの確保は発生しません。
 
 ### 2. マスターリミッター
 出力の最終段に `DynamicsCompressorNode` が接続されているため、100個のサウンドエフェクトが完全に同時に鳴っても、耳を劈くようなノイズが発生しません。

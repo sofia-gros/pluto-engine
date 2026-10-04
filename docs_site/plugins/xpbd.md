@@ -1,6 +1,6 @@
 # XPBD 物理エンジン (Extended Position Based Dynamics)
 
-PlutoEngineは、従来の剛体力学（Rigid Body Dynamics）に代わり、堅牢で安定したExtended Position Based Dynamics (XPBD) ベースの2D物理エンジンを内蔵しています。
+PlutoEngine v1.2.1 は、従来の剛体力学（Rigid Body Dynamics）に代わり、堅牢で安定したExtended Position Based Dynamics (XPBD) ベースの2D物理エンジンを内蔵しています。すべての物理シミュレーションはSoA（Structure of Arrays）を用いてゼロアロケーションで実行されます。
 
 ## XPBDの利点
 
@@ -15,9 +15,9 @@ XPBDは**直接「位置」を制約条件に従って修正（Solve）**しま�
 物理演算はCPU・メモリのボトルネックになりやすい領域です。
 PlutoEngineのXPBDソルバは完全にデータ指向（DOD）で設計されています。
 
-- `positions`, `prev_positions`, `inverse_mass`, `velocities` などの配列をSoA形式で保持します。
-- 衝突解決やジョイント制約の計算は、フラットな `Float32Array` に対する単純な数学演算として連続的に実行されます。
-- クラスインスタンスの生成（`new Vector2()` や `new ContactPoint()`）はループ内で一切発生しません。
+- `positions`, `prev_positions`, `inverse_mass`, `velocities` などの配列をSoA形式でフラットな `Float32Array` に保持します。
+- 衝突解決やジョイント制約の計算は、これらに対する単純な数学演算として連続的に実行されます。
+- クラスインスタンスの生成（`new Vector2()` や `new ContactPoint()`）はループ内で一切発生しません。完全にゼロアロケーションです。
 
 ## Standalone Usage
 
@@ -38,8 +38,8 @@ class MyScene extends Scene {
   }
 
   update() {
-    // Use it via this.xpbd
-    // this.xpbd...
+    // 物理シミュレーションステップの進行 (GCフリー)
+    this.xpbd.step(this.arena);
   }
 }
 ```

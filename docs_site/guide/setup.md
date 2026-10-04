@@ -7,7 +7,7 @@ PlutoEngine は、プロジェクトの目的や規模に合わせて、4つの�
 ## 前提条件
 
 - **Node.js**: v18.0.0 以上、または **Bun** (推奨: 1.0 以上)
-- **モダンブラウザ**: Chrome, Edge, Firefox, Safari (WebGL2 または WebGPU に対応した環境)
+- **モダンブラウザ**: Chrome, Edge, Firefox, Safari (WebGPU に対応した環境)
 
 ---
 

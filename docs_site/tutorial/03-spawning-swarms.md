@@ -3,13 +3,13 @@
 第2章で軽快に動くプレイヤーが完成しました。
 第3章では、いよいよ本チュートリアルの真骨頂である**「数千体の敵モンスター（スウォーム）が画面外から一斉に押し寄せる」**システムを構築します！
 
-従来のエンジンでは、500体のスプライトを動かすだけでFPSが激減していました。しかし PlutoEngine なら、**5,000体以上の敵がプレイヤー目掛けて殺到しても、まったく処理落ちしません**。
+従来のエンジンでは、500体のスプライトを動かすだけでFPSが激減していました。しかし PlutoEngine v1.2.1 なら、**5,000体以上の敵がプレイヤー目掛けて殺到しても、WebGPU バックエンドと InstanceBufferArena による一括バッチ描画により、まったく処理落ちしません**。
 
 ---
 
 ## 1. データ指向による敵プール (Enemy Pool) の設計
 
-敵モンスターの管理も、ゼロアロケーションの原則（SoA）に従います。`Enemy` クラスのインスタンスを数千個配列に `push` するのではなく、**事前確保されたフラットな TypedArray** で敵のステータスを管理します。
+敵モンスターの管理も、ゼロアロケーションの原則（SoA: Structure of Arrays）に従います。`Enemy` クラスのインスタンスを数千個配列に `push` するのではなく、**事前確保されたフラットな TypedArray (Float32Array / Int32Array)** で敵のステータスを管理します。
 
 ```typescript
 // 敵管理用の定数
@@ -53,7 +53,7 @@ export class SwarmSurvivorScene extends Scene {
       const spawnX = px + Math.cos(angle) * spawnRadius;
       const spawnY = py + Math.sin(angle) * spawnRadius;
 
-      // アリーナから新しいスプライトIDを割り当て (サイズ 18px)
+      // InstanceBufferArena から新しいスプライトIDを割り当て (サイズ 18px)
       const sprite = this.add.sprite(spawnX, spawnY, 18);
       // 深紅のモンスターカラー (0xef4444)
       sprite.setTint(0xef4444);
@@ -73,7 +73,7 @@ export class SwarmSurvivorScene extends Scene {
 
 毎フレーム、登録されているすべての敵について、プレイヤーへの方向ベクトルを計算して移動させます。
 
-アリーナの型付き配列（`this.arena.posX`, `this.arena.posY`）をローカル変数に参照させてループを回すことで、JITコンパイラが最速のポインタ走査コードを生成します。
+InstanceBufferArena の型付き配列（`this.arena.posX`, `this.arena.posY`）をローカル変数に参照させてループを回すことで、JITコンパイラが最速のポインタ走査コードを生成します。ループ内で `new` は一切使用しません（ゼロアロケーション）。
 
 ```typescript
   /**
@@ -82,6 +82,8 @@ export class SwarmSurvivorScene extends Scene {
   private updateEnemies(dt: number): void {
     const px = this.player.x;
     const py = this.player.y;
+    
+    // InstanceBufferArena のバッファを直接参照
     const posX = this.arena.posX;
     const posY = this.arena.posY;
     const facing = this.arena.facing;
@@ -140,7 +142,7 @@ export class SwarmSurvivorScene extends Scene {
 四方八方から、真っ赤な敵の群れが渦を巻きながらプレイヤーに迫ってきます。
 
 ブラウザの DevTools（F12）の Performance タブを開いてみてください。
-**敵の数が 1,000、2,000、3,000、5,000体と増え続けても、フレームレートは 60 FPS または 144 FPS の上限に張り付いたまま、ノコギリ状のGCスパイクが一切現れない**ことに驚くはずです！
+**敵の数が 1,000、2,000、3,000、5,000体と増え続けても、RenderGraph を介した WebGPU バックエンドの最適化により、フレームレートは 60 FPS または 144 FPS の上限に張り付いたまま、ノコギリ状のGCスパイクが一切現れない**ことに驚くはずです！
 
 しかし、この状態では敵同士が1点に重なってしまったり、当たり判定を愚直に計算すると $O(N^2)$ の計算爆発が起きてしまいます。
-続く第4章では、この大群を $O(1)$ で高速検索する**モートン空間ハッシュ（Spatial Partitioning）**を導入します！
+続く第4章では、この大群の衝突判定を最適化する **XPBDPlugin (Extended Position Based Dynamics)** と、空間を高速検索する **MortonPlugin (モートンコードベースの空間ハッシュ)** を導入します！

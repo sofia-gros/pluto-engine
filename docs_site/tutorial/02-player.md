@@ -1,21 +1,21 @@
 # 第2章: プレイヤー操作と入力管理
 
-第1章ではゲームの土台と大容量メモリアリーナを構築しました。
+第1章ではゲームの土台と大容量メモリアリーナ(`InstanceBufferArena`)を構築しました。
 第2章では、大群に立ち向かう主人公（プレイヤー）を登場させ、キーボード（WASD / 矢印キー）による**滑らかでキビキビとした8方向移動**を実装します！
 
-ここで最も重要なのは、**斜め移動時の速度補正（ベクトルの正規化）を、新しいオブジェクトを作らずに計算する（ゼロアロケーション）**テクニックです。
+ここで最も重要なのは、**斜め移動時の速度補正（ベクトルの正規化）を、新しいオブジェクトを作らずに計算する（ゼロアロケーション）**テクニックです。PlutoEngine v1.2.1のSoA（Structure of Arrays）とFlyweightパターンを活用し、ガベージコレクション（GC）の発生を完全に抑えます。
 
 ---
 
 ## 1. プレイヤースプライトの作成
 
-シーンにプレイヤーを保持するプロパティを追加し、`create()` メソッドでスプライトを生成します。
+シーンにプレイヤーを保持するプロパティを追加し、`create()` メソッドでスプライトを生成します。内部的には `InstanceBufferArena` から割り当てられ、Flyweightオブジェクトとして機能します。
 
 ```typescript
-import { PlutoEngine, ScaleMode, Scene, type Sprite } from 'pluto-engine';
+import { PlutoEngine, ScaleMode, Scene, XPBDPlugin, MortonPlugin, type Sprite } from 'pluto-engine';
 
 export class SwarmSurvivorScene extends Scene {
-  // プレイヤーのハンドル
+  // プレイヤーのハンドル (Flyweightオブジェクト)
   private player!: Sprite;
 
   // プレイヤーステータス
@@ -25,6 +25,7 @@ export class SwarmSurvivorScene extends Scene {
 
   create(): void {
     // 画面中央にサイズ 28px のプレイヤースプライトを生成
+    // 内部的には InstanceBufferArena から Float32Array のスロットが割り当てられます
     this.player = this.add.sprite(960 / 2, 540 / 2, 28);
 
     // 鮮やかなエメラルドグリーン (0x10b981) を設定
@@ -41,7 +42,7 @@ export class SwarmSurvivorScene extends Scene {
 
 従来のゲーム制作では、斜め移動の正規化に `new Vector2(dx, dy).normalize()` といったオブジェクト生成がよく使われます。しかし、1秒間に60〜144回も `new` を行うと、メモリ上にゴミが溜まりGCスパイクの原因になります。
 
-PlutoEngine では、スカラー値（ローカル変数）だけで高速に計算します：
+PlutoEngine v1.2.1 では、スカラー値（ローカル変数）だけで高速に計算します。さらに、`this.player.x` へのアクセスは、内部でSoA（Float32Array）の該当インデックスを直接読み書きするため、非常に高速です：
 
 ```typescript
   update(dt: number): void {
@@ -70,6 +71,7 @@ PlutoEngine では、スカラー値（ローカル変数）だけで高速に�
       const normY = moveY / length;
 
       // 速度と経過時間(dt)を掛けて移動
+      // Flyweight経由でSoAバッファを直接更新
       const dist = this.playerSpeed * dt;
       this.player.x += normX * dist;
       this.player.y += normY * dist;
@@ -102,10 +104,10 @@ PlutoEngine の `InputManager` は、ブラウザの非同期な DOM キーボ�
 
 ## 4. 全体コード (`src/main.ts`)
 
-現在の `src/main.ts` は以下のようになります：
+現在の `src/main.ts` は以下のようになります。v1.2.1アーキテクチャに合わせ、バックエンドに `webgpu` を指定し、今後の章で使う物理・空間ハッシュプラグイン (`XPBDPlugin`, `MortonPlugin`) を登録しています。描画には `RenderGraph` が自動的に使用されます。
 
 ```typescript
-import { PlutoEngine, ScaleMode, Scene, type Sprite } from 'pluto-engine';
+import { PlutoEngine, ScaleMode, Scene, XPBDPlugin, MortonPlugin, type Sprite } from 'pluto-engine';
 
 export class SwarmSurvivorScene extends Scene {
   private player!: Sprite;
@@ -149,7 +151,9 @@ new PlutoEngine({
   height: 540,
   scaleMode: ScaleMode.FIT,
   autoCenter: true,
+  backend: 'webgpu', // WebGPUレンダリングバックエンドを使用
   maxInstances: 50000,
+  plugins: [XPBDPlugin, MortonPlugin], // 物理・空間ハッシュプラグイン
   scene: [SwarmSurvivorScene],
 });
 ```

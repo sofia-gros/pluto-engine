@@ -1,10 +1,10 @@
-# 第1章: プロジェクト構築とアリーナ初期化
+# 第1章: プロジェクト構築とWebGPU初期化
 
-この10章のチュートリアルでは、ブラウザ上で**数千〜数万体ものモンスターがプレイヤーに押し寄せる大群サバイバーゲーム（Swarm Survivor）**を、PlutoEngine を使ってゼロから完成させます。
+この10章のチュートリアルでは、ブラウザ上で**数千〜数万体ものモンスターがプレイヤーに押し寄せる大群サバイバーゲーム（Swarm Survivor）**を、PlutoEngine v1.2.1 を使ってゼロから完成させます。
 
-PlutoEngine の**データ指向（SoA）とゼロアロケーション設計**を用いれば、5,000体以上の敵が画面を埋め尽くしても、144FPSで安定して動作します。
+PlutoEngine の**データ指向（SoA）とFlyweightパターンを用いたゼロアロケーション設計**、そして**WebGPUバックエンド**を用いれば、5,000体以上の敵が画面を埋め尽くしても、安定して動作します。物理演算には `XPBDPlugin`、空間分割には `MortonPlugin` を使用していきます。
 
-第1章では、開発環境のセットアップと、超大容量メモリアリーナを持つゲームエンジンの初期化を行います。
+第1章では、開発環境のセットアップと、WebGPU・超大容量インスタンスバッファアリーナを持つゲームエンジンの初期化を行います。
 
 ---
 
@@ -80,7 +80,7 @@ bun add pluto-engine
 
 ## 3. シーンとエンジンの初期化 (`src/main.ts`)
 
-`src/main.ts` に最初のゲームシーン `SwarmSurvivorScene` を作成し、`PlutoEngine` を初期化します。
+`src/main.ts` に最初のゲームシーン `SwarmSurvivorScene` を作成し、`PlutoEngine` を初期化します。v1.2.1のアーキテクチャに合わせて、WebGPUバックエンドを有効化し、`InstanceBufferArena`によって一括管理される構成を設定します。
 
 ```typescript
 import { PlutoEngine, ScaleMode, Scene } from 'pluto-engine';
@@ -92,9 +92,11 @@ export class SwarmSurvivorScene extends Scene {
   /**
    * シーンの初期化時に一度だけ実行される
    */
-  create(): void {
+  async create(): Promise<void> {
     console.log('SwarmSurvivorScene が初期化されました');
-    console.log(`アリーナ最大収容量: ${this.arena.capacity} インスタンス`);
+    
+    // v1.2.1では InstanceBufferArena でエンティティを管理します
+    console.log(`アリーナ最大収容量: ${this.engine.arena.capacity} インスタンス`);
 
     // アリーナの中央にテスト用の目印スプライトを1つ配置
     const centerMarker = this.add.sprite(960 / 2, 540 / 2, 16);
@@ -102,7 +104,8 @@ export class SwarmSurvivorScene extends Scene {
   }
 
   /**
-   * 毎フレーム呼ばれる更新ロジック (ゼロアロケーション)
+   * 毎フレーム呼ばれる更新ロジック (ゼロアロケーション、Flyweightパターンを使用)
+   * ※更新ループ内では new を絶対に使用しないでください
    * @param dt 前フレームからの経過時間 (秒)
    */
   update(dt: number): void {
@@ -117,21 +120,21 @@ const engine = new PlutoEngine({
   height: 540,
   scaleMode: ScaleMode.FIT,
   autoCenter: true,
-  maxInstances: 50000, // 5万体のエンティティを収容可能なSoAアリーナを確保
+  backend: 'webgpu', // WebGPUバックエンドを指定
+  maxInstances: 50000, // 5万体のエンティティを収容可能なSoAベースのInstanceBufferArenaを確保
   scene: [SwarmSurvivorScene],
 });
 ```
 
 ---
 
-## 4. なぜ `maxInstances: 50000` なのか？
+## 4. なぜ `maxInstances: 50000` で WebGPU・SoA なのか？
 
-PlutoEngine の核心は、**ゲームが起動した瞬間に必要なメモリ領域を一括確保する**ことにあります。
+v1.2.1 アーキテクチャの核心は、**ゲームが起動した瞬間に必要なメモリ領域を一括確保（InstanceBufferArena）する**ことにあります。
 
-- `Float32Array`（4バイト）× 50,000 = 約 200 KB
-- X座標、Y座標、スケール、向き、色、アクティブフラグを合わせても、**わずか数MBの連続メモリ領域**しか消費しません。
-
-起動時にこの領域を確保しておくことで、ゲームプレイ中に数千体のモンスターが出現しても、ブラウザのV8エンジンはメモリ割り当て（ヒープアロケーション）を一切行う必要がありません。これが**ガベージコレクション（GC）によるカクつきをゼロにする仕組み**です。
+- `Float32Array`（SoA: 構造体の配列ではなく、配列の構造体）により構成され、キャッシュ効率が最適化されています。
+- `RenderGraph` と連携し、WebGPUバックエンドにインスタンス描画データを効率的に送ります。
+- 起動時にこの領域を確保しておくことで、ゲームプレイ中に数千体のモンスターが出現しても、ブラウザのV8エンジンはオブジェクト生成（ヒープアロケーション）を一切行いません。また、Flyweightパターンを用いてインスタンスへアクセスします。これが**ガベージコレクション（GC）によるカクつきをゼロにする仕組み**です。
 
 ---
 

@@ -2,20 +2,22 @@
 
 大群サバイバーゲーム（Survivor系）の醍醐味といえば、**プレイヤーの操作に関わらず全自動で発動し、敵の大群をなぎ倒すド派手な武器システム**です！
 
-第5章では、2つの強力な自動攻撃兵器を実装します：
+第5章では、PlutoEngine v1.2.1 の新しい設計に沿って2つの強力な自動攻撃兵器を実装します：
 1. **軌道エネルギーブレード (Orbiting Blades)**: プレイヤーの周囲を高速旋回し、接近する敵をミンチにする回転刃。
 2. **追尾マジックダガー (Magic Daggers)**: 一定間隔で最寄りの敵を自動検知し、一直線に高速射出される魔法の短剣。
 
-第4章で作成した空間ハッシュを活用し、数千体の敵との当たり判定を毎フレーム超高速に処理します。
+第4章で紹介した `MortonPlugin` (モートンコードによる空間ハッシュ) を活用し、数千体の敵との当たり判定を毎フレーム超高速に処理します。
 
 ---
 
 ## 1. 武器 1: 軌道エネルギーブレードの実装
 
-プレイヤーの周囲を回転するブレードスプライトを3本生成し、三角関数で公転運動させます。
+プレイヤーの周囲を回転するブレードスプライトを `InstanceBufferArena` から3つ確保し、三角関数で公転運動させます。
 
 ```typescript
-export class SwarmSurvivorScene extends Scene {
+import { MortonPlugin, InstanceBufferArena } from 'pluto-engine';
+
+export class SwarmSurvivorScene {
   // ... 前章のプロパティ ...
 
   // 軌道ブレードの管理
@@ -26,12 +28,13 @@ export class SwarmSurvivorScene extends Scene {
   private readonly bladeSpeed = 4.0; // 回転角速度 (rad/s)
   private readonly bladeDamage = 15; // 接触ダメージ
 
-  private initWeapons(): void {
-    // 3本のブレードスプライトをアリーナから確保 (サイズ 20px)
+  private initWeapons(arena: InstanceBufferArena): void {
     for (let i = 0; i < this.bladeCount; i++) {
-      const blade = this.add.sprite(0, 0, 20);
-      blade.setTint(0xfacc15); // まばゆい黄金色 (0xfacc15)
-      this.bladeIds[i] = blade.id;
+      // 3本のブレードスプライトをアリーナから確保 (サイズ 20px)
+      const id = arena.allocate();
+      arena.setSize(id, 20);
+      arena.setTint(id, 0xfacc15); // まばゆい黄金色 (0xfacc15)
+      this.bladeIds[i] = id;
     }
   }
 ```
@@ -41,12 +44,10 @@ export class SwarmSurvivorScene extends Scene {
 毎フレーム角度を進め、ブレードの位置を更新しつつ、ブレードの周囲にある敵に対してダメージを与えます。
 
 ```typescript
-  private updateBlades(dt: number): void {
+  private updateBlades(dt: number, arena: InstanceBufferArena, morton: MortonPlugin): void {
     this.bladeAngle += this.bladeSpeed * dt;
-    const px = this.player.x;
-    const py = this.player.y;
-    const posX = this.arena.posX;
-    const posY = this.arena.posY;
+    const px = arena.getPosX(this.playerId);
+    const py = arena.getPosY(this.playerId);
 
     for (let i = 0; i < this.bladeCount; i++) {
       const id = this.bladeIds[i];
@@ -56,12 +57,12 @@ export class SwarmSurvivorScene extends Scene {
       const bx = px + Math.cos(angle) * this.bladeRadius;
       const by = py + Math.sin(angle) * this.bladeRadius;
 
-      posX[id] = bx;
-      posY[id] = by;
+      arena.setPosX(id, bx);
+      arena.setPosY(id, by);
 
-      // ブレードの半径 18px 以内にいる敵を空間ハッシュで検索
-      this.queryNearbyEnemies(bx, by, 18, (enemyIdx) => {
-        this.damageEnemy(enemyIdx, this.bladeDamage * dt * 10);
+      // ブレードの半径 18px 以内にいる敵をMortonPluginで高速検索
+      morton.queryRadius(bx, by, 18, (enemyIdx) => {
+        this.damageEnemy(enemyIdx, this.bladeDamage * dt * 10, arena);
       });
     }
   }
@@ -71,13 +72,13 @@ export class SwarmSurvivorScene extends Scene {
 
 ## 2. 武器 2: 自動照準マジックダガーの実装
 
-飛び道具（弾）も、ヒープ確保を避けるために固定サイズのプールで管理します。
+飛び道具（弾）も、ヒープ確保（GC）を避けるために固定サイズのプール (SoA構造) で管理します。
 
 ```typescript
 const MAX_PROJECTILES = 200;
 
-export class SwarmSurvivorScene extends Scene {
-  // 飛び道具プール
+export class SwarmSurvivorScene {
+  // 飛び道具プール (SoA)
   private projCount = 0;
   private readonly projIds = new Int32Array(MAX_PROJECTILES);
   private readonly projVelX = new Float32Array(MAX_PROJECTILES);
@@ -91,22 +92,22 @@ export class SwarmSurvivorScene extends Scene {
 
 ### 最寄りの敵を自動探索して発射 (`fireDagger`)
 
-空間ハッシュを利用して、プレイヤーから最も近い敵を探索します。
+`MortonPlugin` の空間ハッシュを利用して、プレイヤーから最も近い敵を探索します。
 
 ```typescript
-  private fireDagger(): void {
+  private fireDagger(arena: InstanceBufferArena, morton: MortonPlugin): void {
     if (this.projCount >= MAX_PROJECTILES) return;
 
-    const px = this.player.x;
-    const py = this.player.y;
+    const px = arena.getPosX(this.playerId);
+    const py = arena.getPosY(this.playerId);
 
     // 最寄りの敵を探す
     let closestEnemyId = -1;
     let closestDistSq = 500 * 500; // 射程 500px
 
-    this.queryNearbyEnemies(px, py, 500, (enemyIdx, id) => {
-      const dx = this.arena.posX[id] - px;
-      const dy = this.arena.posY[id] - py;
+    morton.queryRadius(px, py, 500, (enemyIdx, id) => {
+      const dx = arena.getPosX(id) - px;
+      const dy = arena.getPosY(id) - py;
       const dSq = dx * dx + dy * dy;
       if (dSq < closestDistSq) {
         closestDistSq = dSq;
@@ -116,18 +117,21 @@ export class SwarmSurvivorScene extends Scene {
 
     // 射程内に敵がいれば発射
     if (closestEnemyId !== -1) {
-      const targetX = this.arena.posX[closestEnemyId];
-      const targetY = this.arena.posY[closestEnemyId];
+      const targetX = arena.getPosX(closestEnemyId);
+      const targetY = arena.getPosY(closestEnemyId);
       const dx = targetX - px;
       const dy = targetY - py;
       const dist = Math.hypot(dx, dy);
 
       const bulletSpeed = 500; // 弾速 500 px/s
-      const sprite = this.add.sprite(px, py, 14);
-      sprite.setTint(0x38bdf8); // スカイブルー
+      const id = arena.allocate();
+      arena.setSize(id, 14);
+      arena.setPosX(id, px);
+      arena.setPosY(id, py);
+      arena.setTint(id, 0x38bdf8); // スカイブルー
 
       const idx = this.projCount++;
-      this.projIds[idx] = sprite.id;
+      this.projIds[idx] = id;
       this.projVelX[idx] = (dx / dist) * bulletSpeed;
       this.projVelY[idx] = (dy / dist) * bulletSpeed;
       this.projLife[idx] = 1.5; // 1.5秒生存
@@ -138,30 +142,29 @@ export class SwarmSurvivorScene extends Scene {
 ### 弾の移動と敵への着弾処理
 
 ```typescript
-  private updateProjectiles(dt: number): void {
-    const posX = this.arena.posX;
-    const posY = this.arena.posY;
-
+  private updateProjectiles(dt: number, arena: InstanceBufferArena, morton: MortonPlugin): void {
     for (let i = this.projCount - 1; i >= 0; i--) {
       const id = this.projIds[i];
 
       // 弾を前進
-      posX[id] += this.projVelX[i] * dt;
-      posY[id] += this.projVelY[i] * dt;
+      const px = arena.getPosX(id) + this.projVelX[i] * dt;
+      const py = arena.getPosY(id) + this.projVelY[i] * dt;
+      arena.setPosX(id, px);
+      arena.setPosY(id, py);
       this.projLife[i] -= dt;
 
       let hit = false;
       // 弾の周囲 16px の敵と接触判定
-      this.queryNearbyEnemies(posX[id], posY[id], 16, (enemyIdx) => {
+      morton.queryRadius(px, py, 16, (enemyIdx) => {
         if (!hit) {
           hit = true;
-          this.damageEnemy(enemyIdx, 30); // 30ダメージ
+          this.damageEnemy(enemyIdx, 30, arena); // 30ダメージ
         }
       });
 
       // 寿命切れ、または敵に着弾したら消滅 (プールから削除してアリーナに返却)
       if (hit || this.projLife[i] <= 0) {
-        this.arena.free(id); // アリーナのフリーリストに返却 (ゼロGC)
+        arena.free(id); // アリーナのフリーリストに返却 (ゼロGC)
 
         // 配列末尾の要素と入れ替えて O(1) 削除
         const last = --this.projCount;
@@ -178,16 +181,16 @@ export class SwarmSurvivorScene extends Scene {
 
 ## 3. ダメージ処理と敵の撃破
 
-敵のHPを減らし、0以下になったらアリーナから解放します。
+敵のHPを減らし、0以下になったら `InstanceBufferArena` から解放します。
 
 ```typescript
-  public damageEnemy(enemyIndex: number, amount: number): void {
+  public damageEnemy(enemyIndex: number, amount: number, arena: InstanceBufferArena): void {
     this.enemyHp[enemyIndex] -= amount;
 
     // HPが0以下なら撃破
     if (this.enemyHp[enemyIndex] <= 0) {
       const id = this.enemyIds[enemyIndex];
-      this.arena.free(id); // スロットをフリーリストに返却！
+      arena.free(id); // スロットをフリーリストに返却！
 
       // 敵プールから O(1) でスワップ削除
       const last = --this.enemyCount;
@@ -206,4 +209,4 @@ export class SwarmSurvivorScene extends Scene {
 さらに、自動照準の青い魔法の短剣が周囲のモンスターへ矢継ぎ早に放たれ、一気に爽快感あふれるアクションサバイバーゲームに変貌しました。
 
 しかし、まだ敵同士がお互いを無視して1点に重なり合ってしまう問題が残っています。
-次の第6章では、物理ソルバ **XPBD（Extended Position Based Dynamics）**を組み込み、モンスター同士がリアルに押し合いへし合う有機的な群衆物理を実装します！
+次の第6章では、物理ソルバ **`XPBDPlugin`（Extended Position Based Dynamics）**を組み込み、モンスター同士がリアルに押し合いへし合う有機的な群衆物理を実装します！

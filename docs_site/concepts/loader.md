@@ -26,29 +26,33 @@ export class GameScene extends Scene {
 ## TextureManager と LoaderManager
 
 - **`LoaderManager` (`this.load`)**: `preload()` フェーズで `this.load.image(key, url)` を呼び出すことでテクスチャのロードをキューに積みます。
-- **`TextureManager` (`this.textures`)**: ロード済みテクスチャを管理します。`this.textures.createCanvasTexture(key, canvas)` を使うと、`HTMLCanvasElement` から動的にテクスチャを生成することもできます。
+- **`TextureManager` (`this.textures`)**: ロード済みテクスチャを管理します。`this.textures.createTextureFromBuffer(key, buffer, width, height)` を使うと、メモリバッファから動的にテクスチャを生成することもできます。
 
 ## GPU Texture2DArray へのアップロード
 
-ロードされた画像テクスチャは、`device.uploadTexture()` を通じて GPU の `Texture2DArray` にまとめてアップロードされます。
+ロードされた画像テクスチャは、`device.writeTexture()` を通じて GPU の `Texture2DArray` にまとめてアップロードされます。
 
 - 実行時は、SoAアリーナの中に「UV座標のオフセット」と「テクスチャレイヤーID」の整数のみが保存されます。
 - 文字列によるアセットの検索（例: `getTexture("player")`）は初期化時のみ許可され、実行時は高速な数値IDアクセスのみが行われます。
 
-## キャンバステクスチャの動的生成
+## メモリバッファからの動的テクスチャ生成
 
-手続き的に生成したテクスチャは `createCanvasTexture` で登録できます：
+手続き的に生成したテクスチャは `createTextureFromBuffer` で登録できます：
 
 ```typescript
 preload(): void {
-  // Canvas で手続き的に生成したテクスチャを登録
-  const canvas = document.createElement('canvas');
-  canvas.width = 32;
-  canvas.height = 32;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#00ffcc';
-  ctx.fillRect(0, 0, 32, 32);
+  // Uint8Array のピクセルデータで動的にテクスチャを生成
+  const width = 32;
+  const height = 32;
+  const buffer = new Uint8Array(width * height * 4);
+  
+  for (let i = 0; i < buffer.length; i += 4) {
+    buffer[i] = 0;       // R
+    buffer[i+1] = 255;   // G
+    buffer[i+2] = 204;   // B
+    buffer[i+3] = 255;   // A
+  }
 
-  this.textures.createCanvasTexture('gem', canvas);
+  this.textures.createTextureFromBuffer('gem', buffer, width, height);
 }
 ```

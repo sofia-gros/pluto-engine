@@ -2,14 +2,14 @@
 
 ようこそ、**PlutoEngine** の世界へ。
 
-PlutoEngine（プルートエンジン）は、**「ブラウザ上で10万〜30万体以上のエンティティを、60FPS / 144FPSで安定して滑らかに動かす」**ことを追求した、データ指向（Data-Oriented Design / SoA）2D WebGL/WebGPUゲームエンジンです。
+PlutoEngine（プルートエンジン）は、**「ブラウザ上で10万〜30万体以上のエンティティを、60FPS / 144FPSで安定して滑らかに動かす」**ことを追求した、データ指向（Data-Oriented Design / SoA）2D WebGPUゲームエンジンです。
 
 ```
        +-------------------------------------------------------+
        |                     PlutoEngine                       |
        +-------------------------------------------------------+
             |                      |                      |
-   [ Zero-Allocation ]    [ Data-Oriented SoA ]   [ WebGL2 / WebGPU ]
+   [ Zero-Allocation ]    [ Data-Oriented SoA ]   [ WebGPU ]
    毎フレームのGCゼロ      連続TypedArray配置      Instanced Draw転送
             |                      |                      |
             +----------------------+----------------------+
@@ -77,13 +77,12 @@ sprite.x += 5; // 内部では arena.posX[sprite.id] += 5 に直接変換され�
 
 ---
 
-## グラフィックス: WebGL2 と WebGPU の統合
+## グラフィックス: WebGPU 完全統合
 
-PlutoEngine のレンダラーは、インスタンシング描画（Hardware Instanced Drawing）を前提に最適化されており、WebGPU と WebGL2 の双方で 30万体（300,000+）の同時描画を安定してサポートします。
+PlutoEngine のレンダラーは、インスタンシング描画（Hardware Instanced Drawing）を前提に最適化されており、WebGPU で 30万体（300,000+）の同時描画を安定してサポートします。
 
-- **WebGPU 完全対応**: WGSL によるモダンな描画パイプラインを実装。パッキングループのインライン化と `activeCount` に基づく `writeBuffer` 転送サイズ最適化により、IPC キュー過負荷によるクラッシュ限界（旧15万体）を克服し、30万体でも WebGL2 と同等の極限パフォーマンスを発揮。
-- **WebGL2 フルサポート**: GPU Texture2DArray と頂点属性インスタンシングにより、WebGPU 未対応環境でも 30万体のスプライトを 1 ドローコールで一括描画。
-- **ゼロアロケーション SoA 連携**: どちらのバックエンドでも同一の SoA アリーナデータを共有し、毎フレームのヒープ確保ゼロで VRAM へダイレクトにストリーミング。
+- **WebGPU 完全対応**: WGSL によるモダンな描画パイプラインを実装。ライトスルー同期（Write-Through）によりCPU側のパッキング負荷を排除し、`writeBuffer` による転送サイズを最適化。IPC キュー過負荷によるクラッシュ限界を克服し、30万体の極限パフォーマンスを発揮します。
+- **ゼロアロケーション SoA 連携**: SoA アリーナデータを、毎フレームのヒープ確保ゼロで VRAM へダイレクトにストリーミングします。
 
 ---
 
