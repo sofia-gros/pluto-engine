@@ -54,7 +54,7 @@ export class SwarmSurvivorScene extends Scene {
       const spawnY = py + Math.sin(angle) * spawnRadius;
 
       // InstanceBufferArena から新しいスプライトIDを割り当て (サイズ 18px)
-      const sprite = this.add.sprite(spawnX, spawnY, 18);
+      const sprite = this.add.sprite(spawnX, spawnY, 'textureKey').setDisplaySize(18, 18);
       // 深紅のモンスターカラー (0xef4444)
       sprite.setTint(0xef4444);
 

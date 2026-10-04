@@ -71,7 +71,7 @@ class InstanceBufferArena {
 
 ```typescript
 // sprite はアリーナ内の ID（インデックス数値）だけを保持する軽量ハンドル
-const sprite = this.add.sprite(100, 200, 32);
+const sprite = this.add.sprite(100, 200, 'textureKey').setDisplaySize(32, 32);
 sprite.x += 5; // 内部では arena.posX[sprite.id] += 5 に直接変換される
 ```
 

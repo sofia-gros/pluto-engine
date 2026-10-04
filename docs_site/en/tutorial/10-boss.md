@@ -41,11 +41,10 @@ export class SwarmSurvivorScene extends Scene {
     this.enemyCount = 0;
 
     // 2. Spawn colossal boss sprite from above screen (72px scale)
-    this.bossId = this.arena.allocate();
-    this.arena.posX[this.bossId] = 960 / 2;
-    this.arena.posY[this.bossId] = -100;
-    this.arena.scale[this.bossId] = 72;
-    this.arena.tint[this.bossId] = 0xa855f7; // Menacing eldritch purple tint
+    const bossSprite = this.add.sprite(960 / 2, -100, 'textureKey').setDisplaySize(72, 72);
+    // Menacing eldritch purple tint (0xa855f7)
+    bossSprite.setTint(0xa855f7);
+    this.bossId = bossSprite.id;
 
     // 3. Display Boss health header
     this.bossHpText = this.add.text(960 / 2 - 140, 50, '--- SWARM TITAN: 1500 / 1500 ---', {
@@ -54,11 +53,7 @@ export class SwarmSurvivorScene extends Scene {
     });
 
     // Dramatic entrance tween moving boss onto screen
-    this.tweens.add({
-  targets: { id: this.bossId },
-  props: { y: 120 },
-  duration: 1200
-});
+    this.tweens.add(this.bossId, TweenProperty.Y, -100, 120, 1200);
 
     console.log('⚠️ WARNING: SWARM TITAN HAS AWAKENED!');
   }
@@ -130,12 +125,8 @@ The Titan cycles through three distinct combat behaviors every 3 seconds:
     const numBullets = 16;
     for (let i = 0; i < numBullets; i++) {
       const angle = (i * Math.PI * 2) / numBullets;
-      // Spawn enemy projectile (SoA)
-      const bulletId = this.arena.allocate();
-      this.arena.posX[bulletId] = bx;
-      this.arena.posY[bulletId] = by;
-      this.arena.scale[bulletId] = 14;
-      this.arena.tint[bulletId] = 0xf43f5e; // Threatening rose red
+      const bullet = this.add.sprite(bx, by, 'textureKey').setDisplaySize(14, 14);
+      bullet.setTint(0xf43f5e); // Threatening rose red
       // ... register into projectile pool ...
     }
   }

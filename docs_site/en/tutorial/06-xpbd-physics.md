@@ -28,94 +28,128 @@ No matter how densely packed the monsters become, XPBD is unconditionally stable
 
 ---
 
-## 2. Introducing MortonPlugin and XPBDPlugin
+## 2. Implementing the Anti-Clustering Solver
 
-In the new architecture of v1.2.1, physics is added to the scene as a plugin. To accelerate collision detection, we use `MortonPlugin`, a spatial hash based on Morton codes.
+Using our uniform spatial grid from Chapter 4, neighbor lookups for collision pairs run in $O(1)$ constant time:
 
 ```typescript
-import { Scene, XPBDPlugin, MortonPlugin, InstanceBufferArena } from 'pluto-engine';
-
 export class SwarmSurvivorScene extends Scene {
-  private morton!: MortonPlugin;
-  private xpbd!: XPBDPlugin;
-  private arena!: InstanceBufferArena;
+  // ... Previous properties ...
 
-  onAwake(): void {
-    // 1. Initialize SoA-based instance arena
-    this.arena = new InstanceBufferArena(10000);
+  // Enemy collision geometry
+  private readonly enemyRadius = 9;   // 9px radius (18px diameter)
+  private readonly minSeparation = 18; // Desired minimum distance (9 + 9)
+  private readonly minSepSq = 18 * 18; // Squared distance threshold
+```
 
-    // 2. Add spatial partitioning plugin using Morton codes
-    this.morton = this.registerPlugin(new MortonPlugin({ arena: this.arena }));
+### Constraint Relaxation Pass (`solveCrowdOverlap`)
 
-    // 3. Add XPBD plugin and link the spatial partitioning
-    this.xpbd = this.registerPlugin(new XPBDPlugin({ 
-      morton: this.morton,
-      iterations: 2 // Solver iterations (higher means more rigid bodies)
-    }));
+We project overlapping pairs away from each other:
+
+```typescript
+  /**
+   * Applies XPBD positional projection to resolve monster overlap
+   */
+  private solveCrowdOverlap(): void {
+    const posX = this.arena.posX;
+    const posY = this.arena.posY;
+    const count = this.enemyCount;
+    const minSep = this.minSeparation;
+    const minSepSq = this.minSepSq;
+
+    for (let i = 0; i < count; i++) {
+      const idA = this.enemyIds[i];
+      const ax = posX[idA];
+      const ay = posY[idA];
+
+      // Query neighbors within separation distance
+      this.queryNearbyEnemies(ax, ay, minSep, (neighborIdx, idB) => {
+        // Prevent self-collision and duplicate checks
+        if (neighborIdx <= i) return;
+
+        const bx = posX[idB];
+        const by = posY[idB];
+
+        const dx = bx - ax;
+        const dy = by - ay;
+        const distSq = dx * dx + dy * dy;
+
+        // If monsters are overlapping
+        if (distSq < minSepSq && distSq > 0.0001) {
+          const dist = Math.sqrt(distSq);
+          const overlap = minSep - dist;
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // Push each entity apart by 50% (XPBD projection)
+          const push = overlap * 0.5;
+
+          posX[idA] -= nx * push;
+          posY[idA] -= ny * push;
+
+          posX[idB] += nx * push;
+          posY[idB] += ny * push;
+        }
+      });
+    }
   }
 ```
 
 ---
 
-## 3. Registering Enemies and Player to the Physics System
+## 3. Placement in `fixedUpdate`
 
-To make the `XPBDPlugin` recognize objects, we register bodies using the SoA buffer index (ID).
-Here, we avoid using object-oriented `new` in the update loop, strictly adhering to the Zero-Allocation philosophy.
+Physics constraints belong in PlutoEngine's deterministic `fixedUpdate(1/60)` loop:
 
 ```typescript
   /**
-   * Spawn enemy and register to physics system
+   * Fixed 60Hz physics update loop
    */
-  private spawnEnemy(x: number, y: number): void {
-    const id = this.arena.allocate();
-    this.arena.posX[id] = x;
-    this.arena.posY[id] = y;
+  fixedUpdate(fixedDt: number): void {
+    // 1. Rebuild spatial grid with latest positions
+    this.buildSpatialGrid();
 
-    // Register as a dynamic body with 9px radius
-    this.xpbd.addBody(id, { 
-      radius: 9, 
-      isStatic: false,
-      layer: 'enemy'
-    });
-  }
-
-  /**
-   * Register player
-   */
-  private setupPlayer(x: number, y: number): void {
-    const id = this.arena.allocate();
-    this.arena.posX[id] = x;
-    this.arena.posY[id] = y;
-
-    // Player has a 14px radius
-    this.xpbd.addBody(id, { 
-      radius: 14, 
-      isStatic: false,
-      layer: 'player' 
-    });
+    // 2. Execute XPBD relaxation passes (2 iterations for firmer crowd density)
+    this.solveCrowdOverlap();
+    this.solveCrowdOverlap();
   }
 ```
 
 ---
 
-## 4. Automating Collision and Repulsion
+## 4. Player-Monster Body Blocking
 
-In older versions, we had to write manual methods like `solveCrowdOverlap` and directly compute repulsion forces in the loop. In v1.2.1, the `XPBDPlugin` fully automates this.
-You no longer need to manually call solver functions in `fixedUpdate`.
-
-Also, processing damage when the player collides with enemies can be easily implemented using the plugin's event listeners.
+We also apply directional repulsion between the hero and enemies so monsters cannot phase into the player's center:
 
 ```typescript
-  onStart(): void {
-    // Register callback for player-enemy collisions
-    this.xpbd.onCollision('player', 'enemy', (playerId, enemyId, overlap) => {
-      // Inflict minor contact damage to player
-      this.playerHp -= 0.1;
+  private solvePlayerOverlap(): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    const playerRadius = 14;
+    const combinedRadius = playerRadius + this.enemyRadius;
+    const combSq = combinedRadius * combinedRadius;
+
+    this.queryNearbyEnemies(px, py, combinedRadius, (enemyIdx, id) => {
+      const ex = this.arena.posX[id];
+      const ey = this.arena.posY[id];
+      const dx = ex - px;
+      const dy = ey - py;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < combSq && distSq > 0.001) {
+        const dist = Math.sqrt(distSq);
+        const overlap = combinedRadius - dist;
+
+        // Push enemy outward
+        this.arena.posX[id] += (dx / dist) * overlap;
+        this.arena.posY[id] += (dy / dist) * overlap;
+
+        // Inflict minor contact damage to player
+        this.playerHp -= 0.1;
+      }
     });
   }
 ```
-
-Internally, it utilizes the Flyweight pattern and `Float32Array` (SoA). Even if thousands of collision checks occur every frame, no memory allocation (`new`) happens, perfectly preventing stutters caused by Garbage Collection (GC) spikes.
 
 ---
 

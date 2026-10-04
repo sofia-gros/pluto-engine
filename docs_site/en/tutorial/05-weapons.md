@@ -29,7 +29,7 @@ export class SwarmSurvivorScene extends Scene {
   private initWeapons(): void {
     // Allocate 3 blade sprites from arena (20px scale)
     for (let i = 0; i < this.bladeCount; i++) {
-      const blade = this.add.sprite(0, 0, 20);
+      const blade = this.add.sprite(0, 0, 'textureKey').setDisplaySize(20, 20);
       blade.setTint(0xfacc15); // Luminous gold (0xfacc15)
       this.bladeIds[i] = blade.id;
     }
@@ -123,7 +123,7 @@ We use `queryNearbyEnemies` to find the monster nearest to the player:
       const dist = Math.hypot(dx, dy);
 
       const bulletSpeed = 500; // 500 px/s
-      const sprite = this.add.sprite(px, py, 14);
+      const sprite = this.add.sprite(px, py, 'textureKey').setDisplaySize(14, 14);
       sprite.setTint(0x38bdf8); // Sky blue
 
       const idx = this.projCount++;

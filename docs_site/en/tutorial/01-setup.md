@@ -98,7 +98,7 @@ export class SwarmSurvivorScene extends Scene {
     console.log(`Arena capacity: ${this.arena.capacity} instances`);
 
     // Place a small test marker sprite at the center of the arena
-    const centerMarker = this.add.sprite(960 / 2, 540 / 2, 16);
+    const centerMarker = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(16, 16);
     centerMarker.setTint(0x38bdf8); // Sky blue (0xRRGGBB)
   }
 

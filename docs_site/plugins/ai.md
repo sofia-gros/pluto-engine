@@ -1,5 +1,7 @@
 # AIとビヘイビアツリー (AI Behavior)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 数千から数万体のエンティティを同時に動作させる場合、オブジェクト指向による状態遷移（ステートマシン）やノードベースのAIは、メモリポインタの追跡や関数呼び出しのオーバーヘッドでパフォーマンスが崩壊します。
 
 ## PlutoEngine v1.2.1 のフラットなデータ駆動AI

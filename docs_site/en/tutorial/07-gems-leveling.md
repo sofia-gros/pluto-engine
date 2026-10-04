@@ -10,7 +10,7 @@ In Chapter 7, we demonstrate the power of PlutoEngine's **Free List recycling ec
 ## 1. The Zero-Net-Allocation Recycling Loop
 
 When an enemy dies, its ID slot is released back to the arena via `this.arena.free(enemyId)`.
-Immediately afterward, when we spawn an XP Gem with `this.arena.allocate()`, observe what happens under the hood:
+Immediately afterward, when we spawn an XP Gem with `this.add.sprite(ex, ey, 'textureKey').setDisplaySize(10, 10)`, observe what happens under the hood:
 
 ```
 [ Monster Dies ] ──> Calls arena.free(id: 42) (Pushed to Free List)
@@ -72,14 +72,12 @@ We update `damageEnemy` from Chapter 5 to drop gems upon defeat:
       // 3. Spawn gem within pool limits
       if (this.gemCount < MAX_GEMS) {
         // The slot freed above is recycled immediately!
-        const gemId = this.arena.allocate();
-        this.arena.posX[gemId] = ex;
-        this.arena.posY[gemId] = ey;
-        this.arena.scale[gemId] = 10;
-        this.arena.tint[gemId] = 0x34d399; // Brilliant emerald gem tint
+        const gem = this.add.sprite(ex, ey, 'textureKey').setDisplaySize(10, 10);
+        // Brilliant emerald gem tint (0x34d399)
+        gem.setTint(0x34d399);
 
         const gIdx = this.gemCount++;
-        this.gemIds[gIdx] = gemId;
+        this.gemIds[gIdx] = gem.id;
         this.gemValues[gIdx] = 10; // 10 XP
       }
     }

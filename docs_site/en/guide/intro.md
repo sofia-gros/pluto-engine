@@ -71,7 +71,7 @@ To keep the developer experience intuitive, classes like `Sprite` are implemente
 
 ```typescript
 // sprite is a lightweight handle wrapping only an integer ID
-const sprite = this.add.sprite(100, 200, 32);
+const sprite = this.add.sprite(100, 200, 'textureKey').setDisplaySize(32, 32);
 sprite.x += 5; // Direct mapped to arena.posX[sprite.id] += 5
 ```
 

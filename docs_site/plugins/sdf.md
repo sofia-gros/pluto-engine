@@ -1,5 +1,7 @@
 # SDFとポアソンディスクサンプリング (SDF Text & Poisson)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 2Dゲームにおいて、高品質なフォントレンダリングと自然なオブジェクト配置は重要です。PlutoEngine v1.2.1 ではこれをSDFプラグインで解決します。
 
 ## SDF (Signed Distance Field) フォント

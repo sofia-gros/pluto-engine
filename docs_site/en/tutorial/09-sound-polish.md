@@ -64,11 +64,13 @@ Briefly setting a damaged enemy's sprite tint to pure bright white (`0xffffffff`
     this.arena.tint[id] = 0xffffffff;
 
     // Use zero-alloc Tween to return to crimson (0xef4444) over 80ms
-    this.tweens.add({
-  targets: { id: id },
-  props: { tint: 0xef4444 },
-  duration: 80
-});
+    this.tweens.add(
+      id,
+      TweenProperty.TINT,
+      0xffffffff,
+      0xef4444,
+      80
+    );
 
     // Micro screen impulse
     this.addTrauma(0.04);

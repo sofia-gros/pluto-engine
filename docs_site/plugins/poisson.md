@@ -1,5 +1,7 @@
 # ポアソン群集流体 (Continuum Crowds & Flow Field)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 `@pluto-engine/poisson` パッケージは、**流体力学ベースの群集シミュレーション (Continuum Crowds)** と **高速ベクトル場事前計算 (Precomputed Flow Field)** を実現する物理プラグインです。
 
 数万〜30万体の敵（群集）が、互いに押し合い・渋滞を避けながらプレイヤーに向かって水流のように滑らかに押し寄せる動きを、**ゼロアロケーション (GCフリー)** で計算します。

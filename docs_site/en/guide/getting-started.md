@@ -58,7 +58,7 @@ import { PlutoEngine, Scene } from 'pluto-engine';
 class GameScene extends Scene {
   create() {
     // Spawn sprite at screen center
-    const sprite = this.add.sprite(400, 300, 32);
+    const sprite = this.add.sprite(400, 300, 'textureKey').setDisplaySize(32, 32);
     sprite.setTint(0x00ffcc); // Emerald green
   }
 

@@ -17,7 +17,7 @@ export class GameScene extends Scene {
   create(): void {
     // preload() 完了後に呼ばれる
     // this.textures でロード済みテクスチャにアクセス
-    const player = this.add.sprite(400, 300, 32);
+    const player = this.add.sprite(400, 300, 'textureKey').setDisplaySize(32, 32);
     player.setTexture('player');
   }
 }

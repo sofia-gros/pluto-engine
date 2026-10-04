@@ -29,7 +29,7 @@ const engine = new PlutoEngine({
 - `loop: GameLoop`
   メインの実行ループ。
 - `device: GraphicsDevice | null`
-  WebGL または WebGPU のグラフィックスデバイス。
+  WebGPU のグラフィックスデバイス。
 - `totalInstanceCount: number`
   登録済みインスタンス総数（カリング前）。
 - `renderCount: number`

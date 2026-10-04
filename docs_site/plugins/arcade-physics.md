@@ -1,5 +1,7 @@
 # Arcade Physics プラグイン (Phaser-like AABB 物理エンジン)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 PlutoEngine には、Phaser 開発者にとって馴染み深い直感的な API を持ちながら、**内部では 30万体規模を 0.08ms で判定する「AABB Broadphase Culling（高速枝刈り）」** を備えた `ArcadePhysics` プラグインが標準搭載されています。
 
 ---
@@ -26,7 +28,7 @@ PlutoEngine には、Phaser 開発者にとって馴染み深い直感的な API
 export class GameScene extends Scene {
   create() {
     const player = this.add.sprite(400, 300, 'player');
-    player.radius = 16;
+    player.body?.setCircle(16);
 
     // プレイヤーと 30万体の敵（アリーナ）の重なり判定を登録
     this.physics.add.overlap(player, this.arena, (p, enemyIdx) => {

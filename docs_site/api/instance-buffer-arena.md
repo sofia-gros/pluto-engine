@@ -47,7 +47,7 @@ SoA 配列への直接代入は禁止されています。必ず以下のセッ�
 - `setRotation(i: number, v: number): void`
 - `setDepth(i: number, v: number): void`
 - `setTint(i: number, v: number): void`
-- `setVisible(i: number, v: boolean | number): void`
+- `setVisible(i: number, v: number): void`
 - `setOrigin(i: number, x: number, y?: number): void`
 - `setScrollFactor(i: number, x: number, y?: number): void`
 

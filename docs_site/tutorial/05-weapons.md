@@ -15,7 +15,7 @@
 プレイヤーの周囲を回転するブレードスプライトを `InstanceBufferArena` から3つ確保し、三角関数で公転運動させます。
 
 ```typescript
-import { MortonPlugin, InstanceBufferArena } from 'pluto-engine';
+import { MortonSpatialHash, InstanceBufferArena } from 'pluto-engine';
 
 export class SwarmSurvivorScene {
   // ... 前章のプロパティ ...
@@ -32,7 +32,7 @@ export class SwarmSurvivorScene {
     for (let i = 0; i < this.bladeCount; i++) {
       // 3本のブレードスプライトをアリーナから確保 (サイズ 20px)
       const id = arena.allocate();
-      arena.setSize(id, 20);
+      arena.setScale(id, 20);
       arena.setTint(id, 0xfacc15); // まばゆい黄金色 (0xfacc15)
       this.bladeIds[i] = id;
     }
@@ -44,10 +44,10 @@ export class SwarmSurvivorScene {
 毎フレーム角度を進め、ブレードの位置を更新しつつ、ブレードの周囲にある敵に対してダメージを与えます。
 
 ```typescript
-  private updateBlades(dt: number, arena: InstanceBufferArena, morton: MortonPlugin): void {
+  private updateBlades(dt: number, arena: InstanceBufferArena, morton: MortonSpatialHash): void {
     this.bladeAngle += this.bladeSpeed * dt;
-    const px = arena.getPosX(this.playerId);
-    const py = arena.getPosY(this.playerId);
+    const px = arena.posX[this.playerId];
+    const py = arena.posY[this.playerId];
 
     for (let i = 0; i < this.bladeCount; i++) {
       const id = this.bladeIds[i];
@@ -61,9 +61,11 @@ export class SwarmSurvivorScene {
       arena.setPosY(id, by);
 
       // ブレードの半径 18px 以内にいる敵をMortonPluginで高速検索
-      morton.queryRadius(bx, by, 18, (enemyIdx) => {
+      const queryCount = morton.query(bx, by, 18, this.queryResult);
+      for (let j = 0; j < queryCount; j++) {
+        const enemyIdx = this.queryResult[j];
         this.damageEnemy(enemyIdx, this.bladeDamage * dt * 10, arena);
-      });
+      }
     }
   }
 ```
@@ -95,37 +97,39 @@ export class SwarmSurvivorScene {
 `MortonPlugin` の空間ハッシュを利用して、プレイヤーから最も近い敵を探索します。
 
 ```typescript
-  private fireDagger(arena: InstanceBufferArena, morton: MortonPlugin): void {
+  private fireDagger(arena: InstanceBufferArena, morton: MortonSpatialHash): void {
     if (this.projCount >= MAX_PROJECTILES) return;
 
-    const px = arena.getPosX(this.playerId);
-    const py = arena.getPosY(this.playerId);
+    const px = arena.posX[this.playerId];
+    const py = arena.posY[this.playerId];
 
     // 最寄りの敵を探す
     let closestEnemyId = -1;
     let closestDistSq = 500 * 500; // 射程 500px
 
-    morton.queryRadius(px, py, 500, (enemyIdx, id) => {
-      const dx = arena.getPosX(id) - px;
-      const dy = arena.getPosY(id) - py;
+    const queryCount = morton.query(px, py, 500, this.queryResult);
+      for (let j = 0; j < queryCount; j++) {
+        const id = this.queryResult[j];
+      const dx = arena.posX[id] - px;
+      const dy = arena.posY[id] - py;
       const dSq = dx * dx + dy * dy;
       if (dSq < closestDistSq) {
         closestDistSq = dSq;
         closestEnemyId = id;
       }
-    });
+    }
 
     // 射程内に敵がいれば発射
     if (closestEnemyId !== -1) {
-      const targetX = arena.getPosX(closestEnemyId);
-      const targetY = arena.getPosY(closestEnemyId);
+      const targetX = arena.posX[closestEnemyId];
+      const targetY = arena.posY[closestEnemyId];
       const dx = targetX - px;
       const dy = targetY - py;
       const dist = Math.hypot(dx, dy);
 
       const bulletSpeed = 500; // 弾速 500 px/s
       const id = arena.allocate();
-      arena.setSize(id, 14);
+      arena.setScale(id, 14);
       arena.setPosX(id, px);
       arena.setPosY(id, py);
       arena.setTint(id, 0x38bdf8); // スカイブルー
@@ -142,25 +146,27 @@ export class SwarmSurvivorScene {
 ### 弾の移動と敵への着弾処理
 
 ```typescript
-  private updateProjectiles(dt: number, arena: InstanceBufferArena, morton: MortonPlugin): void {
+  private updateProjectiles(dt: number, arena: InstanceBufferArena, morton: MortonSpatialHash): void {
     for (let i = this.projCount - 1; i >= 0; i--) {
       const id = this.projIds[i];
 
       // 弾を前進
-      const px = arena.getPosX(id) + this.projVelX[i] * dt;
-      const py = arena.getPosY(id) + this.projVelY[i] * dt;
+      const px = arena.posX[id] + this.projVelX[i] * dt;
+      const py = arena.posY[id] + this.projVelY[i] * dt;
       arena.setPosX(id, px);
       arena.setPosY(id, py);
       this.projLife[i] -= dt;
 
       let hit = false;
       // 弾の周囲 16px の敵と接触判定
-      morton.queryRadius(px, py, 16, (enemyIdx) => {
+      const queryCount = morton.query(px, py, 16, this.queryResult);
+      for (let j = 0; j < queryCount; j++) {
+        const enemyIdx = this.queryResult[j];
         if (!hit) {
           hit = true;
           this.damageEnemy(enemyIdx, 30, arena); // 30ダメージ
         }
-      });
+      }
 
       // 寿命切れ、または敵に着弾したら消滅 (プールから削除してアリーナに返却)
       if (hit || this.projLife[i] <= 0) {

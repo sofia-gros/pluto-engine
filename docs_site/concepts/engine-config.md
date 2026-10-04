@@ -18,7 +18,7 @@ PlutoEngineは、ゼロアロケーション（Zero-Allocation）とデータ指
 import { Engine, EngineConfig } from 'pluto-engine';
 
 const config: EngineConfig = {
-  canvas: document.getElementById('gameCanvas') as HTMLCanvasElement,
+  canvas: document.getElementById('gameWebGPU') as HTMLCanvasElement,
   maxEntities: 100000,       // 確保するエンティティの最大数
   targetFPS: 60,             // 目標フレームレート
   memoryPoolSize: 1024 * 1024 * 64, // 64MBの共有メモリプール

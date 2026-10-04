@@ -75,7 +75,7 @@ class MainScene extends Scene {
    */
   create(): void {
     // Spawn a sprite at screen center (400, 300) with scale 32px
-    this.player = this.add.sprite(400, 300, 32);
+    this.player = this.add.sprite(400, 300, 'textureKey').setDisplaySize(32, 32);
 
     // Apply a cyan tint (0x00E5FF)
     this.player.setTint(0x00e5ff);

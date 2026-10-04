@@ -1,5 +1,7 @@
 # XPBD 物理エンジン (Extended Position Based Dynamics)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 PlutoEngine v1.2.1 は、従来の剛体力学（Rigid Body Dynamics）に代わり、堅牢で安定したExtended Position Based Dynamics (XPBD) ベースの2D物理エンジンを内蔵しています。すべての物理シミュレーションはSoA（Structure of Arrays）を用いてゼロアロケーションで実行されます。
 
 ## XPBDの利点

@@ -54,7 +54,7 @@ We spawn monsters along a circular perimeter just outside the player's view ($R 
       const spawnY = py + Math.sin(angle) * spawnRadius;
 
       // Allocate sprite ID from arena (18px scale)
-      const sprite = this.add.sprite(spawnX, spawnY, 18);
+      const sprite = this.add.sprite(spawnX, spawnY, 'textureKey').setDisplaySize(18, 18);
       // Crimson red tint (0xef4444)
       sprite.setTint(0xef4444);
 

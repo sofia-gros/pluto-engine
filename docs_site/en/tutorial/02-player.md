@@ -25,7 +25,7 @@ export class SwarmSurvivorScene extends Scene {
 
   create(): void {
     // Spawn player sprite at screen center (960/2, 540/2) with 28px scale
-    this.player = this.add.sprite(960 / 2, 540 / 2, 28);
+    this.player = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(28, 28);
 
     // Apply an emerald green tint (0x10b981)
     this.player.setTint(0x10b981);
@@ -114,7 +114,7 @@ export class SwarmSurvivorScene extends Scene {
   public playerMaxHp = 100;
 
   create(): void {
-    this.player = this.add.sprite(960 / 2, 540 / 2, 28);
+    this.player = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(28, 28);
     this.player.setTint(0x10b981);
   }
 

@@ -102,7 +102,7 @@ If you want to run modern JavaScript directly in the browser without a bundler, 
 
     class MainScene extends Scene {
       create() {
-        const sprite = this.add.sprite(400, 300, 30);
+        const sprite = this.add.sprite(400, 300, 'textureKey').setDisplaySize(30, 30);
         sprite.setTint(0x00ffff);
       }
     }

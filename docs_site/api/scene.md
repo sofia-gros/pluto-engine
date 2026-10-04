@@ -66,12 +66,12 @@ export class MainScene extends Scene {
 
 ## 主なファクトリメソッド (`this.add`)
 
-- `sprite(x, y, textureKey?, frameKey?): Sprite`
-- `text(x, y, text, style?): Text`
-- `container(x, y, children?): Container`
-- `group(children?): Group`
-- `particles(x, y, textureKey?, config?)`
-- `bitmapText(x, y, text, font, pageKey?)`
+- `sprite(x?: number, y?: number, textureKey?: string, frameKey?: string | number): Sprite`
+- `text(x?: number, y?: number, text?: string, style?: TextStyle): Text`
+- `container(x?: number, y?: number, children?: Sprite[]): Container`
+- `group(children?: Sprite[]): Group`
+- `particles(x?: number, y?: number, textureKey?: string, config?: EmitterCreateConfig)`
+- `bitmapText(x: number, y: number, text: string, font: ParsedBitmapFont, pageKey?: string)`
 
 ## シェイプ生成メソッド
 

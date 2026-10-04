@@ -26,7 +26,7 @@ bun add pluto-engine
 
 ---
 
-## 2. HTML と Canvas の準備 (`index.html`)
+## 2. HTML と WebGPU の準備 (`index.html`)
 
 ゲーム画面を中央に配置し、暗黒の宇宙空間を演出するCSSを設定します。`index.html` を以下のように編集します：
 
@@ -99,7 +99,7 @@ export class SwarmSurvivorScene extends Scene {
     console.log(`アリーナ最大収容量: ${this.engine.arena.capacity} インスタンス`);
 
     // アリーナの中央にテスト用の目印スプライトを1つ配置
-    const centerMarker = this.add.sprite(960 / 2, 540 / 2, 16);
+    const centerMarker = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(16, 16);
     centerMarker.setTint(0x38bdf8); // スカイブルー (0xRRGGBB)
   }
 

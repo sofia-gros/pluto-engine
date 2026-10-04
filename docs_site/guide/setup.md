@@ -102,7 +102,7 @@ import { PlutoEngine, Scene } from '@pluto-engine/core';
 
     class MainScene extends Scene {
       create() {
-        const sprite = this.add.sprite(400, 300, 30);
+        const sprite = this.add.sprite(400, 300, 'textureKey').setDisplaySize(30, 30);
         sprite.setTint(0x00ffff);
       }
     }

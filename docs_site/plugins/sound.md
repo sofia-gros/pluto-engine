@@ -1,5 +1,7 @@
 # オーディオプラグイン (SoundManager)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 `@pluto-engine/audio` は、Web Audio API をフル活用した強力なサウンドシステムです。PlutoEngine v1.2.1 では、大量の敵が同時に爆発した際などに音が割れる（クリッピングする）のを防ぐマスターリミッターや、GC（ガベージコレクション）スパイクを防ぐオーディオノードの事前割り当てプーリング機構を内蔵しています。
 
 ## インストールと登録

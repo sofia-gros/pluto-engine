@@ -21,7 +21,7 @@ my-pluto-game/
 
 ## 2. HTML の準備 (`index.html`)
 
-Canvas を配置し、フルスクリーンで表示できるようにシンプルなCSSを指定します。
+WebGPU を配置し、フルスクリーンで表示できるようにシンプルなCSSを指定します。
 
 ```html
 <!DOCTYPE html>
@@ -75,7 +75,7 @@ class MainScene extends Scene {
    */
   create(): void {
     // 画面中央 (400, 300) にサイズ 32px のスプライトを生成
-    this.player = this.add.sprite(400, 300, 32);
+    this.player = this.add.sprite(400, 300, 'textureKey').setDisplaySize(32, 32);
 
     // 鮮やかなシアン色 (0x00E5FF) に設定
     this.player.setTint(0x00e5ff);
@@ -126,7 +126,7 @@ new PlutoEngine({
 
 ## 4. コードのポイント解説
 
-### `this.add.sprite(x, y, scale)`
+### `this.add.sprite(x, y, 'textureKey').setDisplaySize(scale, scale)`
 `this.add.sprite` はヒープに巨大なオブジェクトを新規作成するのではなく、事前確保された `InstanceBufferArena` から利用可能な空きID（フリーリスト）を取得し、軽量なハンドルオブジェクト（Flyweight）を返します。
 
 ### `this.player.x` と `this.player.y`

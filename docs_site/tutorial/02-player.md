@@ -26,7 +26,7 @@ export class SwarmSurvivorScene extends Scene {
   create(): void {
     // 画面中央にサイズ 28px のプレイヤースプライトを生成
     // 内部的には InstanceBufferArena から Float32Array のスロットが割り当てられます
-    this.player = this.add.sprite(960 / 2, 540 / 2, 28);
+    this.player = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(28, 28);
 
     // 鮮やかなエメラルドグリーン (0x10b981) を設定
     this.player.setTint(0x10b981);
@@ -116,7 +116,7 @@ export class SwarmSurvivorScene extends Scene {
   public playerMaxHp = 100;
 
   create(): void {
-    this.player = this.add.sprite(960 / 2, 540 / 2, 28);
+    this.player = this.add.sprite(960 / 2, 540 / 2, 'textureKey').setDisplaySize(28, 28);
     this.player.setTint(0x10b981);
   }
 

@@ -20,7 +20,7 @@ flowchart TD
     subgraph GPU ["Graphics Device"]
         Sync["Write-Through Sync (writeBuffer)"]
         Pipeline["WebGPU Hardware Instancing"]
-        Canvas["HTML5 Canvas Display"]
+        WebGPU["HTML5 Canvas Display"]
     end
 
     Loop --> Time
@@ -31,7 +31,7 @@ flowchart TD
     Arena --> Arrays
     Arrays --> Sync
     Sync --> Pipeline
-    Pipeline --> Canvas
+    Pipeline --> WebGPU
 ```
 
 ---

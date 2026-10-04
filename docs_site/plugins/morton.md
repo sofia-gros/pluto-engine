@@ -1,5 +1,7 @@
 # モートン順序と空間分割 (Morton Order / Z-Curve)
 
+> **v1.2.1 の注意点**: PlutoEngine は現在、最大限のパフォーマンスを引き出すために WebGPU、`InstanceBufferArena`、SoA、および Flyweight pattern (Zero-Allocation) を利用しています。
+
 PlutoEngine v1.2.1 は、数万のエンティティの衝突判定や描画順序の最適化のために、空間分割アルゴリズムである「モートン順序（Z-Curve）」プラグインを提供します。
 
 ## モートン順序とは？

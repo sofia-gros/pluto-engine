@@ -84,11 +84,13 @@ Unlike generic animation libraries (like GSAP or Tween.js) that create promises 
 
 ```typescript
 // Zero-allocation property interpolation
-this.tweens.add({
-  targets: { id: entityId },
-  props: { scale: endValue },
-  duration: durationMs
-});
+this.tweens.add(
+  entityId,           // Target sprite/text ID
+  TweenProperty.SCALE,// Target property (X, Y, SCALE, TINT, ALPHA)
+  startValue,         // Initial value
+  endValue,           // Target value
+  durationMs          // Duration in milliseconds
+);
 ```
 
 When an animation finishes, its slot automatically recycles back into the Tween Free List with zero garbage collection!
@@ -117,18 +119,22 @@ When attacks strike monsters, we spawn a brief damage popup text that bounces up
     });
 
     // 1. Float upwards over 350ms
-    this.tweens.add({
-  targets: { id: popup.id },
-  props: { y: startY - 35 },
-  duration: 350
-});
+    this.tweens.add(
+      popup.id,
+      TweenProperty.Y,
+      startY,
+      startY - 35,
+      350
+    );
 
     // 2. Pop scale effect (starts large, settles small)
-    this.tweens.add({
-  targets: { id: popup.id },
-  props: { scale: 12 },
-  duration: 350
-});
+    this.tweens.add(
+      popup.id,
+      TweenProperty.SCALE,
+      22,
+      12,
+      350
+    );
   }
 ```
 
@@ -154,13 +160,13 @@ When reaching a new level, give the hero an energetic expansion pulse:
     this.hudLevelText.text = `LV. ${this.playerLevel}`;
 
     // Expand player scale to 44px then settle back to 28px
-    this.tweens.add({
-  targets: { id: this.player.id },
-  props: { scale: // Expanded size
-      28 },
-  duration: // Normal base size
+    this.tweens.add(
+      this.player.id,
+      TweenProperty.SCALE,
+      44, // Expanded size
+      28, // Normal base size
       300 // Duration: 300ms
-});
+    );
     // ...
   }
 ```
