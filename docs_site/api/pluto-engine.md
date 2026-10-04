@@ -1,69 +1,156 @@
-# PlutoEngine API リファレンス
+---
+title: PlutoEngine
+---
 
-`PlutoEngine` は Phaser の `new Phaser.Game(config)` に相当するエンジンのエントリポイントです。
-レンダリングループ、時間管理、スケール、シーン遷移、および GPU への SoA バッファストリーミングを統括します。
+# PlutoEngine
 
-## 概要
+## Properties
 
-```typescript
-import { PlutoEngine } from '@pluto-engine/core';
+### `scene`
 
-const engine = new PlutoEngine({
-  width: 800,
-  height: 600,
-  maxInstances: 100000,
-  scene: [MainScene]
-});
-```
+**Type:** `import("A:/Project/plute-engine/packages/core/src/scene/SceneManager").SceneManager`
 
-## プロパティ
 
-- `scene: SceneManager`
-  シーン管理マネージャー。アクティブなシーンの切り替えなどを管理します。
-- `config: EngineConfig`
-  初期化時に渡されたエンジン設定。
-- `scale: ScaleManager`
-  画面のスケールやリサイズを管理します。
-- `time: TimeStepManager`
-  ゲームループの経過時間や FPS を管理します。
-- `loop: GameLoop`
-  メインの実行ループ。
-- `device: GraphicsDevice | null`
-  WebGPU のグラフィックスデバイス。
-- `totalInstanceCount: number`
-  登録済みインスタンス総数（カリング前）。
-- `renderCount: number`
-  実際に描画したインスタンス数（カリング後）。
 
-## パフォーマンス計測プロパティ
+### `config`
 
-- `packTimeMs: number`
-  SoA から vec4 へのパック時間（常に構造的に 0）。
-- `cullTimeMs: number`
-  カリング処理にかかった時間（ミリ秒）。
-- `uploadTimeMs: number`
-  GPU への転送にかかった時間。
-- `drawTimeMs: number`
-  描画（ドローコール）にかかった時間。
-- `gpuCullingActive: boolean`
-  直近のフレームで GPU カリングが実際に有効だったか。
+**Type:** `import("A:/Project/plute-engine/packages/core/src/core/PlutoEngine").EngineConfig`
 
-## メソッド
 
-### `destroy(): void`
+
+### `scale`
+
+**Type:** `import("A:/Project/plute-engine/packages/core/src/scale/ScaleManager").ScaleManager`
+
+
+
+### `time`
+
+**Type:** `import("A:/Project/plute-engine/packages/core/src/time/TimeStepManager").TimeStepManager`
+
+
+
+### `loop`
+
+**Type:** `import("A:/Project/plute-engine/packages/core/src/core/GameLoop").GameLoop`
+
+
+
+### `device`
+
+**Type:** `import("A:/Project/plute-engine/packages/renderer/src/GraphicsDevice").GraphicsDevice | null`
+
+
+
+### `ready`
+
+**Type:** `Promise&lt;void&gt;`
+
+
+
+### `updateTimeMs`
+
+**Type:** `number`
+
+
+
+### `renderTimeMs`
+
+**Type:** `number`
+
+
+
+### `uploadTimeMs`
+
+**Type:** `number`
+
+
+
+### `drawTimeMs`
+
+**Type:** `number`
+
+
+
+### `packTimeMs`
+
+**Type:** `number`
+
+SoA から vec4 への pack コストです。
+
+write-through のため、毎フレームの pack は **構造的に 0** です。
+pack は `InstanceBufferArena` の write-through セッター内で
+「動いたスプライト 1 体につき定数回」だけ発生します。
+
+### `cullTimeMs`
+
+**Type:** `number`
+
+カリング（可視判定と先頭への詰め替え）に要した時間 (ms)。
+
+描画対象を V 体へ絞ったぶん、転送量と頂点処理が減ります。
+`totalInstanceCount` と `renderCount` を合わせて効果を確認できます。
+
+### `gpuCullingActive`
+
+**Type:** `boolean`
+
+直近のフレームで GPU カリングが実際に有効だったか。
+
+`config.gpuCulling` を true にしても、バックエンドが
+`GraphicsDevice.setCullRect` を実装していない場合や、
+カメラが複数ある場合は自動的に無効になります。
+**ベンチの報告では設定値ではなくこの実際に走った値を使います**
+（Phase 8 P-03 の計測でこれを区別する必要がありました）。
+
+### `computeCullingActive`
+
+**Type:** `boolean`
+
+直近のフレームで compute カリング（間接描画）が実際に使われたか。
+`gpuCullingActive` と同じ理由で、設定値ではなく実測値を報告します。
+
+### `filtersActive`
+
+**Type:** `boolean`
+
+直近のフレームで Filter（RenderGraph 経路）が実際に使われたか。
+
+設定値ではなく実測値を報告します。バックエンドが WebGPU でなく、
+`webgpuOnly` のフィルタが除外された場合にも false になります。
+
+### `renderGraph`
+
+**Type:** `import("A:/Project/plute-engine/packages/renderer/src/filters/RenderGraph").RenderGraph`
+
+Filter チェーンと多重パス構成（Phase 8 RenderGraph）。
+
+公開しているため、`engine.renderGraph.setFilters(...)` で
+実行時にフィルタを差し替えられます。
+
+### `totalInstanceCount`
+
+**Type:** `number`
+
+登録済みインスタンス総数（カリング前）
+
+### `renderCount`
+
+**Type:** `number`
+
+実際に描画したインスタンス数（カリング後）
+
+## Methods
+
+### `render()`
+
+**Returns:** `void`
+
+
+
+### `destroy()`
+
+**Returns:** `void`
+
 エンジンインスタンスとレンダラー、アニメーションループを破棄・解放します。
 
-## インターフェース
-
-### `EngineConfig`
-エンジンの初期化設定。
-- `canvas?: HTMLCanvasElement | string`
-- `width?: number`
-- `height?: number`
-- `scaleMode?: ScaleMode`
-- `pixelArt?: boolean`
-- `maxInstances?: number` - (デフォルト: 100000) 最大スプライト数
-- `backend?: 'auto' | 'webgpu' | 'webgl2'`
-- `gpuCulling?: boolean` - GPU カリングを有効にするか
-- `gpuComputeCulling?: boolean`
-- `scene: (new () => Scene)[]` - 登録するシーンクラスの配列

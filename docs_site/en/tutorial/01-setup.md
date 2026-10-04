@@ -91,6 +91,13 @@ import { PlutoEngine, ScaleMode, Scene } from 'pluto-engine';
  */
 export class SwarmSurvivorScene extends Scene {
   /**
+   * Preload game assets
+   */
+  async preload(): Promise<void> {
+    this.load.image('textureKey', 'assets/player.png');
+  }
+
+  /**
    * Called once when the scene initializes
    */
   create(): void {

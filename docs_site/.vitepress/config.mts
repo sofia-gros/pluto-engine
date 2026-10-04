@@ -96,12 +96,185 @@ export default defineConfig({
             text: 'API リファレンス',
             collapsed: false,
             items: [
-              { text: 'PlutoEngine', link: '/api/pluto-engine' },
-              { text: 'Scene', link: '/api/scene' },
-              { text: 'Camera', link: '/api/camera' },
-              { text: 'TweenManager', link: '/api/tween-manager' },
-              { text: 'InstanceBufferArena', link: '/api/instance-buffer-arena' },
+          {
+                    'text': 'InstanceBufferArena',
+                    'link': '/api/instance-buffer-arena'
+          },
+          {
+                    'text': 'Sprite',
+                    'link': '/api/sprite'
+          },
+          {
+                    'text': 'PlutoEngine',
+                    'link': '/api/pluto-engine'
+          },
+          {
+                    'text': 'InputManager',
+                    'link': '/api/input-manager'
+          },
+          {
+                    'text': 'Camera',
+                    'link': '/api/camera'
+          },
+          {
+                    'text': 'Scene',
+                    'link': '/api/scene'
+          },
+          {
+                    'text': 'SceneManager',
+                    'link': '/api/scene-manager'
+          },
+          {
+                    'text': 'TimeStepManager',
+                    'link': '/api/time-step-manager'
+          },
+          {
+                    'text': 'TweenManager',
+                    'link': '/api/tween-manager'
+          }
+]
+          ],
+          },
+        ],
+      },
+    },
+    en: {
+      label: 'English',
+      lang: 'en',
+      description: 'Next-generation Zero-Allocation 2D WebGL/WebGPU Game Engine',
+      link: '/en/',
+      themeConfig: {
+        nav: [
+          { text: 'Home', link: '/en/' },
+          { text: 'Play Demos', link: '/en/demos' },
+          { text: 'Guide', link: '/en/guide/intro' },
+          { text: 'Tutorial', link: '/en/tutorial/01-setup' },
+          { text: 'Concepts', link: '/en/concepts/engine-config' },
+          { text: 'Plugins', link: '/en/plugins/arcade-physics' },
+          { text: 'API', link: '/en/api/pluto-engine' },
+        ],
+        sidebar: [
+          {
+            text: 'Demos',
+            collapsed: false,
+            items: [{ text: '🎮 Playable Demos', link: '/en/demos' }],
+          },
+          {
+            text: 'Guide',
+            collapsed: false,
+            items: [
+              { text: 'Introduction to PlutoEngine', link: '/en/guide/intro' },
+              { text: 'Quick Start', link: '/en/guide/getting-started' },
+              { text: 'Installation & Setup', link: '/en/guide/setup' },
+              { text: 'Hello World', link: '/en/guide/hello-world' },
+              { text: 'Architecture Overview', link: '/en/guide/architecture' },
+              { text: 'Performance Benchmarks', link: '/en/performance' },
             ],
+          },
+          {
+            text: 'Tutorial: Making a Swarm Survivor',
+            collapsed: false,
+            items: [
+              { text: 'Chapter 1: Project Setup & Arena Init', link: '/en/tutorial/01-setup' },
+              { text: 'Chapter 2: Player Controls & Input', link: '/en/tutorial/02-player' },
+              {
+                text: 'Chapter 3: Spawning Thousands in the Swarm',
+                link: '/en/tutorial/03-spawning-swarms',
+              },
+              {
+                text: 'Chapter 4: Morton Spatial Hashing & Queries',
+                link: '/en/tutorial/04-spatial-hash',
+              },
+              {
+                text: 'Chapter 5: Automated Weapons & Projectiles',
+                link: '/en/tutorial/05-weapons',
+              },
+              {
+                text: 'Chapter 6: XPBD Crowd Physics & Anti-Clustering',
+                link: '/en/tutorial/06-xpbd-physics',
+              },
+              {
+                text: 'Chapter 7: XP Gems, Free List & Leveling Up',
+                link: '/en/tutorial/07-gems-leveling',
+              },
+              {
+                text: 'Chapter 8: Dynamic HUD & Zero-Alloc Tweens',
+                link: '/en/tutorial/08-hud-tweens',
+              },
+              {
+                text: 'Chapter 9: Camera Shake, Flash & Polish',
+                link: '/en/tutorial/09-sound-polish',
+              },
+              {
+                text: 'Chapter 10: Boss Battle, Utility AI & Victory Loop',
+                link: '/en/tutorial/10-boss',
+              },
+            ],
+          },
+          {
+            text: 'Concepts',
+            collapsed: false,
+            items: [
+              { text: 'Engine Configuration & Init', link: '/en/concepts/engine-config' },
+              { text: 'Scene & Arena Memory Management', link: '/en/concepts/scene-arena' },
+              { text: 'WGSL Rendering Pipeline', link: '/en/concepts/rendering' },
+              { text: 'Asset Loader', link: '/en/concepts/loader' },
+            ],
+          },
+          {
+            text: 'Plugins',
+            collapsed: false,
+            items: [
+              { text: 'Arcade Physics (AABB Culling)', link: '/en/plugins/arcade-physics' },
+              { text: 'XPBD Physics Engine', link: '/en/plugins/xpbd' },
+              { text: 'Morton Spatial Partitioning', link: '/en/plugins/morton' },
+              { text: 'AI & Behavior Systems', link: '/en/plugins/ai' },
+              { text: 'SDF Text & Signed Distance Fields', link: '/en/plugins/sdf' },
+              { text: 'Poisson Continuum Crowds', link: '/en/plugins/poisson' },
+            ],
+          },
+          {
+            text: 'API Reference',
+            collapsed: false,
+            items: [
+          {
+                    'text': 'InstanceBufferArena',
+                    'link': '/en/api/instance-buffer-arena'
+          },
+          {
+                    'text': 'Sprite',
+                    'link': '/en/api/sprite'
+          },
+          {
+                    'text': 'PlutoEngine',
+                    'link': '/en/api/pluto-engine'
+          },
+          {
+                    'text': 'InputManager',
+                    'link': '/en/api/input-manager'
+          },
+          {
+                    'text': 'Camera',
+                    'link': '/en/api/camera'
+          },
+          {
+                    'text': 'Scene',
+                    'link': '/en/api/scene'
+          },
+          {
+                    'text': 'SceneManager',
+                    'link': '/en/api/scene-manager'
+          },
+          {
+                    'text': 'TimeStepManager',
+                    'link': '/en/api/time-step-manager'
+          },
+          {
+                    'text': 'TweenManager',
+                    'link': '/en/api/tween-manager'
+          }
+]
+          ],
           },
         ],
       },
