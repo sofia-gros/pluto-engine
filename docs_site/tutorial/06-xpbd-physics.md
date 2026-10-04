@@ -38,10 +38,10 @@ export class SwarmSurvivorScene extends Scene {
     this.arena = new InstanceBufferArena(10000);
 
     // 2. モートン符号による空間分割プラグインを追加
-    this.morton = this.addPlugin(new MortonPlugin({ arena: this.arena }));
+    this.morton = this.registerPlugin(new MortonPlugin({ arena: this.arena }));
 
     // 3. XPBDプラグインを追加し、空間分割を紐付け
-    this.xpbd = this.addPlugin(new XPBDPlugin({ 
+    this.xpbd = this.registerPlugin(new XPBDPlugin({ 
       morton: this.morton,
       iterations: 2 // 押し戻しの反復回数（多いほど硬い剛体になる）
     }));

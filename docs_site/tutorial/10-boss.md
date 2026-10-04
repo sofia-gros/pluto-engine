@@ -63,7 +63,11 @@ export class SwarmSurvivorScene extends Scene {
     });
 
     // 画面中央上部へ入場するTweenアニメーション (SoAベースのTween)
-    this.tweens.add(this.bossId, TweenProperty.Y, -100, 120, 1200);
+    this.tweens.add({
+  targets: { id: this.bossId },
+  props: { y: 120 },
+  duration: 1200
+});
 
     console.log('警告: 巨大ボス [SWARM TITAN] が出現しました！');
   }

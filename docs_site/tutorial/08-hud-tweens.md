@@ -3,7 +3,7 @@
 ゲームに命を吹き込むのは、「手応え（Juice）」と「視覚的フィードバック」です！
 どれほど優れた戦闘システムがあっても、敵に与えたダメージが見えず、現在のHPやレベルが分からなければ、面白さは半減してしまいます。
 
-第8章では、PlutoEngine v1.2.1 の **SDFTextPlugin** によるテキスト描画と、**TweenPlugin** の完全データ指向のゼロアロケーション・Tweenシステムを使って、画面上部のHUDと、敵を攻撃した時に気持ちよく弾け飛ぶ「浮動ダメージ数値（Floating Damage Numbers）」を実装します！
+第8章では、PlutoEngine v1.2.1 の **SDFTextPlugin** によるテキスト描画と、**TweenManager** の完全データ指向のゼロアロケーション・Tweenシステムを使って、画面上部のHUDと、敵を攻撃した時に気持ちよく弾け飛ぶ「浮動ダメージ数値（Floating Damage Numbers）」を実装します！
 
 ---
 
@@ -12,13 +12,12 @@
 画面の左上に、プレイヤーのレベル、HP、撃破数、生存時間を表示するテキストを作成します。v1.2.1 の `SDFTextPlugin` では、テキストも実体を持たない Flyweight パターンのIDとして管理されます。
 
 ```typescript
-import { Scene, TweenProperty, SDFTextPlugin, TweenPlugin } from 'pluto-engine';
+import { Scene, TweenProperty, SDFTextPlugin, TweenManager } from 'pluto-engine';
 
 export class SwarmSurvivorScene extends Scene {
   // ... 前章までのプロパティ ...
 
   private textPlugin!: SDFTextPlugin;
-  private tweenPlugin!: TweenPlugin;
 
   // HUD テキストID (SoAインデックス)
   private hudLevelTextId: number = -1;
@@ -32,7 +31,6 @@ export class SwarmSurvivorScene extends Scene {
   public onStart(): void {
     // ...
     this.textPlugin = this.engine.getPlugin(SDFTextPlugin);
-    this.tweenPlugin = this.engine.getPlugin(TweenPlugin);
     this.initHUD();
   }
 
@@ -99,17 +97,15 @@ export class SwarmSurvivorScene extends Scene {
 
 ## 3. PlutoEngine の SoA トゥイーンシステム
 
-PlutoEngine v1.2.1 の `TweenPlugin` は、他の一般的なライブラリ（GSAPなど）とは異なり、**Tween自体も事前確保された `Float32Array`（SoA）で動作**します。`new` キーワードによるオブジェクト生成を完全に排除しています。
+PlutoEngine v1.2.1 の `TweenManager` は、他の一般的なライブラリ（GSAPなど）とは異なり、**Tween自体も事前確保された `Float32Array`（SoA）で動作**します。`new` キーワードによるオブジェクト生成を完全に排除しています。
 
 ```typescript
 // ゼロアロケーションでエンティティのプロパティを補間
-this.tweenPlugin.add({
-  targetId: entityId,           // 対象スプライトのID
-  property: TweenProperty.SCALE,// 補間する対象プロパティ (X, Y, SCALE, TINT など)
-  startValue: startValue,       // 開始値
-  endValue: endValue,           // 終了値
-  durationMs: durationMs        // アニメーション時間 (ミリ秒)
-});
+this.tweens.add({
+  targets: { id: entityId },
+  props: { scale: endValue },
+  duration: durationMs
+})
 ```
 
 補間が終わると内部のプールで自動的に再利用されるため、毎フレーム数千回トゥイーンを発行してもGCは完全にゼロに保たれます！
@@ -141,22 +137,18 @@ this.tweenPlugin.add({
     });
 
     // 1. 上方向にフワッと浮き上がるトゥイーン (350ms)
-    this.tweenPlugin.add({
-      targetId: popupId,
-      property: TweenProperty.Y,
-      startValue: startY,
-      endValue: startY - 35,
-      durationMs: 350
-    });
+    this.tweens.add({
+  targets: { id: popupId },
+  props: { y: startY - 35 },
+  duration: 350
+})
 
     // 2. スケールを大きくしてから収束させるポップ効果
-    this.tweenPlugin.add({
-      targetId: popupId,
-      property: TweenProperty.SCALE,
-      startValue: 22,
-      endValue: 12,
-      durationMs: 350
-    });
+    this.tweens.add({
+  targets: { id: popupId },
+  props: { scale: 12 },
+  duration: 350
+})
   }
 ```
 
@@ -176,7 +168,7 @@ this.tweenPlugin.add({
 
 ## 5. レベルアップ時のヒーロー・パルス演出
 
-レベルアップした瞬間、プレイヤーのサイズを一瞬大きく膨らませて元に戻す「パルスアニメーション」を加えます。ここでも `TweenPlugin` を使用します。
+レベルアップした瞬間、プレイヤーのサイズを一瞬大きく膨らませて元に戻す「パルスアニメーション」を加えます。ここでも `TweenManager` を使用します。
 
 ```typescript
   private applyLevelUpUpgrade(): void {
@@ -184,13 +176,11 @@ this.tweenPlugin.add({
     this.textPlugin.setText(this.hudLevelTextId, `LV. ${this.playerLevel}`);
 
     // プレイヤーが「ドクン！」と一瞬巨大化して元に戻るトゥイーン
-    this.tweenPlugin.add({
-      targetId: this.playerId,
-      property: TweenProperty.SCALE,
-      startValue: 44, // 一瞬 44px に膨張
-      endValue: 28,   // 通常サイズ 28px へ復帰
-      durationMs: 300 // 0.3秒間
-    });
+    this.tweens.add({
+  targets: { id: this.playerId },
+  props: { scale: 28 },
+  duration: 300
+})
     // ...
   }
 ```

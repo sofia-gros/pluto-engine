@@ -67,13 +67,11 @@ export class SwarmSurvivorScene extends Scene {
 
     // Tweenを使って元の赤色 (0xef4444) に戻す (80ms)
     // 内部ではフライウェイト(Flyweight)パターンによりゼロアロケーションで処理されます
-    this.tweens.add(
-      id,
-      TweenProperty.TINT,
-      0xffffffff,
-      0xef4444,
-      80
-    );
+    this.tweens.add({
+  targets: { id: id },
+  props: { tint: 0xef4444 },
+  duration: 80
+});
 
     // 画面をごくわずかに揺らす
     this.addTrauma(0.04);
